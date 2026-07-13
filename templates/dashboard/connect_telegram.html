@@ -1,0 +1,34 @@
+{% extends "dashboard/_layout.html" %}
+{% set active = 'telegram' %}
+{% block title %}Telegram · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>💬 Telegram bağlantısı</h1></div>
+
+{% if current_user.telegram_connected %}
+<div class="card" style="border-color:var(--green);background:var(--green-soft)">
+  <div class="card-title">✅ Telegram bağlı</div>
+  <p class="muted" style="margin:.2rem 0 1rem">Bildirimlerin bağlı Telegram hesabına gönderiliyor.</p>
+  <form method="post" action="{{ url_for('dashboard.reset_telegram') }}">
+    <button class="btn btn-danger btn-sm">Bağlantıyı sıfırla</button>
+  </form>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-title">Botu aç, siparişler aksın</div>
+  <p class="muted">Aşağıdaki butona tıkla — Telegram açılır, <b>Başlat</b>'a bas, hesabın otomatik bağlanır.
+     Birkaç saniye içinde "Bağlantı başarılı" mesajı gelir.</p>
+
+  {% if deep_link %}
+    <a class="btn btn-primary btn-lg" href="{{ deep_link }}" target="_blank" rel="noopener">📲 Telegram'da botu aç</a>
+    <p class="hint">Buton çalışmazsa bu linki telefonunda aç:</p>
+    <div class="code">{{ deep_link }}</div>
+  {% else %}
+    <div class="flash warning">Sistemde <code>TELEGRAM_BOT_USERNAME</code> tanımlı değil.
+      Yönetici <code>.env</code> dosyasına bot kullanıcı adını eklemeli.</div>
+    <p class="hint">Bağlantı token'ın (elle <code>/start &lt;token&gt;</code> için):</p>
+    <div class="code">{{ current_user.telegram_link_token }}</div>
+  {% endif %}
+  <p class="hint" style="margin-top:1rem">Bu sayfa bağlandıktan sonra otomatik güncellenir — sayfayı yenile.</p>
+</div>
+{% endif %}
+{% endblock %}

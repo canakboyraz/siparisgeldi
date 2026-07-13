@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot"></span> SiparişGeldi</div>
+    <nav>
+      <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint=='dashboard.index' }}">🏠 Panel</a>
+      <a href="{{ url_for('dashboard.orders') }}" class="{{ 'active' if request.endpoint=='dashboard.orders' }}">🧾 Siparişler</a>
+      <a href="{{ url_for('dashboard.trendyolgo_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyolgo_setup' }}">🛵 Trendyol Go</a>
+      <a href="{{ url_for('dashboard.migros_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.migros_setup' }}">🍔 Migros Yemek</a>
+      <a href="{{ url_for('dashboard.connect_telegram') }}" class="{{ 'active' if request.endpoint in ['dashboard.connect_telegram','dashboard.reset_telegram'] }}">💬 Telegram</a>
+      <a href="{{ url_for('dashboard.profile') }}" class="{{ 'active' if request.endpoint=='dashboard.profile' }}">⚙️ Profil</a>
+    </nav>
+    <div class="foot">
+      <div class="muted" style="padding:.4rem .8rem;color:#8b909b">{{ current_user.email }}</div>
+      <a href="{{ url_for('auth.logout') }}">↩ Çıkış yap</a>
+    </div>
+  </aside>
+  <main class="main">
+    {% include "_flashes.html" %}
+    {% block panel %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

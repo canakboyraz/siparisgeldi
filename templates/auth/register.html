@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Kayıt · SiparişGeldi{% endblock %}
+{% block body %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <a href="{{ url_for('public.landing') }}" class="brand"><span class="dot"></span> SiparişGeldi</a>
+    <div class="card">
+      <h2 style="text-align:center">Ücretsiz hesap oluştur</h2>
+      {% include "_flashes.html" %}
+      <form method="post">
+        <div class="field">
+          <label>Ad Soyad / İşletme</label>
+          <input type="text" name="name" required autofocus placeholder="Lezzet Restoran">
+        </div>
+        <div class="field">
+          <label>E-posta</label>
+          <input type="email" name="email" required placeholder="ornek@restoran.com">
+        </div>
+        <div class="field">
+          <label>Şifre</label>
+          <input type="password" name="password" required placeholder="En az 6 karakter">
+        </div>
+        <div class="field">
+          <label>Şifre (tekrar)</label>
+          <input type="password" name="confirm_password" required placeholder="••••••••">
+        </div>
+        <button class="btn btn-primary btn-block btn-lg" type="submit">Hesabı oluştur</button>
+      </form>
+    </div>
+    <p class="auth-alt">Zaten hesabın var mı? <a href="{{ url_for('auth.login') }}" style="color:var(--brand);font-weight:700">Giriş yap</a></p>
+  </div>
+</div>
+{% endblock %}

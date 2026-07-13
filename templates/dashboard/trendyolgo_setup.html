@@ -1,0 +1,62 @@
+{% extends "dashboard/_layout.html" %}
+{% set active = 'tgo' %}
+{% block title %}Trendyol Go · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>🛵 Trendyol Go bağlantısı</h1></div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">API bilgileri</div>
+    <p class="muted" style="margin-top:0">Trendyol Go Satıcı Paneli → Entegrasyon Bilgileri'nden alabilirsin.
+       Bilgiler şifreli saklanır.</p>
+    <form method="post">
+      <div class="field">
+        <label>Supplier ID (Satıcı ID)</label>
+        <input type="text" name="supplier_id" required value="{{ intg.tgo_supplier_id or '' }}" placeholder="123456">
+      </div>
+      <div class="field">
+        <label>API Key</label>
+        <input type="text" name="api_key" required value="{{ intg.tgo_api_key if intg else '' }}" placeholder="xxxxxxxx">
+      </div>
+      <div class="field">
+        <label>API Secret</label>
+        <input type="password" name="api_secret" required value="{{ intg.tgo_api_secret if intg else '' }}" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary btn-lg" type="submit">Bağlantıyı test et &amp; kaydet</button>
+    </form>
+  </div>
+
+  {% if intg %}
+  <div class="card">
+    <div class="card-title">Bildirim tercihleri</div>
+    <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
+      <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>🆕 Yeni sipariş bildirimi</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>🔄 Durum değişikliği bildirimi</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>❌ İptal bildirimi</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_daily_report" {{ 'checked' if intg.notify_daily_report }}> <span>📊 Günlük özet raporu</span></div>
+      <button class="btn btn-ghost" style="margin-top:1rem" type="submit">Tercihleri kaydet</button>
+    </form>
+
+    <div class="row" style="margin-top:1.2rem">
+      <div class="muted">
+        Durum:
+        {% if intg.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
+        {% if intg.last_error %}<span class="badge red">son hata</span>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('dashboard.delete_integration', intg_id=intg.id) }}"
+            onsubmit="return confirm('Bu entegrasyon silinsin mi?')">
+        <button class="btn btn-danger btn-sm">Sil</button>
+      </form>
+    </div>
+    {% if intg.last_error %}<p class="hint" style="color:var(--red)">{{ intg.last_error }}</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-title">ℹ️ Bilgi</div>
+    <p class="muted">API bilgilerini kaydettikten sonra sistem her {{ 30 }} saniyede bir yeni sipariş kontrolü yapar.
+       Telegram'ı bağlamayı unutma — bildirimler oraya gider.</p>
+    <a class="btn btn-ghost" href="{{ url_for('dashboard.connect_telegram') }}">💬 Telegram'ı bağla</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

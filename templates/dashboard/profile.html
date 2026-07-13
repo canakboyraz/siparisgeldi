@@ -1,0 +1,36 @@
+{% extends "dashboard/_layout.html" %}
+{% set active = 'profile' %}
+{% block title %}Profil · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>⚙️ Profil</h1></div>
+
+<div class="card" style="max-width:520px">
+  <form method="post">
+    <div class="field">
+      <label>Ad Soyad / İşletme</label>
+      <input type="text" name="name" value="{{ current_user.name }}">
+    </div>
+    <div class="field">
+      <label>E-posta</label>
+      <input type="email" value="{{ current_user.email }}" disabled>
+      <p class="hint">E-posta değiştirilemez.</p>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
+    <div class="card-title" style="font-size:.95rem">Şifre değiştir (opsiyonel)</div>
+    <div class="field">
+      <label>Mevcut şifre</label>
+      <input type="password" name="current_password" placeholder="••••••••">
+    </div>
+    <div class="field">
+      <label>Yeni şifre</label>
+      <input type="password" name="new_password" placeholder="En az 6 karakter">
+    </div>
+    <div class="field">
+      <label>Yeni şifre (tekrar)</label>
+      <input type="password" name="confirm_password" placeholder="••••••••">
+    </div>
+    <button class="btn btn-primary btn-lg" type="submit">Kaydet</button>
+  </form>
+</div>
+{% endblock %}

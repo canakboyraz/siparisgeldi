@@ -1,0 +1,74 @@
+{% extends "dashboard/_layout.html" %}
+{% set active = 'home' %}
+{% block title %}Panel · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <h1>Merhaba, {{ current_user.name }} 👋</h1>
+  <a class="btn btn-primary" href="{{ url_for('dashboard.trendyolgo_setup') }}">+ Platform bağla</a>
+</div>
+
+{% if not current_user.telegram_connected %}
+<div class="card" style="border-color:var(--brand);background:var(--brand-soft);margin-bottom:1rem">
+  <div class="row" style="border:none;padding:0">
+    <div>
+      <div class="card-title">📲 Telegram'ı bağla</div>
+      <div class="muted">Bildirim alabilmek için önce Telegram hesabını bağlaman gerekiyor.</div>
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('dashboard.connect_telegram') }}">Bağla</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="stats">
+  <div class="stat"><div class="v">{{ recent_orders|length }}</div><div class="l">Son siparişler</div></div>
+  <div class="stat"><div class="v">{{ integrations|selectattr('is_active')|list|length }}</div><div class="l">Aktif platform</div></div>
+  <div class="stat"><div class="v">{{ '✓' if current_user.telegram_connected else '—' }}</div><div class="l">Telegram</div></div>
+  <div class="stat"><div class="v">{{ current_user.plan|capitalize }}</div><div class="l">Plan</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Platformların</div>
+    {% if integrations %}
+      {% for intg in integrations %}
+      <div class="row">
+        <div class="inline">
+          <span class="status-dot {{ 'on' if intg.is_active else 'off' }}"></span>
+          <strong>{{ platform_label(intg.platform) }}</strong>
+          {% if intg.last_error %}<span class="badge red">hata</span>{% endif %}
+        </div>
+        <div class="inline">
+          <form method="post" action="{{ url_for('dashboard.toggle_integration', intg_id=intg.id) }}">
+            <button class="btn btn-ghost btn-sm">{{ 'Duraklat' if intg.is_active else 'Aktifleştir' }}</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">Henüz platform bağlamadın.<br>
+        <a href="{{ url_for('dashboard.trendyolgo_setup') }}" style="color:var(--brand);font-weight:700">Trendyol Go bağla →</a>
+        &nbsp;·&nbsp;
+        <a href="{{ url_for('dashboard.migros_setup') }}" style="color:var(--brand);font-weight:700">Migros Yemek bağla →</a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Son siparişler</div>
+    {% if recent_orders %}
+      {% for o in recent_orders %}
+      <div class="row">
+        <div><strong>#{{ o.order_number }}</strong> <span class="muted">· {{ platform_label(o.platform) }}</span></div>
+        <div class="inline">
+          <span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span>
+          <strong>{{ '%.2f'|format(o.total_price) }} ₺</strong>
+        </div>
+      </div>
+      {% endfor %}
+      <div style="margin-top:.8rem"><a href="{{ url_for('dashboard.orders') }}" style="color:var(--brand);font-weight:700">Tümünü gör →</a></div>
+    {% else %}
+      <div class="empty">Henüz sipariş yok. Platform bağlanınca burada görünecek.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

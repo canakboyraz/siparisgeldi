@@ -1,0 +1,68 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Migros Yemek · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>🍔 Migros Yemek bağlantısı</h1></div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Restoran bilgileri</div>
+    <p class="muted" style="margin-top:0">Migros Yemek Restoran Paneli → <b>Pos Entegrasyonu</b>
+       ekranından aldığın <b>API Key</b>, <b>Restoran (Store) ID</b> ve <b>Zincir ID</b>'yi gir.
+       (Secret Key girmene gerek yok — o firma bazında sistemde tanımlı.)</p>
+    <form method="post">
+      <div class="field">
+        <label>Restoran API Key</label>
+        <input type="text" name="api_key" required value="{{ intg.migros_api_key if intg else '' }}" placeholder="XApiKey değeri">
+      </div>
+      <div class="field">
+        <label>Store (Restoran) ID</label>
+        <input type="text" name="store_id" required value="{{ intg.migros_store_id or '' if intg else '' }}" placeholder="Örn: 23000000101013">
+        <p class="hint">Siparişlerin doğru hesabına ulaşması için bu ID webhook eşleştirmesinde kullanılır.</p>
+      </div>
+      <div class="field">
+        <label>Zincir / Marka ID <span class="muted">— opsiyonel</span></label>
+        <input type="text" name="group_id" value="{{ intg.migros_group_id or '' if intg else '' }}" placeholder="Örn: 115">
+      </div>
+      <button class="btn btn-primary btn-lg" type="submit">Doğrula &amp; kaydet</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔗 Webhook adreslerimiz</div>
+    <p class="muted" style="margin-top:0">Bu adresler <b>tüm platform için ortaktır</b> ve Migros
+       entegrasyon ekibine bir kez iletilir. Migros siparişleri bu adreslere gönderir; biz
+       <b>Store ID</b> ile senin hesabına yönlendiririz.</p>
+    <p class="hint" style="margin-bottom:.3rem">🆕 Sipariş oluştu</p>
+    <div class="code">{{ webhook_urls.order_created }}</div>
+    <p class="hint" style="margin:.7rem 0 .3rem">❌ Sipariş iptal</p>
+    <div class="code">{{ webhook_urls.order_canceled }}</div>
+    <p class="hint" style="margin:.7rem 0 .3rem">🚚 Kurye durumu</p>
+    <div class="code">{{ webhook_urls.delivery_status }}</div>
+    <p class="hint" style="margin-top:1rem">Migros webhook'ları <b>Basic Auth</b> ile gönderir.
+       <code>MIGROS_WEBHOOK_USER/PASS</code> değerlerini de Migros'a ilet.</p>
+
+    {% if intg %}
+    <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
+    <div class="card-title" style="font-size:.95rem">Bildirim tercihleri</div>
+    <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
+      <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>🆕 Yeni sipariş</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>🚚 Kurye/durum değişikliği</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>❌ İptal</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_daily_report" {{ 'checked' if intg.notify_daily_report }}> <span>📊 Günlük özet</span></div>
+      <button class="btn btn-ghost" style="margin-top:1rem" type="submit">Tercihleri kaydet</button>
+    </form>
+    <div class="row" style="margin-top:1rem">
+      <div class="muted">Durum:
+        {% if intg.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
+        {% if intg.last_error %}<span class="badge red">son hata</span>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('dashboard.delete_integration', intg_id=intg.id) }}"
+            onsubmit="return confirm('Migros entegrasyonu silinsin mi?')">
+        <button class="btn btn-danger btn-sm">Sil</button>
+      </form>
+    </div>
+    {% if intg.last_error %}<p class="hint" style="color:var(--red)">{{ intg.last_error }}</p>{% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

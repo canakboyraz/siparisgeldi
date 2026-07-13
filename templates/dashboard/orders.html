@@ -1,0 +1,44 @@
+{% extends "dashboard/_layout.html" %}
+{% set active = 'orders' %}
+{% block title %}Siparişler · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <h1>🧾 Siparişler</h1>
+  <form method="get" class="inline">
+    <select name="platform" onchange="this.form.submit()">
+      <option value="">Tüm platformlar</option>
+      <option value="trendyolgo" {{ 'selected' if platform=='trendyolgo' }}>Trendyol Go</option>
+      <option value="migros" {{ 'selected' if platform=='migros' }}>Migros Yemek</option>
+    </select>
+  </form>
+</div>
+
+<div class="card">
+  {% if orders.items %}
+  <table>
+    <thead><tr><th>Sipariş</th><th>Platform</th><th>Durum</th><th>Tutar</th><th>Tarih</th></tr></thead>
+    <tbody>
+      {% for o in orders.items %}
+      <tr>
+        <td><strong>#{{ o.order_number }}</strong></td>
+        <td>{{ platform_label(o.platform) }}</td>
+        <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
+        <td>{{ '%.2f'|format(o.total_price) }} ₺</td>
+        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if orders.pages > 1 %}
+  <div class="inline" style="justify-content:center;margin-top:1.2rem;gap:.8rem">
+    {% if orders.has_prev %}<a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.orders', page=orders.prev_num, platform=platform) }}">← Önceki</a>{% endif %}
+    <span class="muted">Sayfa {{ orders.page }} / {{ orders.pages }}</span>
+    {% if orders.has_next %}<a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.orders', page=orders.next_num, platform=platform) }}">Sonraki →</a>{% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty">Bu filtreye uygun sipariş yok.</div>
+  {% endif %}
+</div>
+{% endblock %}

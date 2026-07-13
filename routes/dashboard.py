@@ -1,0 +1,217 @@
+"""Panel: özet, Telegram bağlama, TrendyolGo kurulum, siparişler, profil."""
+import secrets
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
+from flask_login import login_required, current_user
+
+from extensions import db
+from models import Integration, Order
+from integrations.trendyolgo import test_connection
+from integrations import migros
+
+dashboard_bp = Blueprint("dashboard", __name__)
+
+
+@dashboard_bp.route("/")
+@login_required
+def index():
+    integrations = Integration.query.filter_by(user_id=current_user.id).all()
+    recent = (Order.query.filter_by(user_id=current_user.id)
+              .order_by(Order.created_at.desc()).limit(10).all())
+    today_count = None
+    return render_template("dashboard/index.html",
+                           integrations=integrations, recent_orders=recent,
+                           today_count=today_count)
+
+
+# ── Telegram bağlama ────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/telegram")
+@login_required
+def connect_telegram():
+    token = current_user.ensure_link_token()
+    db.session.commit()
+    bot_username = current_app.config.get("TELEGRAM_BOT_USERNAME", "")
+    deep_link = f"https://t.me/{bot_username}?start={token}" if bot_username else ""
+    return render_template("dashboard/connect_telegram.html",
+                           deep_link=deep_link, bot_username=bot_username)
+
+
+@dashboard_bp.route("/telegram/yenile", methods=["POST"])
+@login_required
+def reset_telegram():
+    """Bağlantıyı sıfırla (yeni link üret, mevcut chat bağını kaldır)."""
+    current_user.telegram_chat_id = None
+    current_user.telegram_link_token = None
+    current_user.ensure_link_token()
+    db.session.commit()
+    flash("Telegram bağlantısı sıfırlandı. Yeni linkle tekrar bağlanın.", "info")
+    return redirect(url_for("dashboard.connect_telegram"))
+
+
+# ── TrendyolGo ──────────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/trendyolgo", methods=["GET", "POST"])
+@login_required
+def trendyolgo_setup():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo").first()
+
+    if request.method == "POST":
+        supplier_id = request.form.get("supplier_id", "").strip()
+        api_key     = request.form.get("api_key", "").strip()
+        api_secret  = request.form.get("api_secret", "").strip()
+
+        if not supplier_id or not api_key or not api_secret:
+            flash("Tüm alanlar zorunludur.", "danger")
+            return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+
+        ok, msg, _ = test_connection(supplier_id, api_key, api_secret)
+        if not ok:
+            flash(f"API bağlantısı başarısız: {msg}", "danger")
+            return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+
+        if not intg:
+            intg = Integration(user_id=current_user.id, platform="trendyolgo")
+            db.session.add(intg)
+
+        intg.tgo_supplier_id = supplier_id
+        intg.tgo_api_key     = api_key
+        intg.tgo_api_secret  = api_secret
+        intg.is_active       = True
+        db.session.commit()
+
+        flash(f"✅ TrendyolGo bağlandı! {msg}", "success")
+        if not current_user.telegram_connected:
+            flash("Bildirim alabilmek için Telegram'ı da bağlayın.", "warning")
+        return redirect(url_for("dashboard.index"))
+
+    return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+
+
+# ── Migros Yemek ────────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/migros", methods=["GET", "POST"])
+@login_required
+def migros_setup():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="migros").first()
+
+    if request.method == "POST":
+        api_key  = request.form.get("api_key", "").strip()
+        store_id = request.form.get("store_id", "").strip()
+        group_id = request.form.get("group_id", "").strip()
+
+        if not api_key or not store_id:
+            flash("Restoran API Key ve Store (Restoran) ID zorunludur.", "danger")
+            return render_template("dashboard/migros_setup.html", intg=intg, webhook_urls=_migros_webhook_urls())
+
+        # Bağlantıyı doğrula (GetStoreGroups — şifreleme gerektirmez, sadece api key)
+        base = current_app.config.get("MIGROS_API_BASE")
+        secret = current_app.config.get("MIGROS_SECRET_KEY", "")
+        ok, msg, _ = migros.test_connection(api_key, secret, base)
+
+        if not intg:
+            intg = Integration(user_id=current_user.id, platform="migros")
+            db.session.add(intg)
+
+        intg.migros_api_key  = api_key
+        intg.migros_store_id = store_id
+        intg.migros_group_id = group_id
+        intg.is_active       = True
+        db.session.commit()
+
+        if ok:
+            flash(f"✅ Migros Yemek bağlandı! {msg}", "success")
+        else:
+            flash(f"⚠️ Bilgiler kaydedildi ama API doğrulanamadı: {msg} "
+                  f"(API base URL — test/canlı ortamı kontrol et). Webhook'lar yine de çalışır.", "warning")
+        if not current_user.telegram_connected:
+            flash("Bildirim alabilmek için Telegram'ı da bağlayın.", "warning")
+        return redirect(url_for("dashboard.migros_setup"))
+
+    return render_template("dashboard/migros_setup.html", intg=intg, webhook_urls=_migros_webhook_urls())
+
+
+def _migros_webhook_urls():
+    """Migros'a iletilecek FİRMA seviyesi webhook URL'leri (herkes için aynı)."""
+    return {
+        "order_created":  url_for("webhooks.migros_order_created", _external=True),
+        "order_canceled": url_for("webhooks.migros_order_canceled", _external=True),
+        "delivery_status": url_for("webhooks.migros_delivery_status", _external=True),
+    }
+
+
+@dashboard_bp.route("/entegrasyon/<int:intg_id>/durum", methods=["POST"])
+@login_required
+def toggle_integration(intg_id):
+    intg = Integration.query.filter_by(id=intg_id, user_id=current_user.id).first_or_404()
+    intg.is_active = not intg.is_active
+    db.session.commit()
+    flash(f"Entegrasyon {'aktif' if intg.is_active else 'pasif'} edildi.", "success")
+    return redirect(url_for("dashboard.index"))
+
+
+@dashboard_bp.route("/entegrasyon/<int:intg_id>/sil", methods=["POST"])
+@login_required
+def delete_integration(intg_id):
+    intg = Integration.query.filter_by(id=intg_id, user_id=current_user.id).first_or_404()
+    db.session.delete(intg)
+    db.session.commit()
+    flash("Entegrasyon silindi.", "info")
+    return redirect(url_for("dashboard.index"))
+
+
+@dashboard_bp.route("/entegrasyon/<int:intg_id>/bildirimler", methods=["POST"])
+@login_required
+def update_notifications(intg_id):
+    intg = Integration.query.filter_by(id=intg_id, user_id=current_user.id).first_or_404()
+    intg.notify_new_order     = "notify_new_order" in request.form
+    intg.notify_status_change = "notify_status_change" in request.form
+    intg.notify_cancel        = "notify_cancel" in request.form
+    intg.notify_daily_report  = "notify_daily_report" in request.form
+    db.session.commit()
+    flash("Bildirim tercihleri güncellendi.", "success")
+    return redirect(url_for("dashboard.index"))
+
+
+# ── Siparişler ──────────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/siparisler")
+@login_required
+def orders():
+    page     = request.args.get("page", 1, type=int)
+    platform = request.args.get("platform", "")
+    q = Order.query.filter_by(user_id=current_user.id)
+    if platform:
+        q = q.filter_by(platform=platform)
+    orders_paged = q.order_by(Order.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    return render_template("dashboard/orders.html", orders=orders_paged, platform=platform)
+
+
+# ── Profil ──────────────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/profil", methods=["GET", "POST"])
+@login_required
+def profile():
+    if request.method == "POST":
+        name       = request.form.get("name", "").strip()
+        current_pw = request.form.get("current_password", "")
+        new_pw     = request.form.get("new_password", "")
+        confirm_pw = request.form.get("confirm_password", "")
+
+        if name:
+            current_user.name = name
+        if current_pw or new_pw:
+            if not current_user.check_password(current_pw):
+                flash("Mevcut şifre hatalı.", "danger")
+                return render_template("dashboard/profile.html")
+            if new_pw != confirm_pw:
+                flash("Yeni şifreler eşleşmiyor.", "danger")
+                return render_template("dashboard/profile.html")
+            if len(new_pw) < 6:
+                flash("Şifre en az 6 karakter olmalı.", "danger")
+                return render_template("dashboard/profile.html")
+            current_user.set_password(new_pw)
+
+        db.session.commit()
+        flash("Profil güncellendi.", "success")
+
+    return render_template("dashboard/profile.html")

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="container">
+  <div class="nav">
+    <div class="brand"><span class="dot"></span> SiparişGeldi</div>
+    <div class="inline">
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.login') }}">Giriş</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">Ücretsiz Başla</a>
+    </div>
+  </div>
+
+  <section class="hero">
+    <span class="pill">Trendyol Go · Migros Yemek · Getir</span>
+    <h1>Siparişlerin anında<br>Telegram'ına düşsün</h1>
+    <p>Yemek platformlarından gelen her yeni sipariş, durum değişikliği ve günlük ciro
+       özetin doğrudan telefonuna gelir. Kurulum 2 dakika, ekran başında beklemek yok.</p>
+    <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Hemen başla — ücretsiz</a>
+    <a class="btn btn-ghost btn-lg" href="{{ url_for('auth.login') }}">Giriş yap</a>
+  </section>
+
+  <section class="features">
+    <div class="feature">
+      <div class="ic">⚡</div>
+      <h3>Anlık bildirim</h3>
+      <p>Yeni sipariş geldiği an Telegram'a tam detaylı mesaj: ürünler, tutar, ödeme, not.</p>
+    </div>
+    <div class="feature">
+      <div class="ic">🔁</div>
+      <h3>Durum takibi</h3>
+      <p>Kabul, hazırlanıyor, yolda, teslim, iptal — her aşamada otomatik bildirim.</p>
+    </div>
+    <div class="feature">
+      <div class="ic">📊</div>
+      <h3>Günlük özet</h3>
+      <p>Her akşam sipariş adedi, iptaller ve toplam cironu özetleyen rapor.</p>
+    </div>
+  </section>
+
+  <h2 style="text-align:center;margin-top:1rem">Nasıl çalışır?</h2>
+  <section class="steps">
+    <div class="step"><div class="n">ADIM 1</div><strong>Hesap aç</strong><p class="muted" style="margin:.3rem 0 0">E-posta ile saniyeler içinde kayıt ol.</p></div>
+    <div class="step"><div class="n">ADIM 2</div><strong>Platformunu bağla</strong><p class="muted" style="margin:.3rem 0 0">Trendyol Go API bilgilerini gir, Telegram'ı tek tıkla bağla.</p></div>
+    <div class="step"><div class="n">ADIM 3</div><strong>Bildirimler aksın</strong><p class="muted" style="margin:.3rem 0 0">Gerisini biz hallederiz — siparişler telefonuna gelir.</p></div>
+  </section>
+</div>
+<footer>© {{ now().year }} SiparişGeldi · Yemek siparişi bildirim servisi</footer>
+{% endblock %}
