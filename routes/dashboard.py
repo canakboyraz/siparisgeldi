@@ -228,17 +228,41 @@ def profile():
 @dashboard_bp.route("/test-bildirim", methods=["POST"])
 @login_required
 def send_test_notification():
-    """Seçili kanala (Telegram/WhatsApp) tek tıkla test bildirimi gönderir."""
-    from notifications.dispatcher import send_to_user
-    text = (
-        "🔔 <b>Test bildirimi</b>\n"
-        "Bu bir test mesajıdır — bildirimlerin doğru çalışıyor! 🎉\n"
-        "— SiparişGeldi"
-    )
-    ok = send_to_user(current_user, text, wa=["Test bildirimi", "TEST-001", "0,00 ₺"])
-    if ok:
-        flash("✅ Test bildirimi gönderildi — kanalını kontrol et.", "success")
-    else:
-        flash("⚠️ Test gönderilemedi. Telegram bağlı mı, WhatsApp numarası/credential'lar ve "
-              "onaylı şablon tam mı kontrol et.", "warning")
+    """Seçili kanala test bildirimi gönderir. WhatsApp'ta önce onaylı şablonu dener,
+    olmazsa (24s müşteri penceresi açıksa) serbest metne düşer — böylece şablon onayı
+    beklenmeden de test edilebilir."""
+    from notifications import whatsapp, telegram as tg
+    cfg = current_app.config
+    ch = (current_user.notification_channel or "telegram").lower()
+    tg_text = "🔔 <b>Test bildirimi</b>\nBildirimlerin çalışıyor! 🎉\n— SiparişGeldi"
+    wa_text = "🔔 Test bildirimi — bildirimlerin çalışıyor! 🎉 (SiparişGeldi)"
+    results = []
+
+    if ch in ("telegram", "both"):
+        if current_user.telegram_chat_id and cfg.get("TELEGRAM_BOT_TOKEN"):
+            ok = tg.send_message(cfg["TELEGRAM_BOT_TOKEN"], current_user.telegram_chat_id, tg_text)
+            results.append("Telegram ✅" if ok else "Telegram ❌")
+        else:
+            results.append("Telegram ⏭ (bağlı değil)")
+
+    if ch in ("whatsapp", "both"):
+        tok  = cfg.get("WHATSAPP_ACCESS_TOKEN")
+        pnid = cfg.get("WHATSAPP_PHONE_NUMBER_ID")
+        num  = current_user.whatsapp_number
+        if tok and pnid and num:
+            ver = cfg.get("WHATSAPP_API_VERSION", "v21.0")
+            ok, err = whatsapp.send_template(
+                num, cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim"),
+                cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
+                ["Test bildirimi", "TEST-001", "0,00 ₺"], tok, pnid, ver)
+            if ok:
+                results.append("WhatsApp ✅ (şablon)")
+            else:
+                ok2, err2 = whatsapp.send_text(num, wa_text, tok, pnid, ver)
+                results.append("WhatsApp ✅ (serbest metin)" if ok2
+                               else f"WhatsApp ❌ ({err or err2})")
+        else:
+            results.append("WhatsApp ⏭ (numara/credential eksik)")
+
+    flash("Test sonucu: " + (" · ".join(results) if results else "kanal ayarlı değil"), "info")
     return redirect(url_for("dashboard.profile"))
