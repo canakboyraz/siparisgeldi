@@ -77,7 +77,8 @@ def _process_tgo(intg):
             if intg.notify_new_order:
                 amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
                 send_to_user(user, tgo.format_new_order_message(order_data),
-                             wa=["Yeni sipariş · Trendyol Go", str(order_number), amount])
+                             wa=["Yeni sipariş · Trendyol Go", str(order_number),
+                                 tgo.summarize_items(order_data), amount])
                 print(f"[TGO] 🆕 #{order_number} (user={intg.user_id})")
         else:
             # Statü değişimi
@@ -94,7 +95,8 @@ def _process_tgo(intg):
                 db.session.commit()
                 amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
                 send_to_user(user, tgo.format_status_message(order_data, current_status),
-                             wa=[f"{status_label(current_status)} · Trendyol Go", str(order_number), amount])
+                             wa=[f"{status_label(current_status)} · Trendyol Go", str(order_number),
+                                 tgo.summarize_items(order_data), amount])
                 print(f"[TGO] 🔄 #{order_number} → {current_status} (user={intg.user_id})")
             else:
                 db.session.commit()

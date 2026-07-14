@@ -53,6 +53,21 @@ def get_orders(supplier_id: str, api_key: str, api_secret: str,
 
 # ── Mesaj formatlama ────────────────────────────────────────────────────────
 
+def summarize_items(order: dict, max_items: int = 4) -> str:
+    """Sipariş satırlarını kısa bir metne özetler: 'Lahmacun x2, Ayran x1'.
+    WhatsApp şablon değişkeni için (tek satır, kısa)."""
+    lines = order.get("lines") or []
+    parts = []
+    for ln in lines[:max_items]:
+        qty = len(ln.get("items", [])) or 1
+        parts.append(f"{ln.get('name', '?')} x{qty}")
+    s = ", ".join(parts) if parts else "-"
+    more = len(lines) - max_items
+    if more > 0:
+        s += f" +{more} ürün"
+    return s[:220]
+
+
 def format_new_order_message(order: dict) -> str:
     order_number = order.get("orderNumber", "N/A")
     order_code   = order.get("orderCode", "N/A")

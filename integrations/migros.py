@@ -157,6 +157,20 @@ def extract_order_fields(p: dict) -> dict:
     }
 
 
+def summarize_items(p: dict, max_items: int = 4) -> str:
+    """Migros siparişini kısa metne özetler. 'description' varsa onu kullanır."""
+    desc = p.get("description")
+    if desc:
+        return str(desc)[:220]
+    items = p.get("items") or []
+    parts = [f"{it.get('name', '?')} x{it.get('amount', 1)}" for it in items[:max_items]]
+    s = ", ".join(parts) if parts else "-"
+    more = len(items) - max_items
+    if more > 0:
+        s += f" +{more} ürün"
+    return s[:220]
+
+
 def format_order_created(p: dict) -> str:
     order_id = p.get("id", "N/A")
     store    = (p.get("store") or {}).get("name", "-")

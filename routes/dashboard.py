@@ -254,7 +254,7 @@ def send_test_notification():
             ok, err = whatsapp.send_template(
                 num, cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim"),
                 cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
-                ["Test bildirimi", "TEST-001", "0,00 ₺"], tok, pnid, ver)
+                ["Test bildirimi", "TEST-001", "Örnek ürün x1", "0,00 ₺"], tok, pnid, ver)
             if ok:
                 results.append("WhatsApp ✅ (şablon)")
             else:
