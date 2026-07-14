@@ -9,11 +9,13 @@ from . import telegram
 from . import whatsapp
 
 
-def send_to_user(user, telegram_text: str, wa: list = None) -> bool:
+def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = None) -> bool:
     """Kullanıcının seçtiği kanal(lar)a bildirim gönderir.
 
     telegram_text: Telegram için tam biçimli mesaj.
-    wa: WhatsApp şablon parametreleri [olay, sipariş_no, tutar]. None ise WhatsApp atlanır.
+    wa: WhatsApp şablon parametreleri (sıralı liste). None ise WhatsApp atlanır.
+    wa_template: Kullanılacak WhatsApp şablon adı. None ise varsayılan sipariş
+      şablonu (WHATSAPP_TEMPLATE_NAME) kullanılır. Raporlar için ayrı şablon geçilir.
     """
     if not user:
         return False
@@ -34,10 +36,11 @@ def send_to_user(user, telegram_text: str, wa: list = None) -> bool:
         cfg = current_app.config
         token = cfg.get("WHATSAPP_ACCESS_TOKEN", "")
         pnid  = cfg.get("WHATSAPP_PHONE_NUMBER_ID", "")
+        template = wa_template or cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim")
         if token and pnid:
             ok, err = whatsapp.send_template(
                 to=user.whatsapp_number,
-                template_name=cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim"),
+                template_name=template,
                 lang=cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
                 params=wa,
                 token=token,

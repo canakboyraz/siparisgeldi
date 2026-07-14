@@ -79,10 +79,12 @@ class Integration(db.Model):
     webhook_token      = db.Column(db.String(64), unique=True)
 
     # Bildirim tercihleri
-    notify_new_order     = db.Column(db.Boolean, default=True)
-    notify_status_change = db.Column(db.Boolean, default=True)
-    notify_cancel        = db.Column(db.Boolean, default=True)
-    notify_daily_report  = db.Column(db.Boolean, default=True)
+    notify_new_order      = db.Column(db.Boolean, default=True)
+    notify_status_change  = db.Column(db.Boolean, default=True)
+    notify_cancel         = db.Column(db.Boolean, default=True)
+    notify_daily_report   = db.Column(db.Boolean, default=True)
+    notify_weekly_report  = db.Column(db.Boolean, default=True)
+    notify_monthly_report = db.Column(db.Boolean, default=True)
 
     # Son senkron durumu (teşhis için)
     last_sync_at    = db.Column(db.DateTime)

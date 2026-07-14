@@ -163,10 +163,12 @@ def delete_integration(intg_id):
 @login_required
 def update_notifications(intg_id):
     intg = Integration.query.filter_by(id=intg_id, user_id=current_user.id).first_or_404()
-    intg.notify_new_order     = "notify_new_order" in request.form
-    intg.notify_status_change = "notify_status_change" in request.form
-    intg.notify_cancel        = "notify_cancel" in request.form
-    intg.notify_daily_report  = "notify_daily_report" in request.form
+    intg.notify_new_order      = "notify_new_order" in request.form
+    intg.notify_status_change  = "notify_status_change" in request.form
+    intg.notify_cancel         = "notify_cancel" in request.form
+    intg.notify_daily_report   = "notify_daily_report" in request.form
+    intg.notify_weekly_report  = "notify_weekly_report" in request.form
+    intg.notify_monthly_report = "notify_monthly_report" in request.form
     db.session.commit()
     flash("Bildirim tercihleri güncellendi.", "success")
     return redirect(url_for("dashboard.index"))

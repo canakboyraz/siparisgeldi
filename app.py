@@ -19,6 +19,8 @@ def _ensure_schema():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(30)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_channel VARCHAR(20) DEFAULT 'telegram'",
         "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
+        "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
     ]
     with db.engine.begin() as conn:
         for s in stmts:

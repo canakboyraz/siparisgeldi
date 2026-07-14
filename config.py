@@ -50,6 +50,8 @@ class Config:
     # Proaktif bildirim için Meta onaylı utility şablonu
     WHATSAPP_TEMPLATE_NAME  = os.environ.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim")
     WHATSAPP_TEMPLATE_LANG  = os.environ.get("WHATSAPP_TEMPLATE_LANG", "tr")
+    # Günlük rapor için AYRI Meta onaylı şablon (3 değişken: platform+tarih, özet, ciro)
+    WHATSAPP_REPORT_TEMPLATE_NAME = os.environ.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_rapor")
 
     # Scheduler'ı web süreci içinde başlat (tek instance dev için). Prod'da
     # ayrı worker süreci öneririz → RUN_SCHEDULER=0 yapıp worker.py'yi ayrı çalıştır.

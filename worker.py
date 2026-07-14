@@ -7,7 +7,7 @@
 - Her gece 23:45 günlük özet raporu gönderir.
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytz
 import requests
@@ -144,47 +144,131 @@ def poll_telegram_binds(app):
         AppState.set("tg_update_offset", str(max_id + 1))
 
 
-# ── Günlük rapor ────────────────────────────────────────────────────────────
+# ── Raporlar (günlük / haftalık / aylık) ─────────────────────────────────────
 
-def send_daily_reports(app):
-    with app.app_context():
-        today = datetime.now(TURKEY_TZ).date()
-        integrations = Integration.query.filter_by(is_active=True).all()
-        for intg in integrations:
-            if not intg.notify_daily_report:
-                continue
-            try:
-                _daily_report(intg, today)
-            except Exception as e:
-                print(f"[RAPOR] Hata user={intg.user_id}: {e}")
+def _aggregate_products(orders, max_items: int = 15) -> str:
+    """Sipariş listesinin raw_json'undan ürün adetlerini toplar.
+    'Ice Latte x4, Browni x2' biçiminde döndürür (adete göre azalan)."""
+    counts = {}
+    for o in orders:
+        try:
+            data = json.loads(o.raw_json) if o.raw_json else {}
+        except (ValueError, TypeError):
+            continue
+        if o.platform == "migros":
+            for it in (data.get("items") or []):
+                name = it.get("name", "?")
+                counts[name] = counts.get(name, 0) + (it.get("amount", 1) or 1)
+        else:  # trendyolgo
+            for ln in (data.get("lines") or []):
+                name = ln.get("name", "?")
+                qty = len(ln.get("items", [])) or 1
+                counts[name] = counts.get(name, 0) + qty
+
+    if not counts:
+        return "-"
+    items = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+    parts = [f"{name} x{qty}" for name, qty in items[:max_items]]
+    s = ", ".join(parts)
+    if len(items) > max_items:
+        s += f" +{len(items) - max_items} çeşit"
+    return s
 
 
-def _daily_report(intg, today):
-    start = TURKEY_TZ.localize(datetime.combine(today, datetime.min.time()))
-    orders = Order.query.filter(
+def _period_orders(intg, start_dt, end_dt=None):
+    """intg için [start_dt, end_dt) aralığındaki siparişleri döndürür (UTC-naive)."""
+    start_utc = start_dt.astimezone(pytz.utc).replace(tzinfo=None)
+    q = Order.query.filter(
         Order.user_id == intg.user_id,
         Order.platform == intg.platform,
-        Order.created_at >= start.astimezone(pytz.utc).replace(tzinfo=None),
-    ).all()
+        Order.created_at >= start_utc,
+    )
+    if end_dt is not None:
+        end_utc = end_dt.astimezone(pytz.utc).replace(tzinfo=None)
+        q = q.filter(Order.created_at < end_utc)
+    return q.all()
 
+
+def _send_period_report(intg, kind: str, period_label: str, orders):
+    """Ortak rapor gönderici: kind = 'Günlük' | 'Haftalık' | 'Aylık'."""
     cancelled = [o for o in orders if o.status in ("Cancelled", "UnSupplied")]
     active    = [o for o in orders if o.status not in ("Cancelled", "UnSupplied")]
     revenue   = sum(o.total_price for o in active)
+    products  = _aggregate_products(active)
     label = {"trendyolgo": "Trendyol Go", "migros": "Migros Yemek"}.get(intg.platform, intg.platform)
 
+    emoji = {"Günlük": "📊", "Haftalık": "📅", "Aylık": "🗓️"}.get(kind, "📊")
     msg = (
-        f"📊 <b>Günlük Rapor — {label}</b>\n"
-        f"📅 {today.strftime('%d.%m.%Y')}\n"
+        f"{emoji} <b>{kind} Rapor — {label}</b>\n"
+        f"📆 {period_label}\n"
         f"{'━'*28}\n"
         f"✅ <b>Geçerli Sipariş:</b> {len(active)}\n"
         f"❌ <b>İptal:</b> {len(cancelled)}\n"
         f"💰 <b>Toplam Ciro:</b> {revenue:.2f} ₺\n"
         f"{'━'*28}\n"
-        f"🕙 <i>{datetime.now(TURKEY_TZ).strftime('%H:%M')}</i>"
+        f"🛍️ <b>Satılan Ürünler:</b>\n{products}\n"
     )
     user = db.session.get(User, intg.user_id)
-    send_to_user(user, msg)
-    print(f"[RAPOR] user={intg.user_id} platform={intg.platform}")
+    # WhatsApp rapor şablonu: {{1}}=başlık+dönem {{2}}=ürünler {{3}}=özet {{4}}=ciro
+    from flask import current_app
+    wa_template = current_app.config.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_rapor")
+    wa = [
+        f"{kind} · {label} · {period_label} · {len(active)} geçerli, {len(cancelled)} iptal",
+        products[:400] if products != "-" else "Sipariş yok",
+        f"{revenue:.2f} ₺",
+    ]
+    send_to_user(user, msg, wa=wa, wa_template=wa_template)
+    print(f"[RAPOR/{kind}] user={intg.user_id} platform={intg.platform}")
+
+
+def send_daily_reports(app):
+    with app.app_context():
+        today = datetime.now(TURKEY_TZ).date()
+        for intg in Integration.query.filter_by(is_active=True).all():
+            if not intg.notify_daily_report:
+                continue
+            try:
+                start = TURKEY_TZ.localize(datetime.combine(today, datetime.min.time()))
+                orders = _period_orders(intg, start)
+                _send_period_report(intg, "Günlük", today.strftime('%d.%m.%Y'), orders)
+            except Exception as e:
+                print(f"[RAPOR] Günlük hata user={intg.user_id}: {e}")
+
+
+def send_weekly_reports(app):
+    """Her Pazartesi 08:00 — önceki 7 gün (Pzt-Paz)."""
+    with app.app_context():
+        now = datetime.now(TURKEY_TZ)
+        end = TURKEY_TZ.localize(datetime.combine(now.date(), datetime.min.time()))
+        start = end - timedelta(days=7)
+        label = f"{start.strftime('%d.%m')} – {(end - timedelta(days=1)).strftime('%d.%m.%Y')}"
+        for intg in Integration.query.filter_by(is_active=True).all():
+            if not getattr(intg, "notify_weekly_report", True):
+                continue
+            try:
+                orders = _period_orders(intg, start, end)
+                _send_period_report(intg, "Haftalık", label, orders)
+            except Exception as e:
+                print(f"[RAPOR] Haftalık hata user={intg.user_id}: {e}")
+
+
+def send_monthly_reports(app):
+    """Ayın 1'i 08:00 — önceki takvim ayı."""
+    with app.app_context():
+        now = datetime.now(TURKEY_TZ)
+        first_this = TURKEY_TZ.localize(datetime(now.year, now.month, 1))
+        last_month_end = first_this
+        prev = last_month_end - timedelta(days=1)
+        start = TURKEY_TZ.localize(datetime(prev.year, prev.month, 1))
+        label = start.strftime('%B %Y')
+        for intg in Integration.query.filter_by(is_active=True).all():
+            if not getattr(intg, "notify_monthly_report", True):
+                continue
+            try:
+                orders = _period_orders(intg, start, last_month_end)
+                _send_period_report(intg, "Aylık", label, orders)
+            except Exception as e:
+                print(f"[RAPOR] Aylık hata user={intg.user_id}: {e}")
 
 
 # ── Scheduler kurulumu ──────────────────────────────────────────────────────
@@ -203,6 +287,14 @@ def start_scheduler(app):
 
     scheduler.add_job(send_daily_reports, "cron", hour=23, minute=45,
                       args=[app], id="daily_report", replace_existing=True)
+
+    # Haftalık — her Pazartesi 08:00 (önceki 7 gün)
+    scheduler.add_job(send_weekly_reports, "cron", day_of_week="mon", hour=8, minute=0,
+                      args=[app], id="weekly_report", replace_existing=True)
+
+    # Aylık — ayın 1'i 08:00 (önceki ay)
+    scheduler.add_job(send_monthly_reports, "cron", day=1, hour=8, minute=0,
+                      args=[app], id="monthly_report", replace_existing=True)
 
     scheduler.start()
     print(f"[SCHEDULER] Başlatıldı ✅ (polling: {interval}s)")
