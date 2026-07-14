@@ -223,3 +223,22 @@ def profile():
         flash("Profil güncellendi.", "success")
 
     return render_template("dashboard/profile.html")
+
+
+@dashboard_bp.route("/test-bildirim", methods=["POST"])
+@login_required
+def send_test_notification():
+    """Seçili kanala (Telegram/WhatsApp) tek tıkla test bildirimi gönderir."""
+    from notifications.dispatcher import send_to_user
+    text = (
+        "🔔 <b>Test bildirimi</b>\n"
+        "Bu bir test mesajıdır — bildirimlerin doğru çalışıyor! 🎉\n"
+        "— SiparişGeldi"
+    )
+    ok = send_to_user(current_user, text, wa=["Test bildirimi", "TEST-001", "0,00 ₺"])
+    if ok:
+        flash("✅ Test bildirimi gönderildi — kanalını kontrol et.", "success")
+    else:
+        flash("⚠️ Test gönderilemedi. Telegram bağlı mı, WhatsApp numarası/credential'lar ve "
+              "onaylı şablon tam mı kontrol et.", "warning")
+    return redirect(url_for("dashboard.profile"))

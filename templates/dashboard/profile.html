@@ -50,4 +50,13 @@
     <button class="btn btn-primary btn-lg" type="submit">Kaydet</button>
   </form>
 </div>
+
+<div class="card" style="max-width:520px;margin-top:1rem">
+  <div class="card-title" style="font-size:.95rem">Test bildirimi</div>
+  <p class="muted" style="margin:.2rem 0 1rem">Seçili kanal(lar)a örnek bir bildirim gönderip
+     kurulumunu doğrula. Önce yukarıdaki ayarları kaydettiğinden emin ol.</p>
+  <form method="post" action="{{ url_for('dashboard.send_test_notification') }}">
+    <button class="btn btn-ghost" type="submit">🔔 Test bildirimi gönder</button>
+  </form>
+</div>
 {% endblock %}
