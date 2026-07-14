@@ -199,6 +199,14 @@ def profile():
 
         if name:
             current_user.name = name
+
+        # Bildirim kanalı + WhatsApp numarası
+        channel = request.form.get("notification_channel", "").strip()
+        if channel in ("telegram", "whatsapp", "both"):
+            current_user.notification_channel = channel
+        wa_number = request.form.get("whatsapp_number", "").strip()
+        current_user.whatsapp_number = wa_number or None
+
         if current_pw or new_pw:
             if not current_user.check_password(current_pw):
                 flash("Mevcut şifre hatalı.", "danger")

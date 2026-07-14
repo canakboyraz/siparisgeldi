@@ -28,6 +28,10 @@ class User(UserMixin, db.Model):
     telegram_chat_id   = db.Column(db.String(50))                 # /start ile yakalanır
     telegram_link_token = db.Column(db.String(64), unique=True, index=True)
 
+    # WhatsApp (Meta Cloud API) ve kanal tercihi
+    whatsapp_number     = db.Column(db.String(30))
+    notification_channel = db.Column(db.String(20), default="telegram")  # telegram | whatsapp | both
+
     integrations = db.relationship("Integration", backref="user", lazy=True, cascade="all, delete-orphan")
     orders       = db.relationship("Order", backref="user", lazy=True, cascade="all, delete-orphan")
 

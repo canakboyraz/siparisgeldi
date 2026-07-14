@@ -17,6 +17,23 @@
     </div>
 
     <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
+    <div class="card-title" style="font-size:.95rem">Bildirim kanalı</div>
+    <div class="field">
+      <label>Bildirimleri nereden almak istersin?</label>
+      <select name="notification_channel">
+        <option value="telegram" {{ 'selected' if current_user.notification_channel in [None,'','telegram'] }}>Telegram</option>
+        <option value="whatsapp" {{ 'selected' if current_user.notification_channel=='whatsapp' }}>WhatsApp</option>
+        <option value="both" {{ 'selected' if current_user.notification_channel=='both' }}>Her ikisi (Telegram + WhatsApp)</option>
+      </select>
+      <p class="hint">Telegram için sol menüden bağlantı yap. WhatsApp için numaranı aşağıya gir.</p>
+    </div>
+    <div class="field">
+      <label>WhatsApp numarası</label>
+      <input type="text" name="whatsapp_number" value="{{ current_user.whatsapp_number or '' }}" placeholder="0532 111 22 33">
+      <p class="hint">Ülke koduyla ya da 0 ile başlayabilirsin (örn. 0532… veya +90532…).</p>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
     <div class="card-title" style="font-size:.95rem">Şifre değiştir (opsiyonel)</div>
     <div class="field">
       <label>Mevcut şifre</label>

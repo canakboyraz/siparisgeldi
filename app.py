@@ -1,9 +1,31 @@
 """Uygulama fabrikası (application factory)."""
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
+from sqlalchemy import text
 
 from config import Config
 from extensions import db, login_manager
+
+
+def _ensure_schema():
+    """Var olan Postgres tablolarına eksik kolonları güvenle ekler.
+    create_all() yalnızca eksik TABLOLARI oluşturur, kolon eklemez; bu yüzden
+    sonradan eklenen alanlar için hafif bir 'ADD COLUMN IF NOT EXISTS' geçeriz.
+    SQLite (yerel) taze DB oluşturduğundan atlanır."""
+    backend = db.engine.url.get_backend_name()
+    if not backend.startswith("postgres"):
+        return
+    stmts = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(30)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_channel VARCHAR(20) DEFAULT 'telegram'",
+        "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
+    ]
+    with db.engine.begin() as conn:
+        for s in stmts:
+            try:
+                conn.execute(text(s))
+            except Exception as e:
+                print(f"[SCHEMA] atlandı: {s} → {e}")
 
 
 def create_app(config_class=Config, start_scheduler=None):
@@ -46,9 +68,10 @@ def create_app(config_class=Config, start_scheduler=None):
             "bot_username": app.config.get("TELEGRAM_BOT_USERNAME", ""),
         }
 
-    # Tabloları oluştur
+    # Tabloları oluştur + hafif şema güncellemeleri (mevcut Postgres'e yeni kolon)
     with app.app_context():
         db.create_all()
+        _ensure_schema()
 
     # Arka plan zamanlayıcı (dev: web süreci içinde)
     should_start = app.config.get("RUN_SCHEDULER", True) if start_scheduler is None else start_scheduler

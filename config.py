@@ -43,6 +43,14 @@ class Config:
     MIGROS_WEBHOOK_USER = os.environ.get("MIGROS_WEBHOOK_USER", "")
     MIGROS_WEBHOOK_PASS = os.environ.get("MIGROS_WEBHOOK_PASS", "")
 
+    # WhatsApp (Meta Cloud API). Değerler Meta Business/Developers'tan alınır.
+    WHATSAPP_ACCESS_TOKEN   = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+    WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+    WHATSAPP_API_VERSION    = os.environ.get("WHATSAPP_API_VERSION", "v21.0")
+    # Proaktif bildirim için Meta onaylı utility şablonu
+    WHATSAPP_TEMPLATE_NAME  = os.environ.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim")
+    WHATSAPP_TEMPLATE_LANG  = os.environ.get("WHATSAPP_TEMPLATE_LANG", "tr")
+
     # Scheduler'ı web süreci içinde başlat (tek instance dev için). Prod'da
     # ayrı worker süreci öneririz → RUN_SCHEDULER=0 yapıp worker.py'yi ayrı çalıştır.
     RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "1") == "1"
