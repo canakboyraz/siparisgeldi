@@ -48,6 +48,74 @@ def reset_telegram():
     return redirect(url_for("dashboard.connect_telegram"))
 
 
+# ── WhatsApp bağlama ────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/whatsapp", methods=["GET", "POST"])
+@login_required
+def connect_whatsapp():
+    if request.method == "POST":
+        number  = request.form.get("whatsapp_number", "").strip()
+        channel = request.form.get("notification_channel", "").strip()
+        current_user.whatsapp_number = number or None
+        if channel in ("telegram", "whatsapp", "both"):
+            current_user.notification_channel = channel
+        db.session.commit()
+        flash("WhatsApp ayarların kaydedildi.", "success")
+        return redirect(url_for("dashboard.connect_whatsapp"))
+    return render_template("dashboard/connect_whatsapp.html")
+
+
+@dashboard_bp.route("/whatsapp/test", methods=["POST"])
+@login_required
+def test_whatsapp():
+    """WhatsApp'a örnek sipariş bildirimi gönderir (şablon → serbest metin fallback)."""
+    from notifications import whatsapp
+    cfg = current_app.config
+    num = current_user.whatsapp_number
+    tok = cfg.get("WHATSAPP_ACCESS_TOKEN")
+    pnid = cfg.get("WHATSAPP_PHONE_NUMBER_ID")
+    if not (num and tok and pnid):
+        flash("WhatsApp numarası veya sistem yapılandırması eksik.", "warning")
+        return redirect(url_for("dashboard.connect_whatsapp"))
+    ver = cfg.get("WHATSAPP_API_VERSION", "v21.0")
+    ok, err = whatsapp.send_template(
+        num, cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim"),
+        cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
+        ["Test bildirimi", "TEST-001", "Örnek ürün x1", "0,00 ₺"], tok, pnid, ver)
+    if not ok:
+        ok, err2 = whatsapp.send_text(num, "🔔 Test — WhatsApp bildirimlerin çalışıyor! (SiparişGeldi)", tok, pnid, ver)
+        err = None if ok else (err or err2)
+    flash("✅ WhatsApp test mesajı gönderildi." if ok else f"⚠️ Gönderilemedi: {err}",
+          "success" if ok else "warning")
+    return redirect(url_for("dashboard.connect_whatsapp"))
+
+
+@dashboard_bp.route("/rapor/test", methods=["POST"])
+@login_required
+def test_report():
+    """Kullanıcının aktif entegrasyonları için günlük raporu hemen tetikler."""
+    from datetime import datetime
+    import pytz
+    from worker import _period_orders, _send_period_report
+    TZ = pytz.timezone("Europe/Istanbul")
+    today = datetime.now(TZ).date()
+    intgs = Integration.query.filter_by(user_id=current_user.id, is_active=True).all()
+    if not intgs:
+        flash("Önce bir platform (TrendyolGo/Migros) bağla.", "warning")
+        return redirect(url_for("dashboard.index"))
+    count = 0
+    for intg in intgs:
+        try:
+            start = TZ.localize(datetime.combine(today, datetime.min.time()))
+            orders = _period_orders(intg, start)
+            _send_period_report(intg, "Günlük", today.strftime('%d.%m.%Y'), orders)
+            count += 1
+        except Exception as e:
+            print(f"[RAPOR TEST] Hata user={current_user.id}: {e}")
+    flash(f"✅ {count} platform için test raporu gönderildi — kanalını kontrol et.", "success")
+    return redirect(url_for("dashboard.index"))
+
+
 # ── TrendyolGo ──────────────────────────────────────────────────────────────
 
 @dashboard_bp.route("/trendyolgo", methods=["GET", "POST"])

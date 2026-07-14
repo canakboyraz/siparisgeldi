@@ -4,7 +4,14 @@
 {% block panel %}
 <div class="page-head">
   <h1>Merhaba, {{ current_user.name }} 👋</h1>
-  <a class="btn btn-primary" href="{{ url_for('dashboard.trendyolgo_setup') }}">+ Platform bağla</a>
+  <div class="inline">
+    {% if integrations %}
+    <form method="post" action="{{ url_for('dashboard.test_report') }}">
+      <button class="btn btn-ghost" type="submit">📊 Test rapor gönder</button>
+    </form>
+    {% endif %}
+    <a class="btn btn-primary" href="{{ url_for('dashboard.trendyolgo_setup') }}">+ Platform bağla</a>
+  </div>
 </div>
 
 {% if not current_user.telegram_connected %}
