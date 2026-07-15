@@ -11,6 +11,9 @@
       <a href="{{ url_for('dashboard.connect_telegram') }}" class="{{ 'active' if request.endpoint in ['dashboard.connect_telegram','dashboard.reset_telegram'] }}">💬 Telegram</a>
       <a href="{{ url_for('dashboard.connect_whatsapp') }}" class="{{ 'active' if request.endpoint=='dashboard.connect_whatsapp' }}">🟢 WhatsApp</a>
       <a href="{{ url_for('dashboard.profile') }}" class="{{ 'active' if request.endpoint=='dashboard.profile' }}">⚙️ Profil</a>
+      {% if user_is_admin %}
+      <a href="{{ url_for('admin.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.') }}">🛡️ Admin</a>
+      {% endif %}
     </nav>
     <div class="foot">
       <div class="muted" style="padding:.4rem .8rem;color:#8b909b">{{ current_user.email }}</div>

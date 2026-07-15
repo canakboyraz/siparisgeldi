@@ -1,0 +1,41 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Admin · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>🛡️ Admin paneli</h1></div>
+
+<div class="stats">
+  <div class="stat"><div class="v">{{ stats.total_users }}</div><div class="l">Toplam kullanıcı</div></div>
+  <div class="stat"><div class="v">{{ stats.active_integrations }}/{{ stats.total_integrations }}</div><div class="l">Aktif entegrasyon</div></div>
+  <div class="stat"><div class="v">{{ stats.total_orders }}</div><div class="l">Toplam sipariş</div></div>
+  <div class="stat"><div class="v">{{ stats.telegram_connected }} · {{ stats.whatsapp_connected }}</div><div class="l">Telegram · WhatsApp</div></div>
+</div>
+
+<div class="card">
+  <div class="card-title">Kullanıcılar ({{ stats.total_users }})</div>
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Ad / İşletme</th><th>E-posta</th><th>Kayıt</th><th>Platformlar</th>
+        <th>Sipariş</th><th>TG</th><th>WA</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><strong>{{ r.user.name }}</strong></td>
+        <td class="muted">{{ r.user.email }}</td>
+        <td class="muted">{{ r.user.created_at.strftime('%d.%m.%Y') if r.user.created_at else '—' }}</td>
+        <td>{{ r.platforms }}</td>
+        <td>{{ r.order_count }}</td>
+        <td>{{ '✅' if r.telegram else '—' }}</td>
+        <td>{{ '✅' if r.whatsapp else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Henüz kullanıcı yok.</div>
+  {% endif %}
+</div>
+{% endblock %}

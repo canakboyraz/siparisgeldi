@@ -50,15 +50,20 @@ def create_app(config_class=Config, start_scheduler=None):
     from routes.auth import auth_bp
     from routes.dashboard import dashboard_bp
     from routes.webhooks import webhooks_bp
+    from routes.admin import admin_bp
 
     app.register_blueprint(public_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp, url_prefix="/panel")
     app.register_blueprint(webhooks_bp, url_prefix="/webhooks")
+    app.register_blueprint(admin_bp, url_prefix="/admin")
 
     # Şablonlarda kullanılacak yardımcılar
     from datetime import datetime
     import utils
+
+    from routes.admin import is_admin
+    from flask_login import current_user
 
     @app.context_processor
     def inject_helpers():
@@ -68,6 +73,7 @@ def create_app(config_class=Config, start_scheduler=None):
             "status_color": utils.status_color,
             "platform_label": utils.platform_label,
             "bot_username": app.config.get("TELEGRAM_BOT_USERNAME", ""),
+            "user_is_admin": is_admin(current_user),
         }
 
     # Tabloları oluştur + hafif şema güncellemeleri (mevcut Postgres'e yeni kolon)

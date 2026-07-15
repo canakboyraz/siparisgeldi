@@ -10,6 +10,8 @@ class Config:
 
     # Genel alan adı / marka
     APP_DOMAIN = os.environ.get("APP_DOMAIN", "siparisgeldi.net")
+    # Admin paneline erişebilecek e-postalar (virgülle ayrık, küçük harf)
+    ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
     # Reverse proxy (Railway/Render) arkasında dış URL'ler https üretilsin
     PREFERRED_URL_SCHEME = os.environ.get("PREFERRED_URL_SCHEME", "https")
 
