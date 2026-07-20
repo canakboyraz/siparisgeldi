@@ -69,9 +69,15 @@
         {% endif %}
       </div>
     </div>
-    {% if counts.warning %}
-    <span class="badge red">Acil kontrol gerekli</span>
-    {% endif %}
+    <div class="inline">
+      {% if counts.warning %}
+      <span class="badge red">Acil kontrol gerekli</span>
+      {% endif %}
+      <div class="total-box">
+        <span>Toplam tutar</span>
+        <strong>{{ '%.2f'|format(filtered_total or 0) }} ₺</strong>
+      </div>
+    </div>
   </div>
 
   {% if rows %}
@@ -81,7 +87,6 @@
         <th>Sipariş</th>
         <th>Platform</th>
         <th>Durum</th>
-        <th>Bekleme</th>
         <th>Tutar</th>
         <th>Not</th>
         <th>Tarih</th>
@@ -97,7 +102,6 @@
         </td>
         <td>{{ platform_label(o.platform) }}</td>
         <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
-        <td>{{ row.age_minutes }} dk</td>
         <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
         <td class="note-cell">{{ o.customer_note or '—' }}</td>
         <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>

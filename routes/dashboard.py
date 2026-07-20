@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from extensions import db
 from models import Integration, Order
@@ -290,6 +290,7 @@ def active_orders():
     if status_filter["exclude"]:
         query = query.filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(status_filter["exclude"]))))
 
+    filtered_total = query.with_entities(func.coalesce(func.sum(Order.total_price), 0)).scalar() or 0
     orders_paged = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=30, error_out=False)
     now = datetime.utcnow()
     rows = [_active_order_row(order, now) for order in orders_paged.items]
@@ -302,6 +303,7 @@ def active_orders():
         orders=orders_paged,
         rows=rows,
         counts=counts,
+        filtered_total=filtered_total,
         filters={
             "platform": platform,
             "durum": status_group,
