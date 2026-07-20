@@ -15,7 +15,9 @@ dashboard_bp = Blueprint("dashboard", __name__)
 PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New"}
 PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared"}
 DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery"}
-PROBLEM_STATUSES = {"Cancelled", "UnSupplied", "Rejected", "Refunded", "Returned"}
+CANCELLED_STATUSES = {"Cancelled", "UnSupplied", "Rejected"}
+REFUNDED_STATUSES = {"Refunded", "Returned"}
+PROBLEM_STATUSES = CANCELLED_STATUSES | REFUNDED_STATUSES
 DONE_STATUSES = {"Delivered", "Completed"}
 ACTIVE_EXCLUDED_STATUSES = PROBLEM_STATUSES | DONE_STATUSES
 UNACCEPTED_WARNING_SECONDS = 120
@@ -284,15 +286,11 @@ def active_orders():
     base_query = _apply_active_common_filters(base_query, platform, search, date_from, date_to)
     query = base_query
 
-    status_filter = _status_filter(status_group)
-    if status_filter["include"]:
-        query = query.filter(Order.status.in_(sorted(status_filter["include"])))
-    if status_filter["exclude"]:
-        query = query.filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(status_filter["exclude"]))))
+    now = datetime.utcnow()
+    query = _apply_status_group_filter(query, status_group, now)
 
     filtered_total = query.with_entities(func.coalesce(func.sum(Order.total_price), 0)).scalar() or 0
     orders_paged = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=30, error_out=False)
-    now = datetime.utcnow()
     rows = [_active_order_row(order, now) for order in orders_paged.items]
 
     all_user_orders = base_query.with_entities(Order.status, Order.created_at).all()
@@ -339,6 +337,19 @@ def _apply_active_common_filters(query, platform: str, search: str, date_from: s
     return query
 
 
+def _apply_status_group_filter(query, group: str, now: datetime):
+    if group == "geciken":
+        warning_before = now - timedelta(seconds=UNACCEPTED_WARNING_SECONDS)
+        return query.filter(Order.status.in_(sorted(PENDING_STATUSES)), Order.created_at <= warning_before)
+
+    status_filter = _status_filter(group)
+    if status_filter["include"]:
+        query = query.filter(Order.status.in_(sorted(status_filter["include"])))
+    if status_filter["exclude"]:
+        query = query.filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(status_filter["exclude"]))))
+    return query
+
+
 def _parse_date_start(value: str):
     if not value:
         return None
@@ -362,6 +373,10 @@ def _status_filter(group: str) -> dict:
         return {"include": DELIVERY_STATUSES, "exclude": set()}
     if group == "sorunlu":
         return {"include": PROBLEM_STATUSES, "exclude": set()}
+    if group == "iptal":
+        return {"include": CANCELLED_STATUSES, "exclude": set()}
+    if group == "iade":
+        return {"include": REFUNDED_STATUSES, "exclude": set()}
     if group == "tamamlanan":
         return {"include": DONE_STATUSES, "exclude": set()}
     if group == "tumu":
@@ -373,9 +388,12 @@ def _status_group_options() -> list:
     return [
         ("aktif", "Aktif"),
         ("bekleyen", "Kabul bekleyen"),
+        ("geciken", "Kabul geciken"),
         ("hazirlaniyor", "Hazırlanıyor"),
         ("yolda", "Yolda"),
         ("sorunlu", "Sorunlu"),
+        ("iptal", "İptal"),
+        ("iade", "İade"),
         ("tamamlanan", "Tamamlanan"),
         ("tumu", "Tümü"),
     ]
@@ -393,11 +411,25 @@ def _active_order_row(order: Order, now: datetime) -> dict:
 
 
 def _active_order_counts(orders: list, now: datetime) -> dict:
-    counts = {"active": 0, "pending": 0, "preparing": 0, "delivery": 0, "problem": 0, "done": 0, "warning": 0}
+    counts = {
+        "active": 0,
+        "pending": 0,
+        "preparing": 0,
+        "delivery": 0,
+        "problem": 0,
+        "cancelled": 0,
+        "refunded": 0,
+        "done": 0,
+        "warning": 0,
+    }
     for order in orders:
         group = _order_group(order.status)
         if group in counts:
             counts[group] += 1
+        if order.status in CANCELLED_STATUSES:
+            counts["cancelled"] += 1
+        if order.status in REFUNDED_STATUSES:
+            counts["refunded"] += 1
         if order.status not in ACTIVE_EXCLUDED_STATUSES:
             counts["active"] += 1
         if _active_order_row(order, now)["is_unaccepted_warning"]:
