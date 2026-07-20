@@ -1,7 +1,9 @@
 """Panel: özet, Telegram bağlama, TrendyolGo kurulum, siparişler, profil."""
 import secrets
+from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
+from sqlalchemy import or_
 
 from extensions import db
 from models import Integration, Order
@@ -9,6 +11,14 @@ from integrations.trendyolgo import test_connection
 from integrations import migros
 
 dashboard_bp = Blueprint("dashboard", __name__)
+
+PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New"}
+PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared"}
+DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery"}
+PROBLEM_STATUSES = {"Cancelled", "UnSupplied", "Rejected", "Refunded", "Returned"}
+DONE_STATUSES = {"Delivered", "Completed"}
+ACTIVE_EXCLUDED_STATUSES = PROBLEM_STATUSES | DONE_STATUSES
+UNACCEPTED_WARNING_SECONDS = 120
 
 
 @dashboard_bp.route("/")
@@ -258,6 +268,114 @@ def orders():
         q = q.filter_by(platform=platform)
     orders_paged = q.order_by(Order.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
     return render_template("dashboard/orders.html", orders=orders_paged, platform=platform)
+
+
+@dashboard_bp.route("/aktif-siparisler")
+@login_required
+def active_orders():
+    page = request.args.get("page", 1, type=int)
+    platform = request.args.get("platform", "").strip()
+    status_group = request.args.get("durum", "aktif").strip() or "aktif"
+    search = request.args.get("q", "").strip()
+
+    query = Order.query.filter_by(user_id=current_user.id)
+    if platform:
+        query = query.filter_by(platform=platform)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(
+            Order.order_number.ilike(like),
+            Order.external_id.ilike(like),
+            Order.customer_note.ilike(like),
+        ))
+
+    status_filter = _status_filter(status_group)
+    if status_filter["include"]:
+        query = query.filter(Order.status.in_(sorted(status_filter["include"])))
+    if status_filter["exclude"]:
+        query = query.filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(status_filter["exclude"]))))
+
+    orders_paged = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=30, error_out=False)
+    now = datetime.utcnow()
+    rows = [_active_order_row(order, now) for order in orders_paged.items]
+
+    all_user_orders = Order.query.filter_by(user_id=current_user.id).with_entities(Order.status, Order.created_at).all()
+    counts = _active_order_counts(all_user_orders, now)
+
+    return render_template(
+        "dashboard/active_orders.html",
+        orders=orders_paged,
+        rows=rows,
+        counts=counts,
+        filters={"platform": platform, "durum": status_group, "q": search},
+        groups=_status_group_options(),
+    )
+
+
+def _status_filter(group: str) -> dict:
+    if group == "bekleyen":
+        return {"include": PENDING_STATUSES, "exclude": set()}
+    if group == "hazirlaniyor":
+        return {"include": PREPARING_STATUSES, "exclude": set()}
+    if group == "yolda":
+        return {"include": DELIVERY_STATUSES, "exclude": set()}
+    if group == "sorunlu":
+        return {"include": PROBLEM_STATUSES, "exclude": set()}
+    if group == "tamamlanan":
+        return {"include": DONE_STATUSES, "exclude": set()}
+    if group == "tumu":
+        return {"include": set(), "exclude": set()}
+    return {"include": set(), "exclude": ACTIVE_EXCLUDED_STATUSES}
+
+
+def _status_group_options() -> list:
+    return [
+        ("aktif", "Aktif"),
+        ("bekleyen", "Kabul bekleyen"),
+        ("hazirlaniyor", "Hazırlanıyor"),
+        ("yolda", "Yolda"),
+        ("sorunlu", "Sorunlu"),
+        ("tamamlanan", "Tamamlanan"),
+        ("tumu", "Tümü"),
+    ]
+
+
+def _active_order_row(order: Order, now: datetime) -> dict:
+    age_seconds = int((now - order.created_at).total_seconds()) if order.created_at else 0
+    is_pending = order.status in PENDING_STATUSES
+    return {
+        "order": order,
+        "age_minutes": max(0, age_seconds // 60),
+        "is_unaccepted_warning": is_pending and age_seconds >= UNACCEPTED_WARNING_SECONDS,
+        "group": _order_group(order.status),
+    }
+
+
+def _active_order_counts(orders: list, now: datetime) -> dict:
+    counts = {"active": 0, "pending": 0, "preparing": 0, "delivery": 0, "problem": 0, "done": 0, "warning": 0}
+    for order in orders:
+        group = _order_group(order.status)
+        if group in counts:
+            counts[group] += 1
+        if order.status not in ACTIVE_EXCLUDED_STATUSES:
+            counts["active"] += 1
+        if _active_order_row(order, now)["is_unaccepted_warning"]:
+            counts["warning"] += 1
+    return counts
+
+
+def _order_group(status: str) -> str:
+    if status in PENDING_STATUSES:
+        return "pending"
+    if status in PREPARING_STATUSES:
+        return "preparing"
+    if status in DELIVERY_STATUSES:
+        return "delivery"
+    if status in PROBLEM_STATUSES:
+        return "problem"
+    if status in DONE_STATUSES:
+        return "done"
+    return "active"
 
 
 # ── Profil ──────────────────────────────────────────────────────────────────

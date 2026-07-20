@@ -1,0 +1,111 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Aktif Siparişler · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <h1>Aktif Siparişler</h1>
+  <a class="btn btn-ghost" href="{{ url_for('dashboard.orders') }}">Sipariş arşivi</a>
+</div>
+
+<div class="stats">
+  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='aktif', platform=filters.platform, q=filters.q) }}">
+    <div class="v">{{ counts.active }}</div><div class="l">Aktif sipariş</div>
+  </a>
+  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='bekleyen', platform=filters.platform, q=filters.q) }}">
+    <div class="v">{{ counts.pending }}</div><div class="l">Kabul bekleyen</div>
+  </a>
+  <a class="stat stat-link {{ 'danger' if counts.warning else '' }}" href="{{ url_for('dashboard.active_orders', durum='bekleyen', platform=filters.platform, q=filters.q) }}">
+    <div class="v">{{ counts.warning }}</div><div class="l">2 dk üstü bekleyen</div>
+  </a>
+  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='sorunlu', platform=filters.platform, q=filters.q) }}">
+    <div class="v">{{ counts.problem }}</div><div class="l">İptal / sorunlu</div>
+  </a>
+</div>
+
+<div class="card">
+  <form method="get" class="filters active-filters">
+    <div class="field">
+      <label>Arama</label>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="Sipariş no veya not">
+    </div>
+    <div class="field">
+      <label>Platform</label>
+      <select name="platform">
+        <option value="">Tüm platformlar</option>
+        <option value="trendyolgo" {{ 'selected' if filters.platform == 'trendyolgo' }}>Trendyol Go</option>
+        <option value="migros" {{ 'selected' if filters.platform == 'migros' }}>Migros Yemek</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Durum</label>
+      <select name="durum">
+        {% for value, label in groups %}
+        <option value="{{ value }}" {{ 'selected' if filters.durum == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field actions">
+      <button class="btn btn-primary" type="submit">Filtrele</button>
+      <a class="btn btn-ghost" href="{{ url_for('dashboard.active_orders') }}">Temizle</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <div class="card-title">Operasyon listesi</div>
+      <div class="muted">{{ orders.total }} kayıt gösteriliyor</div>
+    </div>
+    {% if counts.warning %}
+    <span class="badge red">Acil kontrol gerekli</span>
+    {% endif %}
+  </div>
+
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Sipariş</th>
+        <th>Platform</th>
+        <th>Durum</th>
+        <th>Bekleme</th>
+        <th>Tutar</th>
+        <th>Not</th>
+        <th>Tarih</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% set o = row.order %}
+      <tr class="{{ 'row-alert' if row.is_unaccepted_warning else '' }}">
+        <td>
+          <strong>#{{ o.order_number or o.external_id }}</strong>
+          {% if row.is_unaccepted_warning %}<br><span class="badge red">Kabul gecikti</span>{% endif %}
+        </td>
+        <td>{{ platform_label(o.platform) }}</td>
+        <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
+        <td>{{ row.age_minutes }} dk</td>
+        <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
+        <td class="note-cell">{{ o.customer_note or '—' }}</td>
+        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if orders.pages > 1 %}
+  <div class="pagination">
+    {% if orders.has_prev %}
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.active_orders', page=orders.prev_num, platform=filters.platform, durum=filters.durum, q=filters.q) }}">Önceki</a>
+    {% endif %}
+    <span class="muted">Sayfa {{ orders.page }} / {{ orders.pages }}</span>
+    {% if orders.has_next %}
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.active_orders', page=orders.next_num, platform=filters.platform, durum=filters.durum, q=filters.q) }}">Sonraki</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty">Bu filtreye uygun aktif sipariş yok.</div>
+  {% endif %}
+</div>
+{% endblock %}
