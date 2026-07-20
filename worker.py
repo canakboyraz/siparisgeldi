@@ -23,6 +23,8 @@ from utils import status_label
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
 scheduler = BackgroundScheduler(timezone=TURKEY_TZ)
 
+TGO_UNACCEPTED_ALERT_STATUS = "UNACCEPTED_2MIN"
+
 
 # ── Sipariş polling ─────────────────────────────────────────────────────────
 
@@ -86,6 +88,16 @@ def _process_tgo(intg):
                 existing.status = current_status
                 existing.raw_json = json.dumps(order_data, ensure_ascii=False)
 
+            if _should_alert_unaccepted_tgo(existing, current_status, intg):
+                existing.mark_status_notified(TGO_UNACCEPTED_ALERT_STATUS)
+                db.session.commit()
+                amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
+                send_to_user(user, _format_unaccepted_tgo_message(order_data),
+                             wa=["Acil: siparis kabul edilmedi", str(order_number),
+                                 tgo.summarize_items(order_data), amount])
+                print(f"[TGO] ⚠️ #{order_number} 2 dk kabul edilmedi (user={intg.user_id})")
+                continue
+
             is_cancel = current_status in ("Cancelled", "UnSupplied")
             wants = intg.notify_cancel if is_cancel else intg.notify_status_change
 
@@ -100,6 +112,40 @@ def _process_tgo(intg):
                 print(f"[TGO] 🔄 #{order_number} → {current_status} (user={intg.user_id})")
             else:
                 db.session.commit()
+
+
+def _should_alert_unaccepted_tgo(order: Order, current_status: str, intg: Integration) -> bool:
+    """Return True once when a TrendyolGo order waits in Created for 2+ minutes."""
+    from flask import current_app
+
+    if not intg.notify_new_order:
+        return False
+    if current_status != "Created":
+        return False
+    if order.is_status_notified(TGO_UNACCEPTED_ALERT_STATUS):
+        return False
+    if not order.created_at:
+        return False
+    alert_after = timedelta(seconds=current_app.config.get("TGO_UNACCEPTED_ALERT_SECONDS", 120))
+    return datetime.utcnow() - order.created_at >= alert_after
+
+
+def _format_unaccepted_tgo_message(order: dict) -> str:
+    order_number = order.get("orderNumber", "N/A")
+    total_price = order.get("totalPrice", 0) or 0
+    eta = order.get("eta", "-")
+    items = tgo.summarize_items(order)
+    return (
+        "⚠️ <b>ACIL: SIPARIS HALA KABUL EDILMEDI</b>\n"
+        f"{'━'*28}\n"
+        f"📋 <b>Siparis No:</b> #{order_number}\n"
+        "⏱️ <b>Bekleme:</b> 2 dakikayi gecti\n"
+        f"🛍️ <b>Urunler:</b> {items}\n"
+        f"💰 <b>Tutar:</b> {total_price:.2f} ₺\n"
+        f"⏱️ <b>Sure:</b> {eta}\n"
+        f"{'━'*28}\n"
+        "TrendyolGo panelinden veya uygulamadan hemen kontrol edin."
+    )
 
 
 # ── Telegram hesap bağlama ──────────────────────────────────────────────────

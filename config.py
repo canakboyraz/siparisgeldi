@@ -33,6 +33,8 @@ class Config:
 
     # Sipariş polling aralığı (saniye)
     POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "30"))
+    # TrendyolGo siparişi bu süre içinde kabul edilmezse ekstra uyarı gönderilir.
+    TGO_UNACCEPTED_ALERT_SECONDS = int(os.environ.get("TGO_UNACCEPTED_ALERT_SECONDS", "120"))
 
     # Migros Yemek (Gourmet) API
     # Test: https://test.gourmet.migrosonline.com  ·  Canlı: https://gourmet.migrosonline.com
