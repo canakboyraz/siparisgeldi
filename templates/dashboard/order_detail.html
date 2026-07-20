@@ -27,7 +27,6 @@
       <div><span>Kaynak</span><strong>{{ detail.source }}</strong></div>
       <div><span>Şube</span><strong>{{ detail.store }}</strong></div>
       <div><span>Müşteri</span><strong>{{ detail.customer }}</strong></div>
-      <div><span>Harici ID</span><strong>{{ order.external_id }}</strong></div>
       <div><span>Güncelleme</span><strong>{{ order.updated_at.strftime('%d.%m.%Y %H:%M') if order.updated_at else '—' }}</strong></div>
     </div>
   </div>
@@ -84,12 +83,4 @@
   {% endif %}
 </div>
 
-{% if detail.raw %}
-<div class="card">
-  <details class="raw-details">
-    <summary>Teknik veri</summary>
-    <pre>{{ detail.raw|tojson(indent=2) }}</pre>
-  </details>
-</div>
-{% endif %}
 {% endblock %}
