@@ -160,14 +160,21 @@ def _handle_canceled(intg, user, payload):
     order = Order.query.filter_by(
         user_id=intg.user_id, platform="migros", external_id=ext_id
     ).first()
+    original_payload = None
     if order:
+        try:
+            original_payload = json.loads(order.raw_json) if order.raw_json else None
+        except (TypeError, ValueError):
+            original_payload = None
         order.status = "Cancelled"
         if not order.is_status_notified("Cancelled"):
             order.mark_status_notified("Cancelled")
         db.session.commit()
     if intg.notify_cancel:
-        send_to_user(user, migros.format_order_canceled(payload),
-                     wa=["Sipariş iptal · Migros Yemek", ext_id or "-", "-", "-"])
+        amount = f"{order.total_price:.2f} ₺" if order else "-"
+        items = migros.summarize_items(original_payload) if original_payload else "-"
+        send_to_user(user, migros.format_order_canceled(payload, original_payload),
+                     wa=["Sipariş iptal · Migros Yemek", ext_id or "-", items, amount])
         print(f"[MIGROS] ❌ iptal #{ext_id} (user={intg.user_id})")
 
 

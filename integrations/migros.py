@@ -180,6 +180,24 @@ def summarize_items(p: dict, max_items: int = 4) -> str:
     return s[:900]
 
 
+def summarize_items_for_display(p: dict, max_items: int = 4) -> str:
+    """Migros siparişini Telegram gibi zengin metin kanalları için özetler."""
+    text = summarize_items(p, max_items=max_items)
+    replacements = {
+        "Cikarilacak": "Çıkarılacak",
+        "Siparis notu": "Sipariş notu",
+        "Zili calmayin": "Zili çalmayın",
+        "Zili calin": "Zili çalın",
+        "Temassiz teslimat": "Temassız teslimat",
+        "Catal bicak gondermeyin": "Çatal bıçak göndermeyin",
+        "Adres tarifi": "Adres tarifi",
+        "+": "+",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
 def _item_detail_parts(item: dict) -> list:
     details = []
     for op in (item.get("options") or []):
@@ -303,14 +321,37 @@ def format_order_created(p: dict) -> str:
     return msg
 
 
-def format_order_canceled(p: dict) -> str:
+def format_order_canceled(p: dict, original_order: dict = None) -> str:
     order_id = p.get("OrderId") or p.get("orderId", "N/A")
-    return (
+    msg = (
         f"❌ <b>SİPARİŞ İPTAL EDİLDİ — Migros Yemek</b>\n"
         f"{'━'*28}\n"
         f"📋 <b>Sipariş No:</b> #{order_id}\n"
-        f"ℹ️ Sipariş iptal/reddedildi.\n"
     )
+    if original_order:
+        prices = original_order.get("prices") or {}
+        total = _penny(prices, "total", "discounted", "migrosDiscounted", "restaurantDiscounted")
+        items = summarize_items_for_display(original_order)
+        note = ((original_order.get("extendedProperties") or {}).get("orderNote") or "")
+        msg += (
+            f"🛍️ <b>Ürünler:</b> {items}\n"
+            f"💰 <b>Tutar:</b> {total or '-'}\n"
+        )
+        if note:
+            msg += f"🗒️ <b>Sipariş Notu:</b> {note}\n"
+
+    reason = (
+        p.get("CancelReason")
+        or p.get("cancelReason")
+        or p.get("Reason")
+        or p.get("reason")
+        or p.get("CancelReasonText")
+        or p.get("cancelReasonText")
+    )
+    if reason:
+        msg += f"📌 <b>Neden:</b> {reason}\n"
+    msg += "ℹ️ Sipariş iptal/reddedildi.\n"
+    return msg
 
 
 _DELIVERY_MAP = {
