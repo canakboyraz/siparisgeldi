@@ -277,7 +277,7 @@ def format_order_created(p: dict) -> str:
         if note:
             items_text += f"    📝 Ürün notu: {note}\n"
     if not items_text:
-        items_text = f"  {p.get('description', '(ürün bilgisi yok)')}\n"
+        items_text = "  (ürün bilgisi yok)\n"
 
     ext = p.get("extendedProperties") or {}
     address = ((p.get("customer") or {}).get("deliveryAddress") or {})

@@ -89,7 +89,7 @@ def _line_quantity(line: dict) -> int:
 
 
 def _name_from_dict(data: dict) -> str:
-    for key in ("name", "productName", "itemName", "title", "description"):
+    for key in ("name", "productName", "itemName", "title"):
         value = _clean_text(data.get(key))
         if value:
             return value
@@ -101,7 +101,6 @@ def _note_parts(data: dict) -> list:
     for key, label in (
         ("note", "Not"),
         ("productNote", "Urun notu"),
-        ("description", "Aciklama"),
         ("specialNote", "Ozel not"),
     ):
         value = _clean_text(data.get(key))
@@ -215,8 +214,6 @@ def format_new_order_message(order: dict) -> str:
                 items_text += f"    ❌ {detail.replace('Cikarilacak:', 'Çıkarılacak:', 1)}\n"
             elif detail.startswith("Urun notu:"):
                 items_text += f"    📝 {detail.replace('Urun notu:', 'Ürün notu:', 1)}\n"
-            elif detail.startswith("Aciklama:"):
-                items_text += f"    ℹ️ {detail.replace('Aciklama:', 'Açıklama:', 1)}\n"
             elif detail.startswith("Not:") or detail.startswith("Ozel not:"):
                 items_text += f"    📝 {detail.replace('Ozel not:', 'Özel not:', 1)}\n"
             else:
