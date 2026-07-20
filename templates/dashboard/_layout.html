@@ -7,6 +7,7 @@
       <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint=='dashboard.index' }}">🏠 Panel</a>
       <a href="{{ url_for('dashboard.active_orders') }}" class="{{ 'active' if request.endpoint=='dashboard.active_orders' }}">🚦 Aktif</a>
       <a href="{{ url_for('dashboard.orders') }}" class="{{ 'active' if request.endpoint=='dashboard.orders' }}">🧾 Siparişler</a>
+      <a href="{{ url_for('dashboard.reports') }}" class="{{ 'active' if request.endpoint=='dashboard.reports' }}">📊 Raporlar</a>
       <a href="{{ url_for('dashboard.trendyolgo_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyolgo_setup' }}">🛵 Trendyol Go</a>
       <a href="{{ url_for('dashboard.migros_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.migros_setup' }}">🍔 Migros Yemek</a>
       <a href="{{ url_for('dashboard.connect_telegram') }}" class="{{ 'active' if request.endpoint in ['dashboard.connect_telegram','dashboard.reset_telegram'] }}">💬 Telegram</a>

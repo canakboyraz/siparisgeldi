@@ -5,18 +5,20 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_
+import pytz
 
 from extensions import db
 from models import Integration, Order
 from integrations import migros, trendyolgo as tgo
 
 dashboard_bp = Blueprint("dashboard", __name__)
+TURKEY_TZ = pytz.timezone("Europe/Istanbul")
 
 PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New"}
 PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared"}
 DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery"}
-CANCELLED_STATUSES = {"Cancelled", "UnSupplied", "Rejected"}
-REFUNDED_STATUSES = {"Refunded", "Returned"}
+CANCELLED_STATUSES = {"Cancelled", "Canceled", "UnSupplied", "Rejected", "REJECTED"}
+REFUNDED_STATUSES = {"Refunded", "Refund", "Returned", "Return", "PartiallyRefunded", "PartialRefunded", "RETURNED", "REFUNDED"}
 PROBLEM_STATUSES = CANCELLED_STATUSES | REFUNDED_STATUSES
 DONE_STATUSES = {"Delivered", "Completed"}
 ACTIVE_EXCLUDED_STATUSES = PROBLEM_STATUSES | DONE_STATUSES
@@ -272,6 +274,36 @@ def orders():
     return render_template("dashboard/orders.html", orders=orders_paged, platform=platform)
 
 
+@dashboard_bp.route("/raporlar")
+@login_required
+def reports():
+    period = request.args.get("period", "daily").strip() or "daily"
+    platform = request.args.get("platform", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+
+    start_date, end_date, period_label = _report_date_range(period, date_from, date_to)
+    query = Order.query.filter_by(user_id=current_user.id)
+    if platform:
+        query = query.filter_by(platform=platform)
+    query = _apply_report_date_filter(query, start_date, end_date)
+    orders = query.order_by(Order.created_at.desc()).all()
+    summary = _build_report_summary(orders)
+
+    return render_template(
+        "dashboard/reports.html",
+        summary=summary,
+        orders=orders[:50],
+        filters={
+            "period": period,
+            "platform": platform,
+            "date_from": start_date.isoformat(),
+            "date_to": end_date.isoformat(),
+        },
+        period_label=period_label,
+    )
+
+
 @dashboard_bp.route("/siparis/<int:order_id>")
 @login_required
 def order_detail(order_id):
@@ -457,6 +489,132 @@ def _order_group(status: str) -> str:
     if status in DONE_STATUSES:
         return "done"
     return "active"
+
+
+def _report_date_range(period: str, date_from: str, date_to: str):
+    today = datetime.now(TURKEY_TZ).date()
+    if period == "custom":
+        parsed_from = _parse_date_value(date_from)
+        parsed_to = _parse_date_value(date_to)
+        start = parsed_from or today
+        end = parsed_to or start
+        if end < start:
+            flash("Bitiş tarihi başlangıçtan önce olamaz; tarih aralığı düzeltilerek gösterildi.", "warning")
+            start, end = end, start
+        return start, end, f"{start.strftime('%d.%m.%Y')} - {end.strftime('%d.%m.%Y')}"
+
+    if period == "weekly":
+        start = today - timedelta(days=today.weekday())
+        return start, today, f"{start.strftime('%d.%m.%Y')} - {today.strftime('%d.%m.%Y')}"
+    if period == "monthly":
+        start = today.replace(day=1)
+        return start, today, start.strftime("%m.%Y")
+    return today, today, today.strftime("%d.%m.%Y")
+
+
+def _apply_report_date_filter(query, start_date, end_date):
+    start_dt = TURKEY_TZ.localize(datetime.combine(start_date, datetime.min.time()))
+    end_dt = TURKEY_TZ.localize(datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
+    return query.filter(
+        Order.created_at >= start_dt.astimezone(pytz.utc).replace(tzinfo=None),
+        Order.created_at < end_dt.astimezone(pytz.utc).replace(tzinfo=None),
+    )
+
+
+def _parse_date_value(value: str):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Tarih alanlarından biri okunamadı.", "warning")
+        return None
+
+
+def _build_report_summary(orders: list) -> dict:
+    refunded = [order for order in orders if _is_refunded_order(order)]
+    cancelled = [order for order in orders if _is_cancelled_order(order) and order not in refunded]
+    valid = [order for order in orders if order not in cancelled and order not in refunded]
+
+    return {
+        "gross_count": len(orders),
+        "gross_total": _sum_orders(orders),
+        "valid_count": len(valid),
+        "valid_total": _sum_orders(valid),
+        "cancelled_count": len(cancelled),
+        "cancelled_total": _sum_orders(cancelled),
+        "refunded_count": len(refunded),
+        "refunded_total": _sum_orders(refunded),
+        "products": _report_products(valid),
+        "platforms": _report_platforms(valid, cancelled, refunded),
+    }
+
+
+def _sum_orders(orders: list) -> float:
+    return sum((order.total_price or 0) for order in orders)
+
+
+def _normalized_status(status: str) -> str:
+    return (status or "").replace("_", "").replace("-", "").replace(" ", "").lower()
+
+
+def _is_cancelled_order(order: Order) -> bool:
+    status = order.status or ""
+    normalized = _normalized_status(status)
+    return (
+        status in CANCELLED_STATUSES
+        or "cancel" in normalized
+        or "iptal" in normalized
+        or "reject" in normalized
+        or "unsupplied" in normalized
+    )
+
+
+def _is_refunded_order(order: Order) -> bool:
+    status = order.status or ""
+    normalized = _normalized_status(status)
+    return (
+        status in REFUNDED_STATUSES
+        or "refund" in normalized
+        or "iade" in normalized
+        or "return" in normalized
+    )
+
+
+def _report_products(orders: list, max_items: int = 15) -> list:
+    counts = {}
+    for order in orders:
+        data = _parse_raw_json(order.raw_json)
+        if order.platform == "migros":
+            for item in data.get("items") or []:
+                name = item.get("name") or "Ürün"
+                counts[name] = counts.get(name, 0) + (item.get("amount") or 1)
+        else:
+            for line in data.get("lines") or []:
+                name = line.get("name") or line.get("productName") or "Ürün"
+                counts[name] = counts.get(name, 0) + tgo._line_quantity(line)
+    return [
+        {"name": name, "quantity": qty}
+        for name, qty in sorted(counts.items(), key=lambda item: item[1], reverse=True)[:max_items]
+    ]
+
+
+def _report_platforms(valid: list, cancelled: list, refunded: list) -> list:
+    grouped = {}
+    for key, orders in (("valid", valid), ("cancelled", cancelled), ("refunded", refunded)):
+        for order in orders:
+            bucket = grouped.setdefault(order.platform, {
+                "platform": order.platform,
+                "valid_count": 0,
+                "valid_total": 0,
+                "cancelled_count": 0,
+                "cancelled_total": 0,
+                "refunded_count": 0,
+                "refunded_total": 0,
+            })
+            bucket[f"{key}_count"] += 1
+            bucket[f"{key}_total"] += order.total_price or 0
+    return sorted(grouped.values(), key=lambda item: item["valid_total"], reverse=True)
 
 
 def _order_detail_context(order: Order) -> dict:

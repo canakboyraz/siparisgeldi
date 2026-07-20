@@ -1,0 +1,124 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Raporlar · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div>
+    <h1>Raporlar</h1>
+    <div class="muted">{{ period_label }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" class="filters report-filters">
+    <div class="field">
+      <label>Dönem</label>
+      <select name="period">
+        <option value="daily" {{ 'selected' if filters.period == 'daily' }}>Günlük</option>
+        <option value="weekly" {{ 'selected' if filters.period == 'weekly' }}>Haftalık</option>
+        <option value="monthly" {{ 'selected' if filters.period == 'monthly' }}>Aylık</option>
+        <option value="custom" {{ 'selected' if filters.period == 'custom' }}>Tarih aralığı</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Platform</label>
+      <select name="platform">
+        <option value="">Tüm platformlar</option>
+        <option value="trendyolgo" {{ 'selected' if filters.platform == 'trendyolgo' }}>Trendyol Go</option>
+        <option value="migros" {{ 'selected' if filters.platform == 'migros' }}>Migros Yemek</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Başlangıç</label>
+      <input type="date" name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div class="field">
+      <label>Bitiş</label>
+      <input type="date" name="date_to" value="{{ filters.date_to }}">
+    </div>
+    <div class="field actions">
+      <button class="btn btn-primary" type="submit">Göster</button>
+      <a class="btn btn-ghost" href="{{ url_for('dashboard.reports') }}">Bugün</a>
+    </div>
+  </form>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="v">{{ summary.valid_count }}</div><div class="l">Geçerli sipariş</div></div>
+  <div class="stat"><div class="v">{{ '%.2f'|format(summary.valid_total) }} ₺</div><div class="l">Net satış</div></div>
+  <div class="stat"><div class="v">{{ summary.cancelled_count }}</div><div class="l">İptal sipariş</div></div>
+  <div class="stat"><div class="v">{{ '%.2f'|format(summary.cancelled_total) }} ₺</div><div class="l">İptal toplamı</div></div>
+  <div class="stat"><div class="v">{{ summary.refunded_count }}</div><div class="l">İade sipariş</div></div>
+  <div class="stat"><div class="v">{{ '%.2f'|format(summary.refunded_total) }} ₺</div><div class="l">İade toplamı</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="section-head">
+      <div>
+        <div class="card-title">Satılan ürünler</div>
+        <div class="muted">İptal ve iade hariç</div>
+      </div>
+    </div>
+    {% if summary.products %}
+      {% for item in summary.products %}
+      <div class="row">
+        <strong>{{ item.name }}</strong>
+        <span class="badge gray">x{{ item.quantity }}</span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">Bu aralıkta geçerli satış yok.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Platform kırılımı</div>
+    {% if summary.platforms %}
+      {% for item in summary.platforms %}
+      <div class="row">
+        <div>
+          <strong>{{ platform_label(item.platform) }}</strong><br>
+          <span class="muted">
+            {{ item.valid_count }} geçerli
+            · {{ item.cancelled_count }} iptal / {{ '%.2f'|format(item.cancelled_total) }} ₺
+            · {{ item.refunded_count }} iade / {{ '%.2f'|format(item.refunded_total) }} ₺
+          </span>
+        </div>
+        <strong>{{ '%.2f'|format(item.valid_total) }} ₺</strong>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">Bu aralıkta sipariş yok.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <div class="card-title">Siparişler</div>
+      <div class="muted">Son 50 kayıt · toplam {{ summary.gross_count }} sipariş · brüt {{ '%.2f'|format(summary.gross_total) }} ₺</div>
+    </div>
+  </div>
+  {% if orders %}
+  <table>
+    <thead>
+      <tr><th>Sipariş</th><th>Platform</th><th>Durum</th><th>Tutar</th><th>Tarih</th></tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td><a class="table-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">#{{ o.order_number or o.external_id }}</a></td>
+        <td>{{ platform_label(o.platform) }}</td>
+        <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
+        <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
+        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Bu filtreye uygun sipariş yok.</div>
+  {% endif %}
+</div>
+{% endblock %}
