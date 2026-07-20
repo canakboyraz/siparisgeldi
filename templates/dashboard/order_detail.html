@@ -58,9 +58,9 @@
 
 <div class="card">
   <div class="card-title">Ürünler</div>
-  {% if detail.items %}
+  {% if detail["items"] %}
   <div class="item-list">
-    {% for item in detail.items %}
+    {% for item in detail["items"] %}
     <div class="detail-item">
       <div class="item-main">
         <strong>{{ item.name }}</strong>
