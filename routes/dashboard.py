@@ -161,6 +161,7 @@ def trendyolgo_setup():
 @login_required
 def migros_setup():
     intg = Integration.query.filter_by(user_id=current_user.id, platform="migros").first()
+    migros_api_base = current_app.config.get("MIGROS_API_BASE")
 
     if request.method == "POST":
         api_key  = request.form.get("api_key", "").strip()
@@ -169,12 +170,13 @@ def migros_setup():
 
         if not api_key or not store_id:
             flash("Restoran API Key ve Store (Restoran) ID zorunludur.", "danger")
-            return render_template("dashboard/migros_setup.html", intg=intg, webhook_urls=_migros_webhook_urls())
+            return render_template("dashboard/migros_setup.html", intg=intg,
+                                   webhook_urls=_migros_webhook_urls(),
+                                   migros_api_base=migros_api_base)
 
         # Bağlantıyı doğrula (GetStoreGroups — şifreleme gerektirmez, sadece api key)
-        base = current_app.config.get("MIGROS_API_BASE")
         secret = current_app.config.get("MIGROS_SECRET_KEY", "")
-        ok, msg, _ = migros.test_connection(api_key, secret, base)
+        ok, msg, _ = migros.test_connection(api_key, secret, migros_api_base)
 
         if not intg:
             intg = Integration(user_id=current_user.id, platform="migros")
@@ -195,7 +197,9 @@ def migros_setup():
             flash("Bildirim alabilmek için Telegram'ı da bağlayın.", "warning")
         return redirect(url_for("dashboard.migros_setup"))
 
-    return render_template("dashboard/migros_setup.html", intg=intg, webhook_urls=_migros_webhook_urls())
+    return render_template("dashboard/migros_setup.html", intg=intg,
+                           webhook_urls=_migros_webhook_urls(),
+                           migros_api_base=migros_api_base)
 
 
 def _migros_webhook_urls():

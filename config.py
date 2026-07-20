@@ -37,7 +37,7 @@ class Config:
     TGO_UNACCEPTED_ALERT_SECONDS = int(os.environ.get("TGO_UNACCEPTED_ALERT_SECONDS", "120"))
 
     # Migros Yemek (Gourmet) API
-    # Test: https://test.gourmet.migrosonline.com  ·  Canlı: https://gourmet.migrosonline.com
+    # Test: https://test-gourmet.migrosone.com  ·  Canlı: https://gourmet.migrosonline.com
     MIGROS_API_BASE = os.environ.get("MIGROS_API_BASE", "https://gourmet.migrosonline.com")
     # Secret Key ENTEGRASYON FİRMASI (bizim) bazında TEK adettir; şifreleme için
     # kullanılır. Migros webhook URL'lerini ilettikten sonra bize verilir.
