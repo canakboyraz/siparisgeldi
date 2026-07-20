@@ -68,7 +68,7 @@
     {% if recent_orders %}
       {% for o in recent_orders %}
       <div class="row">
-        <div><strong>#{{ o.order_number }}</strong> <span class="muted">· {{ platform_label(o.platform) }}</span></div>
+        <div><a class="table-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">#{{ o.order_number or o.external_id }}</a> <span class="muted">· {{ platform_label(o.platform) }}</span></div>
         <div class="inline">
           <span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span>
           <strong>{{ '%.2f'|format(o.total_price) }} ₺</strong>

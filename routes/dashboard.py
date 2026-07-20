@@ -1,4 +1,5 @@
 """Panel: özet, Telegram bağlama, TrendyolGo kurulum, siparişler, profil."""
+import json
 import secrets
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
@@ -7,8 +8,7 @@ from sqlalchemy import func, or_
 
 from extensions import db
 from models import Integration, Order
-from integrations.trendyolgo import test_connection
-from integrations import migros
+from integrations import migros, trendyolgo as tgo
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -144,7 +144,7 @@ def trendyolgo_setup():
             flash("Tüm alanlar zorunludur.", "danger")
             return render_template("dashboard/trendyolgo_setup.html", intg=intg)
 
-        ok, msg, _ = test_connection(supplier_id, api_key, api_secret)
+        ok, msg, _ = tgo.test_connection(supplier_id, api_key, api_secret)
         if not ok:
             flash(f"API bağlantısı başarısız: {msg}", "danger")
             return render_template("dashboard/trendyolgo_setup.html", intg=intg)
@@ -270,6 +270,14 @@ def orders():
         q = q.filter_by(platform=platform)
     orders_paged = q.order_by(Order.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
     return render_template("dashboard/orders.html", orders=orders_paged, platform=platform)
+
+
+@dashboard_bp.route("/siparis/<int:order_id>")
+@login_required
+def order_detail(order_id):
+    order = Order.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
+    detail = _order_detail_context(order)
+    return render_template("dashboard/order_detail.html", order=order, detail=detail)
 
 
 @dashboard_bp.route("/aktif-siparisler")
@@ -449,6 +457,155 @@ def _order_group(status: str) -> str:
     if status in DONE_STATUSES:
         return "done"
     return "active"
+
+
+def _order_detail_context(order: Order) -> dict:
+    raw = _parse_raw_json(order.raw_json)
+    if order.platform == "migros":
+        return _migros_detail_context(order, raw)
+    if order.platform == "trendyolgo":
+        return _tgo_detail_context(order, raw)
+    return {
+        "raw": raw,
+        "items": [],
+        "customer": "-",
+        "store": "-",
+        "delivery": "-",
+        "payment": order.payment_type or "-",
+        "address": "",
+        "address_direction": "",
+        "flags": [],
+        "order_note": order.customer_note or "",
+    }
+
+
+def _parse_raw_json(raw_json: str) -> dict:
+    if not raw_json:
+        return {}
+    try:
+        data = json.loads(raw_json)
+        return data if isinstance(data, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _tgo_detail_context(order: Order, raw: dict) -> dict:
+    payment = raw.get("payment") or {}
+    payment_map = {
+        "PAY_WITH_CARD": "Online Kart",
+        "PAY_WITH_ON_DELIVERY": "Kapıda Ödeme",
+        "PAY_WITH_MEAL_CARD": "Yemek Kartı",
+    }
+    delivery_map = {"GO": "TGo Kuryesi", "STORE": "Restoran Kuryesi"}
+    app_raw = (raw.get("userInformation") or {}).get("appName", "")
+
+    return {
+        "raw": raw,
+        "items": _tgo_detail_items(raw),
+        "customer": _first_text(raw, "customerName", "customerFullName", "fullName") or "-",
+        "store": _first_text(raw, "storeName", "restaurantName", "sellerName") or "-",
+        "source": app_raw or order.app_source or "-",
+        "delivery": delivery_map.get(raw.get("deliveryType"), raw.get("deliveryType") or "-"),
+        "payment": payment_map.get(payment.get("paymentType"), order.payment_type or payment.get("paymentType") or "-"),
+        "address": _tgo_address(raw),
+        "address_direction": "",
+        "flags": [],
+        "order_note": raw.get("customerNote") or order.customer_note or "",
+    }
+
+
+def _tgo_detail_items(raw: dict) -> list:
+    items = []
+    for line in raw.get("lines") or []:
+        if not isinstance(line, dict):
+            continue
+        details = [_display_detail_text(part) for part in tgo._line_detail_parts(line)]
+        items.append({
+            "name": line.get("name") or line.get("productName") or "?",
+            "quantity": tgo._line_quantity(line),
+            "note": "",
+            "details": details,
+        })
+    return items
+
+
+def _migros_detail_context(order: Order, raw: dict) -> dict:
+    ext = raw.get("extendedProperties") or {}
+    customer = raw.get("customer") or {}
+    address = customer.get("deliveryAddress") or {}
+    payment = (raw.get("payment") or {}).get("type") or {}
+    provider_map = {"RESTAURANT": "Restoran Kuryesi", "MIGROS": "Migros Kuryesi"}
+    flags = []
+    if ext.get("ringDoorBell") is False:
+        flags.append("Zili çalmayın")
+    elif ext.get("ringDoorBell") is True:
+        flags.append("Zili çalın")
+    if ext.get("contactlessDelivery"):
+        flags.append("Temassız teslimat")
+    if ext.get("saveGreen"):
+        flags.append("Çatal bıçak göndermeyin")
+
+    return {
+        "raw": raw,
+        "items": _migros_detail_items(raw),
+        "customer": customer.get("fullName") or "-",
+        "store": (raw.get("store") or {}).get("name") or "-",
+        "source": "Migros Yemek",
+        "delivery": provider_map.get(raw.get("deliveryProvider"), raw.get("deliveryProvider") or "-"),
+        "payment": payment.get("description") or payment.get("name") or order.payment_type or "-",
+        "address": address.get("detail") or "",
+        "address_direction": address.get("direction") or "",
+        "flags": flags,
+        "order_note": ext.get("orderNote") or order.customer_note or "",
+    }
+
+
+def _migros_detail_items(raw: dict) -> list:
+    items = []
+    for item in raw.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        items.append({
+            "name": item.get("name") or "?",
+            "quantity": item.get("amount") or 1,
+            "note": item.get("note") or "",
+            "details": [_display_detail_text(part) for part in migros._item_detail_parts(item)],
+        })
+    return items
+
+
+def _display_detail_text(value: str) -> str:
+    replacements = {
+        "Cikarilacak": "Çıkarılacak",
+        "Urun notu": "Ürün notu",
+        "Ozel not": "Özel not",
+        "Siparis notu": "Sipariş notu",
+    }
+    text = value or ""
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
+def _first_text(data: dict, *keys) -> str:
+    for key in keys:
+        value = data.get(key)
+        if value:
+            return str(value).strip()
+    return ""
+
+
+def _tgo_address(raw: dict) -> str:
+    address = raw.get("address") or raw.get("deliveryAddress") or {}
+    if isinstance(address, str):
+        return address
+    if not isinstance(address, dict):
+        return ""
+    for key in ("fullAddress", "address", "detail", "description"):
+        if address.get(key):
+            return str(address[key]).strip()
+    parts = [address.get(k) for k in ("neighborhood", "street", "buildingNo", "floor", "doorNumber", "district", "city")]
+    return " ".join(str(part).strip() for part in parts if part)
 
 
 # ── Profil ──────────────────────────────────────────────────────────────────

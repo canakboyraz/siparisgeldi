@@ -142,10 +142,30 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .row-alert{background:#fff7f6}
 .row-alert td:first-child{border-left:3px solid var(--red)}
 .note-cell{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.table-link{color:var(--brand);font-weight:800}
+.table-link:hover{text-decoration:underline}
 .total-box{display:flex;align-items:center;gap:.6rem;background:var(--green-soft);color:var(--green);
   border:1px solid #bfe6d0;border-radius:10px;padding:.5rem .75rem;white-space:nowrap}
 .total-box span{font-size:.82rem;font-weight:700;color:var(--green)}
 .total-box strong{font-size:1.05rem}
+.detail-grid{align-items:start;margin-bottom:1rem}
+.detail-list{display:grid;gap:.7rem}
+.detail-list div{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--line);padding-bottom:.65rem}
+.detail-list div:last-child{border-bottom:none;padding-bottom:0}
+.detail-list span,.detail-block span{color:var(--muted);font-size:.82rem;font-weight:700}
+.detail-list strong{text-align:right;max-width:60%;word-break:break-word}
+.detail-block{margin-top:1rem}
+.detail-block p{margin:.25rem 0 0;word-break:break-word}
+.notice-box{background:var(--amber-soft);color:#6f4c05;border:1px solid #f1d28b;border-radius:10px;padding:.85rem 1rem;margin-top:.8rem}
+.flag-list{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem}
+.item-list{display:grid;gap:.8rem}
+.detail-item{border:1px solid var(--line);border-radius:10px;padding:1rem;background:#fff}
+.item-main{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.detail-item ul{margin:.6rem 0 0;padding-left:1.2rem;color:var(--ink)}
+.detail-item li{margin:.2rem 0}
+.item-note{margin-top:.7rem;background:var(--gray-soft);border-radius:8px;padding:.55rem .7rem;color:var(--gray);font-weight:600}
+.raw-details summary{cursor:pointer;font-weight:800;color:var(--muted)}
+.raw-details pre{white-space:pre-wrap;word-break:break-word;background:var(--gray-soft);border-radius:10px;padding:1rem;max-height:420px;overflow:auto}
 
 @media(max-width:860px){
   .layout{grid-template-columns:1fr}
@@ -160,4 +180,6 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .section-head{align-items:flex-start}
   .note-cell{max-width:180px}
   .total-box{width:100%;justify-content:space-between}
+  .detail-list div{display:block}
+  .detail-list strong{display:block;text-align:left;max-width:100%;margin-top:.15rem}
 }

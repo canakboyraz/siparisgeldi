@@ -1,0 +1,95 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Sipariş #{{ order.order_number or order.external_id }} · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div>
+    <h1>Sipariş #{{ order.order_number or order.external_id }}</h1>
+    <div class="muted">{{ platform_label(order.platform) }} · {{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else 'Tarih yok' }}</div>
+  </div>
+  <div class="inline">
+    <a class="btn btn-ghost" href="{{ url_for('dashboard.active_orders') }}">Aktif siparişler</a>
+    <a class="btn btn-ghost" href="{{ url_for('dashboard.orders') }}">Sipariş arşivi</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="v">{{ status_label(order.status) }}</div><div class="l">Durum</div></div>
+  <div class="stat"><div class="v">{{ '%.2f'|format(order.total_price or 0) }} ₺</div><div class="l">Tutar</div></div>
+  <div class="stat"><div class="v">{{ detail.payment }}</div><div class="l">Ödeme</div></div>
+  <div class="stat"><div class="v">{{ detail.delivery }}</div><div class="l">Teslimat</div></div>
+</div>
+
+<div class="grid-2 detail-grid">
+  <div class="card">
+    <div class="card-title">Sipariş bilgileri</div>
+    <div class="detail-list">
+      <div><span>Platform</span><strong>{{ platform_label(order.platform) }}</strong></div>
+      <div><span>Kaynak</span><strong>{{ detail.source }}</strong></div>
+      <div><span>Şube</span><strong>{{ detail.store }}</strong></div>
+      <div><span>Müşteri</span><strong>{{ detail.customer }}</strong></div>
+      <div><span>Harici ID</span><strong>{{ order.external_id }}</strong></div>
+      <div><span>Güncelleme</span><strong>{{ order.updated_at.strftime('%d.%m.%Y %H:%M') if order.updated_at else '—' }}</strong></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Notlar ve teslimat</div>
+    {% if detail.order_note %}
+    <div class="notice-box"><strong>Sipariş notu</strong><br>{{ detail.order_note }}</div>
+    {% endif %}
+    {% if detail.address %}
+    <div class="detail-block"><span>Adres</span><p>{{ detail.address }}</p></div>
+    {% endif %}
+    {% if detail.address_direction %}
+    <div class="detail-block"><span>Adres tarifi</span><p>{{ detail.address_direction }}</p></div>
+    {% endif %}
+    {% if detail.flags %}
+    <div class="flag-list">
+      {% for flag in detail.flags %}
+      <span class="badge blue">{{ flag }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if not detail.order_note and not detail.address and not detail.address_direction and not detail.flags %}
+    <div class="empty">Ek not veya teslimat detayı yok.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Ürünler</div>
+  {% if detail.items %}
+  <div class="item-list">
+    {% for item in detail.items %}
+    <div class="detail-item">
+      <div class="item-main">
+        <strong>{{ item.name }}</strong>
+        <span class="badge gray">x{{ item.quantity }}</span>
+      </div>
+      {% if item.details %}
+      <ul>
+        {% for part in item.details %}
+        <li>{{ part }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if item.note %}
+      <div class="item-note">Ürün notu: {{ item.note }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">Ürün detayı bulunamadı.</div>
+  {% endif %}
+</div>
+
+{% if detail.raw %}
+<div class="card">
+  <details class="raw-details">
+    <summary>Teknik veri</summary>
+    <pre>{{ detail.raw|tojson(indent=2) }}</pre>
+  </details>
+</div>
+{% endif %}
+{% endblock %}

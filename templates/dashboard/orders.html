@@ -20,7 +20,7 @@
     <tbody>
       {% for o in orders.items %}
       <tr>
-        <td><strong>#{{ o.order_number }}</strong></td>
+        <td><a class="table-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}"><strong>#{{ o.order_number or o.external_id }}</strong></a></td>
         <td>{{ platform_label(o.platform) }}</td>
         <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
         <td>{{ '%.2f'|format(o.total_price) }} ₺</td>

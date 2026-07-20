@@ -103,7 +103,7 @@
       {% set o = row.order %}
       <tr class="{{ 'row-alert' if row.is_unaccepted_warning else '' }}">
         <td>
-          <strong>#{{ o.order_number or o.external_id }}</strong>
+          <a class="table-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}"><strong>#{{ o.order_number or o.external_id }}</strong></a>
           {% if row.is_unaccepted_warning %}<br><span class="badge red">Kabul gecikti</span>{% endif %}
         </td>
         <td>{{ platform_label(o.platform) }}</td>
