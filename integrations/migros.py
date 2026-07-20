@@ -158,17 +158,68 @@ def extract_order_fields(p: dict) -> dict:
 
 
 def summarize_items(p: dict, max_items: int = 4) -> str:
-    """Migros siparişini kısa metne özetler. 'description' varsa onu kullanır."""
-    desc = p.get("description")
-    if desc:
-        return str(desc)[:220]
+    """Migros siparişini WhatsApp şablonuna sığacak şekilde detaylı özetler."""
     items = p.get("items") or []
-    parts = [f"{it.get('name', '?')} x{it.get('amount', 1)}" for it in items[:max_items]]
+    parts = []
+    for it in items[:max_items]:
+        item = f"{it.get('amount', 1)} x {it.get('name', '?')}"
+        details = _item_detail_parts(it)
+        if details:
+            item += " (" + "; ".join(details) + ")"
+        if it.get("note"):
+            item += f" - Not: {it['note']}"
+        parts.append(item)
     s = ", ".join(parts) if parts else "-"
     more = len(items) - max_items
     if more > 0:
-        s += f" +{more} ürün"
-    return s[:220]
+        s += f" +{more} urun"
+
+    extras = _order_extra_parts(p)
+    if extras:
+        s += " | " + " | ".join(extras)
+    return s[:900]
+
+
+def _item_detail_parts(item: dict) -> list:
+    details = []
+    for op in (item.get("options") or []):
+        name = op.get("itemNames") or op.get("headerName")
+        if not name:
+            continue
+        header = op.get("headerName")
+        qty = op.get("quantity")
+        suffix = f" x{qty}" if qty and qty != 1 else ""
+        if op.get("excluded"):
+            details.append(f"Cikarilacak: {name}{suffix}")
+        elif header and header != name:
+            details.append(f"{header}: {name}{suffix}")
+        else:
+            details.append(f"{name}{suffix}")
+    return details
+
+
+def _order_extra_parts(p: dict) -> list:
+    ext = p.get("extendedProperties") or {}
+    extras = []
+    if ext.get("orderNote"):
+        extras.append(f"Siparis notu: {ext['orderNote']}")
+    if ext.get("ringDoorBell") is False:
+        extras.append("Zili calmayin")
+    elif ext.get("ringDoorBell") is True:
+        extras.append("Zili calin")
+    if ext.get("contactlessDelivery"):
+        extras.append("Temassiz teslimat")
+    if ext.get("saveGreen"):
+        extras.append("Catal bicak gondermeyin")
+
+    addr = (p.get("customer") or {}).get("deliveryAddress") or {}
+    direction = addr.get("direction")
+    detail = addr.get("detail")
+    if direction:
+        extras.append(f"Adres tarifi: {direction}")
+    if detail:
+        extras.append(f"Adres: {detail}")
+    return extras
 
 
 def format_order_created(p: dict) -> str:
@@ -195,15 +246,25 @@ def format_order_created(p: dict) -> str:
         for op in (it.get("options") or []):
             opt = op.get("itemNames") or op.get("headerName")
             if opt:
-                items_text += f"    ↳ {opt}\n"
+                header = op.get("headerName")
+                qty = op.get("quantity")
+                suffix = f" x{qty}" if qty and qty != 1 else ""
+                if op.get("excluded"):
+                    items_text += f"    ❌ Çıkarılacak: {opt}{suffix}\n"
+                elif header and header != opt:
+                    items_text += f"    ↳ {header}: {opt}{suffix}\n"
+                else:
+                    items_text += f"    ↳ {opt}{suffix}\n"
         note = it.get("note")
         if note:
-            items_text += f"    📝 {note}\n"
+            items_text += f"    📝 Ürün notu: {note}\n"
     if not items_text:
         items_text = f"  {p.get('description', '(ürün bilgisi yok)')}\n"
 
     ext = p.get("extendedProperties") or {}
-    addr = ((p.get("customer") or {}).get("deliveryAddress") or {}).get("detail", "")
+    address = ((p.get("customer") or {}).get("deliveryAddress") or {})
+    addr = address.get("detail", "")
+    direction = address.get("direction", "")
 
     msg = (
         f"🆕 <b>YENİ SİPARİŞ — Migros Yemek</b>\n"
@@ -224,13 +285,19 @@ def format_order_created(p: dict) -> str:
     )
     if addr:
         msg += f"📍 <b>Adres:</b> {addr}\n"
+    if direction:
+        msg += f"🧭 <b>Adres Tarifi:</b> {direction}\n"
     if ext.get("orderNote"):
-        msg += f"🗒️ <b>Not:</b> {ext['orderNote']}\n"
+        msg += f"🗒️ <b>Sipariş Notu:</b> {ext['orderNote']}\n"
     flags = []
-    if ext.get("ringDoorBell"):
-        flags.append("🔔 Zili çal")
+    if ext.get("ringDoorBell") is False:
+        flags.append("🔕 Zili çalmayın")
+    elif ext.get("ringDoorBell") is True:
+        flags.append("🔔 Zili çalın")
     if ext.get("contactlessDelivery"):
         flags.append("🤝 Temassız teslimat")
+    if ext.get("saveGreen"):
+        flags.append("🍴 Çatal bıçak göndermeyin")
     if flags:
         msg += "ℹ️ " + " · ".join(flags) + "\n"
     return msg
