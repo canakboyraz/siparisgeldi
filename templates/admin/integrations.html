@@ -1,0 +1,75 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Entegrasyonlar · Admin{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <h1>🔌 Entegrasyonlar</h1>
+  <a class="btn btn-ghost" href="{{ url_for('admin.index') }}">Admin özeti</a>
+</div>
+
+<div class="card">
+  <form method="get" class="filters">
+    <div class="field">
+      <label>Arama</label>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="Kullanıcı, e-posta, platform veya restoran ID">
+    </div>
+    <div class="field">
+      <label>Platform</label>
+      <select name="platform">
+        <option value="">Tümü</option>
+        {% for p in platforms %}
+        <option value="{{ p }}" {{ 'selected' if filters.platform == p }}>{{ platform_label(p) }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Durum</label>
+      <select name="state">
+        <option value="">Tümü</option>
+        <option value="active" {{ 'selected' if filters.state == 'active' }}>Aktif</option>
+        <option value="inactive" {{ 'selected' if filters.state == 'inactive' }}>Pasif</option>
+        <option value="error" {{ 'selected' if filters.state == 'error' }}>Hatalı</option>
+      </select>
+    </div>
+    <div class="field actions">
+      <button class="btn btn-primary" type="submit">Filtrele</button>
+      <a class="btn btn-ghost" href="{{ url_for('admin.integrations') }}">Temizle</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">Entegrasyonlar ({{ integrations.total }})</div>
+  {% if integrations.items %}
+  <table>
+    <thead>
+      <tr>
+        <th>Kullanıcı</th><th>Platform</th><th>Restoran ID</th><th>Durum</th>
+        <th>Son senkron</th><th>Son hata</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in integrations.items %}
+      <tr>
+        <td>
+          <strong>{{ i.user.name }}</strong><br>
+          <span class="muted">{{ i.user.email }}</span>
+        </td>
+        <td>{{ platform_label(i.platform) }}</td>
+        <td>{{ i.tgo_supplier_id or i.migros_store_id or '—' }}</td>
+        <td>
+          {% if i.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
+          {% if i.last_error %}<span class="badge red">hata</span>{% endif %}
+        </td>
+        <td class="muted">{{ i.last_sync_at.strftime('%d.%m %H:%M') if i.last_sync_at else '—' }}</td>
+        <td class="muted">{{ i.last_error or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% set pagination = integrations %}
+  {% include "admin/_pagination.html" with context %}
+  {% else %}
+  <div class="empty">Kayıt bulunamadı.</div>
+  {% endif %}
+</div>
+{% endblock %}

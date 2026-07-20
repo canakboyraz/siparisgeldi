@@ -11,8 +11,11 @@
   <div class="stat"><div class="v">{{ stats.telegram_connected }} · {{ stats.whatsapp_connected }}</div><div class="l">Telegram · WhatsApp</div></div>
 </div>
 
-<div class="card">
-  <div class="card-title">Kullanıcılar ({{ stats.total_users }})</div>
+  <div class="card">
+    <div class="section-head">
+      <div class="card-title">Son kullanıcılar</div>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('admin.users') }}">Tümünü gör</a>
+    </div>
   {% if rows %}
   <table>
     <thead>
@@ -43,7 +46,10 @@
 
 <div class="grid-2" style="margin-top:1rem">
   <div class="card">
-    <div class="card-title">Sorunlu entegrasyonlar</div>
+    <div class="section-head">
+      <div class="card-title">Sorunlu entegrasyonlar</div>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('admin.integrations', state='error') }}">Tümünü gör</a>
+    </div>
     {% if problem_integrations %}
     <table>
       <thead>
@@ -69,7 +75,10 @@
   </div>
 
   <div class="card">
-    <div class="card-title">Son entegrasyonlar</div>
+    <div class="section-head">
+      <div class="card-title">Son entegrasyonlar</div>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('admin.integrations') }}">Tümünü gör</a>
+    </div>
     {% if recent_integrations %}
     <table>
       <thead>
@@ -99,7 +108,10 @@
 </div>
 
 <div class="card">
-  <div class="card-title">Son siparişler</div>
+  <div class="section-head">
+    <div class="card-title">Son siparişler</div>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('admin.orders') }}">Tümünü gör</a>
+  </div>
   {% if recent_orders %}
   <table>
     <thead>

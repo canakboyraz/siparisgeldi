@@ -1,0 +1,72 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Siparişler · Admin{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <h1>📦 Siparişler</h1>
+  <a class="btn btn-ghost" href="{{ url_for('admin.index') }}">Admin özeti</a>
+</div>
+
+<div class="card">
+  <form method="get" class="filters">
+    <div class="field">
+      <label>Arama</label>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="Sipariş no, kullanıcı veya e-posta">
+    </div>
+    <div class="field">
+      <label>Platform</label>
+      <select name="platform">
+        <option value="">Tümü</option>
+        {% for p in platforms %}
+        <option value="{{ p }}" {{ 'selected' if filters.platform == p }}>{{ platform_label(p) }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Durum</label>
+      <select name="status">
+        <option value="">Tümü</option>
+        {% for s in statuses %}
+        <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ status_label(s) }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field actions">
+      <button class="btn btn-primary" type="submit">Filtrele</button>
+      <a class="btn btn-ghost" href="{{ url_for('admin.orders') }}">Temizle</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">Siparişler ({{ orders.total }})</div>
+  {% if orders.items %}
+  <table>
+    <thead>
+      <tr>
+        <th>Tarih</th><th>Kullanıcı</th><th>Platform</th><th>Sipariş No</th>
+        <th>Durum</th><th>Tutar</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in orders.items %}
+      <tr>
+        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
+        <td>
+          <strong>{{ o.user.name }}</strong><br>
+          <span class="muted">{{ o.user.email }}</span>
+        </td>
+        <td>{{ platform_label(o.platform) }}</td>
+        <td>#{{ o.order_number or o.external_id }}</td>
+        <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
+        <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% set pagination = orders %}
+  {% include "admin/_pagination.html" with context %}
+  {% else %}
+  <div class="empty">Kayıt bulunamadı.</div>
+  {% endif %}
+</div>
+{% endblock %}

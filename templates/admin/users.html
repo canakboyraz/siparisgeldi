@@ -1,0 +1,62 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Kullanıcılar · Admin{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <h1>👥 Kullanıcılar</h1>
+  <a class="btn btn-ghost" href="{{ url_for('admin.index') }}">Admin özeti</a>
+</div>
+
+<div class="card">
+  <form method="get" class="filters">
+    <div class="field">
+      <label>Arama</label>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="Ad, işletme veya e-posta">
+    </div>
+    <div class="field">
+      <label>Kanal</label>
+      <select name="channel">
+        <option value="">Tümü</option>
+        <option value="telegram" {{ 'selected' if filters.channel == 'telegram' }}>Telegram</option>
+        <option value="whatsapp" {{ 'selected' if filters.channel == 'whatsapp' }}>WhatsApp</option>
+        <option value="both" {{ 'selected' if filters.channel == 'both' }}>Telegram + WhatsApp</option>
+      </select>
+    </div>
+    <div class="field actions">
+      <button class="btn btn-primary" type="submit">Ara</button>
+      <a class="btn btn-ghost" href="{{ url_for('admin.users') }}">Temizle</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">Kullanıcılar ({{ users.total }})</div>
+  {% if users.items %}
+  <table>
+    <thead>
+      <tr>
+        <th>Ad / İşletme</th><th>E-posta</th><th>Kayıt</th><th>Platformlar</th>
+        <th>Sipariş</th><th>Kanal</th><th>TG</th><th>WA</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users.items %}
+      <tr>
+        <td><strong>{{ u.name }}</strong></td>
+        <td class="muted">{{ u.email }}</td>
+        <td class="muted">{{ u.created_at.strftime('%d.%m.%Y') if u.created_at else '—' }}</td>
+        <td>{{ platforms_by_user.get(u.id, '—') }}</td>
+        <td>{{ order_counts.get(u.id, 0) }}</td>
+        <td><span class="badge gray">{{ u.notification_channel or 'telegram' }}</span></td>
+        <td>{{ '✅' if u.telegram_chat_id else '—' }}</td>
+        <td>{{ '✅' if u.whatsapp_number else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% set pagination = users %}
+  {% include "admin/_pagination.html" with context %}
+  {% else %}
+  <div class="empty">Kayıt bulunamadı.</div>
+  {% endif %}
+</div>
+{% endblock %}
