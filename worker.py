@@ -25,6 +25,25 @@ scheduler = BackgroundScheduler(timezone=TURKEY_TZ)
 
 TGO_UNACCEPTED_ALERT_STATUS = "UNACCEPTED_2MIN"
 
+CANCELLED_ORDER_STATUSES = {
+    "Cancelled",
+    "Canceled",
+    "UnSupplied",
+    "Rejected",
+    "REJECTED",
+}
+
+REFUNDED_ORDER_STATUSES = {
+    "Refunded",
+    "Refund",
+    "Returned",
+    "Return",
+    "PartiallyRefunded",
+    "PartialRefunded",
+    "RETURNED",
+    "REFUNDED",
+}
+
 
 # ── Sipariş polling ─────────────────────────────────────────────────────────
 
@@ -235,11 +254,41 @@ def _period_orders(intg, start_dt, end_dt=None):
     return q.all()
 
 
+def _normalized_status(status: str) -> str:
+    return (status or "").replace("_", "").replace("-", "").replace(" ", "").lower()
+
+
+def _is_cancelled_order(order: Order) -> bool:
+    status = order.status or ""
+    normalized = _normalized_status(status)
+    return (
+        status in CANCELLED_ORDER_STATUSES
+        or "cancel" in normalized
+        or "iptal" in normalized
+        or "reject" in normalized
+        or "unsupplied" in normalized
+    )
+
+
+def _is_refunded_order(order: Order) -> bool:
+    status = order.status or ""
+    normalized = _normalized_status(status)
+    return (
+        status in REFUNDED_ORDER_STATUSES
+        or "refund" in normalized
+        or "iade" in normalized
+        or "return" in normalized
+    )
+
+
 def _send_period_report(intg, kind: str, period_label: str, orders):
     """Ortak rapor gönderici: kind = 'Günlük' | 'Haftalık' | 'Aylık'."""
-    cancelled = [o for o in orders if o.status in ("Cancelled", "UnSupplied")]
-    active    = [o for o in orders if o.status not in ("Cancelled", "UnSupplied")]
+    refunded  = [o for o in orders if _is_refunded_order(o)]
+    cancelled = [o for o in orders if _is_cancelled_order(o) and o not in refunded]
+    active    = [o for o in orders if o not in cancelled and o not in refunded]
     revenue   = sum(o.total_price for o in active)
+    cancelled_total = sum(o.total_price for o in cancelled)
+    refunded_total = sum(o.total_price for o in refunded)
     products  = _aggregate_products(active)
     label = {"trendyolgo": "Trendyol Go", "migros": "Migros Yemek"}.get(intg.platform, intg.platform)
 
@@ -249,8 +298,9 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
         f"📆 {period_label}\n"
         f"{'━'*28}\n"
         f"✅ <b>Geçerli Sipariş:</b> {len(active)}\n"
-        f"❌ <b>İptal:</b> {len(cancelled)}\n"
-        f"💰 <b>Toplam Ciro:</b> {revenue:.2f} ₺\n"
+        f"❌ <b>İptal Sipariş:</b> {len(cancelled)} ({cancelled_total:.2f} ₺)\n"
+        f"↩️ <b>İade Sipariş:</b> {len(refunded)} ({refunded_total:.2f} ₺)\n"
+        f"💰 <b>Geçerli Ciro:</b> {revenue:.2f} ₺\n"
         f"{'━'*28}\n"
         f"🛍️ <b>Satılan Ürünler:</b>\n{products}\n"
     )
@@ -259,7 +309,7 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
     from flask import current_app
     wa_template = current_app.config.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_rapor")
     wa = [
-        f"{kind} · {label} · {period_label} · {len(active)} geçerli, {len(cancelled)} iptal",
+        f"{kind} · {label} · {period_label} · {len(active)} geçerli, {len(cancelled)} iptal, {len(refunded)} iade",
         products[:400] if products != "-" else "Sipariş yok",
         f"{revenue:.2f} ₺",
     ]
