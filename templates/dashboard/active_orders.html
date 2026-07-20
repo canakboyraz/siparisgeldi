@@ -7,16 +7,16 @@
 </div>
 
 <div class="stats">
-  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='aktif', platform=filters.platform, q=filters.q) }}">
+  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='aktif', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
     <div class="v">{{ counts.active }}</div><div class="l">Aktif sipariş</div>
   </a>
-  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='bekleyen', platform=filters.platform, q=filters.q) }}">
+  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='bekleyen', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
     <div class="v">{{ counts.pending }}</div><div class="l">Kabul bekleyen</div>
   </a>
-  <a class="stat stat-link {{ 'danger' if counts.warning else '' }}" href="{{ url_for('dashboard.active_orders', durum='bekleyen', platform=filters.platform, q=filters.q) }}">
+  <a class="stat stat-link {{ 'danger' if counts.warning else '' }}" href="{{ url_for('dashboard.active_orders', durum='bekleyen', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
     <div class="v">{{ counts.warning }}</div><div class="l">2 dk üstü bekleyen</div>
   </a>
-  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='sorunlu', platform=filters.platform, q=filters.q) }}">
+  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='sorunlu', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
     <div class="v">{{ counts.problem }}</div><div class="l">İptal / sorunlu</div>
   </a>
 </div>
@@ -43,6 +43,14 @@
         {% endfor %}
       </select>
     </div>
+    <div class="field">
+      <label>Başlangıç</label>
+      <input type="date" name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div class="field">
+      <label>Bitiş</label>
+      <input type="date" name="date_to" value="{{ filters.date_to }}">
+    </div>
     <div class="field actions">
       <button class="btn btn-primary" type="submit">Filtrele</button>
       <a class="btn btn-ghost" href="{{ url_for('dashboard.active_orders') }}">Temizle</a>
@@ -54,7 +62,12 @@
   <div class="section-head">
     <div>
       <div class="card-title">Operasyon listesi</div>
-      <div class="muted">{{ orders.total }} kayıt gösteriliyor</div>
+      <div class="muted">
+        {{ orders.total }} kayıt gösteriliyor
+        {% if filters.date_from or filters.date_to %}
+        · {{ filters.date_from or 'ilk kayıt' }} - {{ filters.date_to or 'bugün' }}
+        {% endif %}
+      </div>
     </div>
     {% if counts.warning %}
     <span class="badge red">Acil kontrol gerekli</span>
@@ -96,11 +109,11 @@
   {% if orders.pages > 1 %}
   <div class="pagination">
     {% if orders.has_prev %}
-    <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.active_orders', page=orders.prev_num, platform=filters.platform, durum=filters.durum, q=filters.q) }}">Önceki</a>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.active_orders', page=orders.prev_num, platform=filters.platform, durum=filters.durum, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">Önceki</a>
     {% endif %}
     <span class="muted">Sayfa {{ orders.page }} / {{ orders.pages }}</span>
     {% if orders.has_next %}
-    <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.active_orders', page=orders.next_num, platform=filters.platform, durum=filters.durum, q=filters.q) }}">Sonraki</a>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.active_orders', page=orders.next_num, platform=filters.platform, durum=filters.durum, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">Sonraki</a>
     {% endif %}
   </div>
   {% endif %}

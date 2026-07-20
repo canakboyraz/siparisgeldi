@@ -1,6 +1,6 @@
 """Panel: özet, Telegram bağlama, TrendyolGo kurulum, siparişler, profil."""
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import or_
@@ -277,17 +277,12 @@ def active_orders():
     platform = request.args.get("platform", "").strip()
     status_group = request.args.get("durum", "aktif").strip() or "aktif"
     search = request.args.get("q", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
 
-    query = Order.query.filter_by(user_id=current_user.id)
-    if platform:
-        query = query.filter_by(platform=platform)
-    if search:
-        like = f"%{search}%"
-        query = query.filter(or_(
-            Order.order_number.ilike(like),
-            Order.external_id.ilike(like),
-            Order.customer_note.ilike(like),
-        ))
+    base_query = Order.query.filter_by(user_id=current_user.id)
+    base_query = _apply_active_common_filters(base_query, platform, search, date_from, date_to)
+    query = base_query
 
     status_filter = _status_filter(status_group)
     if status_filter["include"]:
@@ -299,7 +294,7 @@ def active_orders():
     now = datetime.utcnow()
     rows = [_active_order_row(order, now) for order in orders_paged.items]
 
-    all_user_orders = Order.query.filter_by(user_id=current_user.id).with_entities(Order.status, Order.created_at).all()
+    all_user_orders = base_query.with_entities(Order.status, Order.created_at).all()
     counts = _active_order_counts(all_user_orders, now)
 
     return render_template(
@@ -307,9 +302,53 @@ def active_orders():
         orders=orders_paged,
         rows=rows,
         counts=counts,
-        filters={"platform": platform, "durum": status_group, "q": search},
+        filters={
+            "platform": platform,
+            "durum": status_group,
+            "q": search,
+            "date_from": date_from,
+            "date_to": date_to,
+        },
         groups=_status_group_options(),
     )
+
+
+def _apply_active_common_filters(query, platform: str, search: str, date_from: str, date_to: str):
+    if platform:
+        query = query.filter_by(platform=platform)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(
+            Order.order_number.ilike(like),
+            Order.external_id.ilike(like),
+            Order.customer_note.ilike(like),
+        ))
+
+    start_dt = _parse_date_start(date_from)
+    end_dt = _parse_date_end(date_to)
+    if date_from and not start_dt:
+        flash("Başlangıç tarihi okunamadı.", "warning")
+    if date_to and not end_dt:
+        flash("Bitiş tarihi okunamadı.", "warning")
+    if start_dt:
+        query = query.filter(Order.created_at >= start_dt)
+    if end_dt:
+        query = query.filter(Order.created_at < end_dt)
+    return query
+
+
+def _parse_date_start(value: str):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _parse_date_end(value: str):
+    start = _parse_date_start(value)
+    return start + timedelta(days=1) if start else None
 
 
 def _status_filter(group: str) -> dict:
