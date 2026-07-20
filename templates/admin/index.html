@@ -7,6 +7,7 @@
   <div class="stat"><div class="v">{{ stats.total_users }}</div><div class="l">Toplam kullanıcı</div></div>
   <div class="stat"><div class="v">{{ stats.active_integrations }}/{{ stats.total_integrations }}</div><div class="l">Aktif entegrasyon</div></div>
   <div class="stat"><div class="v">{{ stats.total_orders }}</div><div class="l">Toplam sipariş</div></div>
+  <div class="stat"><div class="v">{{ stats.error_integrations }}</div><div class="l">Hatalı entegrasyon</div></div>
   <div class="stat"><div class="v">{{ stats.telegram_connected }} · {{ stats.whatsapp_connected }}</div><div class="l">Telegram · WhatsApp</div></div>
 </div>
 
@@ -17,7 +18,7 @@
     <thead>
       <tr>
         <th>Ad / İşletme</th><th>E-posta</th><th>Kayıt</th><th>Platformlar</th>
-        <th>Sipariş</th><th>TG</th><th>WA</th>
+        <th>Sipariş</th><th>Kanal</th><th>TG</th><th>WA</th>
       </tr>
     </thead>
     <tbody>
@@ -28,6 +29,7 @@
         <td class="muted">{{ r.user.created_at.strftime('%d.%m.%Y') if r.user.created_at else '—' }}</td>
         <td>{{ r.platforms }}</td>
         <td>{{ r.order_count }}</td>
+        <td><span class="badge gray">{{ r.user.notification_channel or 'telegram' }}</span></td>
         <td>{{ '✅' if r.telegram else '—' }}</td>
         <td>{{ '✅' if r.whatsapp else '—' }}</td>
       </tr>
@@ -36,6 +38,94 @@
   </table>
   {% else %}
   <div class="empty">Henüz kullanıcı yok.</div>
+  {% endif %}
+</div>
+
+<div class="grid-2" style="margin-top:1rem">
+  <div class="card">
+    <div class="card-title">Sorunlu entegrasyonlar</div>
+    {% if problem_integrations %}
+    <table>
+      <thead>
+        <tr><th>Kullanıcı</th><th>Platform</th><th>Son hata</th><th>Güncelleme</th></tr>
+      </thead>
+      <tbody>
+        {% for i in problem_integrations %}
+        <tr>
+          <td>
+            <strong>{{ i.user.name }}</strong><br>
+            <span class="muted">{{ i.user.email }}</span>
+          </td>
+          <td><span class="badge red">{{ i.platform }}</span></td>
+          <td class="muted">{{ i.last_error }}</td>
+          <td class="muted">{{ i.updated_at.strftime('%d.%m %H:%M') if i.updated_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">Kayıtlı entegrasyon hatası yok.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Son entegrasyonlar</div>
+    {% if recent_integrations %}
+    <table>
+      <thead>
+        <tr><th>Kullanıcı</th><th>Platform</th><th>Durum</th><th>Son senkron</th></tr>
+      </thead>
+      <tbody>
+        {% for i in recent_integrations %}
+        <tr>
+          <td>
+            <strong>{{ i.user.name }}</strong><br>
+            <span class="muted">{{ i.user.email }}</span>
+          </td>
+          <td>{{ i.platform }}</td>
+          <td>
+            {% if i.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
+            {% if i.last_error %}<span class="badge red">hata</span>{% endif %}
+          </td>
+          <td class="muted">{{ i.last_sync_at.strftime('%d.%m %H:%M') if i.last_sync_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">Henüz entegrasyon yok.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Son siparişler</div>
+  {% if recent_orders %}
+  <table>
+    <thead>
+      <tr>
+        <th>Tarih</th><th>Kullanıcı</th><th>Platform</th><th>Sipariş No</th>
+        <th>Durum</th><th>Tutar</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in recent_orders %}
+      <tr>
+        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
+        <td>
+          <strong>{{ o.user.name }}</strong><br>
+          <span class="muted">{{ o.user.email }}</span>
+        </td>
+        <td>{{ platform_label(o.platform) }}</td>
+        <td>#{{ o.order_number or o.external_id }}</td>
+        <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
+        <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Henüz sipariş yok.</div>
   {% endif %}
 </div>
 {% endblock %}

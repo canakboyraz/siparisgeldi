@@ -42,6 +42,7 @@ def index():
     total_integrations = Integration.query.count()
     active_integrations = Integration.query.filter_by(is_active=True).count()
     total_orders       = Order.query.count()
+    error_integrations = Integration.query.filter(Integration.last_error.isnot(None)).count()
     telegram_connected = sum(1 for u in users if u.telegram_chat_id)
     whatsapp_connected = sum(1 for u in users if u.whatsapp_number)
 
@@ -63,7 +64,36 @@ def index():
         "total_integrations": total_integrations,
         "active_integrations": active_integrations,
         "total_orders": total_orders,
+        "error_integrations": error_integrations,
         "telegram_connected": telegram_connected,
         "whatsapp_connected": whatsapp_connected,
     }
-    return render_template("admin/index.html", stats=stats, rows=rows)
+
+    recent_orders = (
+        Order.query
+        .order_by(Order.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    recent_integrations = (
+        Integration.query
+        .order_by(Integration.updated_at.desc())
+        .limit(20)
+        .all()
+    )
+    problem_integrations = (
+        Integration.query
+        .filter(Integration.last_error.isnot(None))
+        .order_by(Integration.updated_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return render_template(
+        "admin/index.html",
+        stats=stats,
+        rows=rows,
+        recent_orders=recent_orders,
+        recent_integrations=recent_integrations,
+        problem_integrations=problem_integrations,
+    )
