@@ -41,11 +41,12 @@
     <tbody>
       {% for u in users.items %}
       <tr>
-        <td><strong>{{ u.name }}</strong></td>
+        <td><a class="table-link" href="{{ url_for('admin.user_detail', user_id=u.id) }}"><strong>{{ u.name }}</strong></a></td>
         <td class="muted">{{ u.email }}</td>
         <td>
           <form method="post" action="{{ url_for('admin.update_user_plan', user_id=u.id) }}" class="inline">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ url_for('admin.users', page=users.page, q=filters.q, channel=filters.channel) }}">
             <select name="plan" style="min-width:110px">
               <option value="free" {{ 'selected' if (u.plan or 'free') == 'free' }}>Ücretsiz</option>
               <option value="pro" {{ 'selected' if u.plan == 'pro' }}>Pro</option>

@@ -148,10 +148,11 @@ def users():
 @admin_required
 def update_user_plan(user_id):
     user = User.query.get_or_404(user_id)
+    back = request.form.get("next") or url_for("admin.users")
     plan = request.form.get("plan", "free").strip().lower()
     if plan not in ("free", "pro"):
         flash("Geçersiz plan seçimi.", "danger")
-        return redirect(url_for("admin.users"))
+        return redirect(back)
 
     user.plan = plan
     user.feature_whatsapp = "feature_whatsapp" in request.form
@@ -165,7 +166,57 @@ def update_user_plan(user_id):
     db.session.commit()
     label = "Pro" if plan == "pro" else "Ücretsiz"
     flash(f"{user.email} planı {label} olarak güncellendi.", "success")
-    return redirect(url_for("admin.users"))
+    return redirect(back)
+
+
+@admin_bp.route("/kullanici/<int:user_id>")
+@admin_required
+def user_detail(user_id):
+    user = User.query.get_or_404(user_id)
+    integrations = (
+        Integration.query
+        .filter_by(user_id=user.id)
+        .order_by(Integration.updated_at.desc())
+        .all()
+    )
+    recent_orders = (
+        Order.query
+        .filter_by(user_id=user.id)
+        .order_by(Order.created_at.desc())
+        .limit(12)
+        .all()
+    )
+    order_count = Order.query.filter_by(user_id=user.id).count()
+    total_revenue = (
+        db.session.query(func.coalesce(func.sum(Order.total_price), 0))
+        .filter_by(user_id=user.id)
+        .scalar()
+    )
+    problem_integrations = [i for i in integrations if i.last_error]
+    return render_template(
+        "admin/user_detail.html",
+        u=user,
+        integrations=integrations,
+        recent_orders=recent_orders,
+        order_count=order_count,
+        total_revenue=total_revenue or 0,
+        problem_integrations=problem_integrations,
+    )
+
+
+@admin_bp.route("/kullanici/<int:user_id>/test-bildirim", methods=["POST"])
+@admin_required
+def send_user_test_notification(user_id):
+    user = User.query.get_or_404(user_id)
+    from notifications.dispatcher import send_to_user
+
+    ok = send_to_user(
+        user,
+        "🔔 <b>Admin test bildirimi</b>\nSiparişGeldi bildirim kanalı çalışıyor.",
+        wa=["Admin test bildirimi", "TEST-ADMIN", "Örnek ürün x1", "0,00 TL"],
+    )
+    flash("Test bildirimi gönderildi." if ok else "Test bildirimi gönderilemedi veya kanal bağlı değil.", "success" if ok else "warning")
+    return redirect(url_for("admin.user_detail", user_id=user.id))
 
 @admin_bp.route("/siparisler")
 @admin_required

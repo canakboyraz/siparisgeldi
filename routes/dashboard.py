@@ -420,6 +420,18 @@ def reports():
     )
 
 
+@dashboard_bp.route("/abonelik")
+@login_required
+def subscription():
+    integrations = Integration.query.filter_by(user_id=current_user.id).all()
+    active_integrations = [i for i in integrations if i.is_active]
+    return render_template(
+        "dashboard/subscription.html",
+        integrations=integrations,
+        active_integrations=active_integrations,
+    )
+
+
 @dashboard_bp.route("/siparis/<int:order_id>")
 @login_required
 def order_detail(order_id):

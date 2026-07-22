@@ -51,7 +51,7 @@
       {% for i in integrations.items %}
       <tr>
         <td>
-          <strong>{{ i.user.name }}</strong><br>
+          <a class="table-link" href="{{ url_for('admin.user_detail', user_id=i.user.id) }}"><strong>{{ i.user.name }}</strong></a><br>
           <span class="muted">{{ i.user.email }}</span>
         </td>
         <td>{{ platform_label(i.platform) }}</td>

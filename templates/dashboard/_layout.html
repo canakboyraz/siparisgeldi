@@ -12,6 +12,7 @@
       <a href="{{ url_for('dashboard.migros_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.migros_setup' }}">🍔 Migros Yemek</a>
       <a href="{{ url_for('dashboard.connect_telegram') }}" class="{{ 'active' if request.endpoint in ['dashboard.connect_telegram','dashboard.reset_telegram'] }}">💬 Telegram</a>
       <a href="{{ url_for('dashboard.connect_whatsapp') }}" class="{{ 'active' if request.endpoint=='dashboard.connect_whatsapp' }}">🟢 WhatsApp</a>
+      <a href="{{ url_for('dashboard.subscription') }}" class="{{ 'active' if request.endpoint=='dashboard.subscription' }}">💳 Abonelik</a>
       <a href="{{ url_for('dashboard.profile') }}" class="{{ 'active' if request.endpoint=='dashboard.profile' }}">⚙️ Profil</a>
       {% if user_is_admin %}
       <a href="{{ url_for('admin.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.') }}">🛡️ Admin</a>

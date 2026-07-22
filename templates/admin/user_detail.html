@@ -1,0 +1,110 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Kullanıcı detayı · Admin{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div>
+    <h1>{{ u.name }}</h1>
+    <div class="muted">{{ u.email }}</div>
+  </div>
+  <div class="inline">
+    <a class="btn btn-ghost" href="{{ url_for('admin.users') }}">Kullanıcılar</a>
+    <form method="post" action="{{ url_for('admin.send_user_test_notification', user_id=u.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary" type="submit">Test bildirimi</button>
+    </form>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="v">{{ 'Pro' if u.plan == 'pro' else 'Ücretsiz' }}</div><div class="l">Plan</div></div>
+  <div class="stat"><div class="v">{{ integrations|selectattr('is_active')|list|length }}/{{ integrations|length }}</div><div class="l">Aktif platform</div></div>
+  <div class="stat"><div class="v">{{ order_count }}</div><div class="l">Toplam sipariş</div></div>
+  <div class="stat"><div class="v">{{ '%.2f'|format(total_revenue or 0) }} ₺</div><div class="l">Kayıtlı toplam</div></div>
+</div>
+
+<div class="grid-2 detail-grid">
+  <div class="card">
+    <div class="card-title">Plan ve özellikler</div>
+    <form method="post" action="{{ url_for('admin.update_user_plan', user_id=u.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ url_for('admin.user_detail', user_id=u.id) }}">
+      <div class="field">
+        <label>Plan</label>
+        <select name="plan">
+          <option value="free" {{ 'selected' if (u.plan or 'free') == 'free' }}>Ücretsiz</option>
+          <option value="pro" {{ 'selected' if u.plan == 'pro' }}>Pro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Bildirim kanalı</label>
+        <select name="notification_channel">
+          <option value="telegram" {{ 'selected' if (u.notification_channel or 'telegram') == 'telegram' }}>Telegram</option>
+          <option value="whatsapp" {{ 'selected' if u.notification_channel == 'whatsapp' }}>WhatsApp</option>
+          <option value="both" {{ 'selected' if u.notification_channel == 'both' }}>Telegram + WhatsApp</option>
+        </select>
+      </div>
+      <label class="toggle-line"><input type="checkbox" name="feature_whatsapp" {{ 'checked' if u.feature_whatsapp }}> <span>WhatsApp izni</span></label>
+      <label class="toggle-line"><input type="checkbox" name="feature_multi_platform" {{ 'checked' if u.feature_multi_platform }}> <span>Çoklu platform izni</span></label>
+      <button class="btn btn-primary" type="submit">Kaydet</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Bağlantı durumu</div>
+    <div class="detail-list">
+      <div><span>Kayıt tarihi</span><strong>{{ u.created_at.strftime('%d.%m.%Y %H:%M') if u.created_at else '-' }}</strong></div>
+      <div><span>Telegram</span><strong>{{ 'Bağlı' if u.telegram_chat_id else 'Bağlı değil' }}</strong></div>
+      <div><span>WhatsApp</span><strong>{{ u.whatsapp_number or 'Kayıtlı değil' }}</strong></div>
+      <div><span>Etkin WhatsApp</span><strong>{{ 'Açık' if u.has_whatsapp_access else 'Kapalı' }}</strong></div>
+      <div><span>Etkin çoklu platform</span><strong>{{ 'Açık' if u.has_multi_platform_access else 'Kapalı' }}</strong></div>
+    </div>
+    {% if problem_integrations %}
+    <div class="notice-box">Bu kullanıcıda {{ problem_integrations|length }} entegrasyon hatası var.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Entegrasyonlar</div>
+  {% if integrations %}
+  <table>
+    <thead><tr><th>Platform</th><th>Durum</th><th>Restoran ID</th><th>Son senkron</th><th>Son hata</th></tr></thead>
+    <tbody>
+      {% for i in integrations %}
+      <tr>
+        <td>{{ platform_label(i.platform) }}</td>
+        <td>{% if i.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}</td>
+        <td>{{ i.tgo_supplier_id or i.migros_store_id or '-' }}</td>
+        <td class="muted">{{ i.last_sync_at.strftime('%d.%m %H:%M') if i.last_sync_at else '-' }}</td>
+        <td class="muted">{{ i.last_error or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Entegrasyon yok.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-title">Son siparişler</div>
+  {% if recent_orders %}
+  <table>
+    <thead><tr><th>Tarih</th><th>Platform</th><th>Sipariş</th><th>Durum</th><th>Tutar</th></tr></thead>
+    <tbody>
+      {% for o in recent_orders %}
+      <tr>
+        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '-' }}</td>
+        <td>{{ platform_label(o.platform) }}</td>
+        <td><a class="table-link" href="{{ url_for('admin.orders', q=o.order_number or o.external_id) }}">#{{ o.order_number or o.external_id }}</a></td>
+        <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
+        <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Sipariş yok.</div>
+  {% endif %}
+</div>
+{% endblock %}

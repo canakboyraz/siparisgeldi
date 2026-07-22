@@ -27,7 +27,7 @@
     <tbody>
       {% for r in rows %}
       <tr>
-        <td><strong>{{ r.user.name }}</strong></td>
+        <td><a class="table-link" href="{{ url_for('admin.user_detail', user_id=r.user.id) }}"><strong>{{ r.user.name }}</strong></a></td>
         <td class="muted">{{ r.user.email }}</td>
         <td class="muted">{{ r.user.created_at.strftime('%d.%m.%Y') if r.user.created_at else '—' }}</td>
         <td>{{ r.platforms }}</td>
@@ -59,7 +59,7 @@
         {% for i in problem_integrations %}
         <tr>
           <td>
-            <strong>{{ i.user.name }}</strong><br>
+            <a class="table-link" href="{{ url_for('admin.user_detail', user_id=i.user.id) }}"><strong>{{ i.user.name }}</strong></a><br>
             <span class="muted">{{ i.user.email }}</span>
           </td>
           <td><span class="badge red">{{ i.platform }}</span></td>
@@ -88,7 +88,7 @@
         {% for i in recent_integrations %}
         <tr>
           <td>
-            <strong>{{ i.user.name }}</strong><br>
+            <a class="table-link" href="{{ url_for('admin.user_detail', user_id=i.user.id) }}"><strong>{{ i.user.name }}</strong></a><br>
             <span class="muted">{{ i.user.email }}</span>
           </td>
           <td>{{ i.platform }}</td>
@@ -125,7 +125,7 @@
       <tr>
         <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
         <td>
-          <strong>{{ o.user.name }}</strong><br>
+          <a class="table-link" href="{{ url_for('admin.user_detail', user_id=o.user.id) }}"><strong>{{ o.user.name }}</strong></a><br>
           <span class="muted">{{ o.user.email }}</span>
         </td>
         <td>{{ platform_label(o.platform) }}</td>
