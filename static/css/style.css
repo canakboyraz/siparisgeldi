@@ -208,20 +208,53 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 
 @media(max-width:860px){
   .layout{grid-template-columns:1fr}
-  .sidebar{flex-direction:row;flex-wrap:wrap;position:sticky;top:0;z-index:10}
-  .sidebar nav{flex-direction:row;flex-wrap:wrap}
-  .sidebar .brand{margin-bottom:0;width:100%}
-  .sidebar .foot{border:none;margin:0;padding:0}
+  .sidebar{
+    position:sticky;top:0;z-index:10;display:block;padding:.7rem .75rem .55rem;
+    box-shadow:0 8px 18px rgba(16,20,30,.14)
+  }
+  .sidebar .brand{margin:0 0 .55rem;padding:0;font-size:1rem}
+  .sidebar nav{
+    display:flex;flex-direction:row;gap:.4rem;overflow-x:auto;overflow-y:hidden;
+    padding-bottom:.25rem;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch
+  }
+  .sidebar nav::-webkit-scrollbar{display:none}
+  .sidebar a{
+    flex:0 0 auto;white-space:nowrap;padding:.48rem .65rem;border-radius:999px;
+    font-size:.84rem;scroll-snap-align:start
+  }
+  .sidebar .foot{
+    position:absolute;right:.65rem;top:.55rem;border:none;margin:0;padding:0;
+    display:flex;align-items:center;gap:.35rem
+  }
+  .sidebar .foot .muted{display:none}
+  .sidebar-logout button{
+    width:auto;padding:.34rem .55rem;border-radius:999px;background:#20242e;
+    font-size:.8rem;color:#fff
+  }
+  .main{padding:1rem .8rem 1.4rem;overflow:visible}
+  .page-head{margin-bottom:1rem;align-items:flex-start}
+  .page-head h1{font-size:1.25rem}
+  .page-head .inline{width:100%;overflow-x:auto;padding-bottom:.15rem}
+  .card{padding:1rem;border-radius:12px}
   .features,.steps,.stats,.grid-2{grid-template-columns:1fr}
   .pricing-grid,.footer-grid{grid-template-columns:1fr}
   .legal-page{padding:1.2rem}
   .legal-dl{grid-template-columns:1fr}
-  .stats{grid-template-columns:1fr 1fr}
+  .stats{grid-template-columns:1fr 1fr;gap:.7rem}
+  .stat{padding:.85rem}
+  .stat .v{font-size:1.25rem}
+  .stat .l{font-size:.76rem}
   .filters{grid-template-columns:1fr}
   .active-filters{grid-template-columns:1fr}
   .report-filters{grid-template-columns:1fr}
   .section-head{align-items:flex-start}
   .note-cell{max-width:180px}
+  table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+  th,td{padding:.58rem .5rem;font-size:.84rem}
+  .row{align-items:flex-start}
+  .row .inline{flex-wrap:wrap;justify-content:flex-end}
+  .btn{padding:.56rem .78rem;font-size:.88rem}
+  input[type=text],input[type=email],input[type=password],input[type=date],select{font-size:16px}
   .total-box{width:100%;justify-content:space-between}
   .detail-list div{display:block}
   .detail-list strong{display:block;text-align:left;max-width:100%;margin-top:.15rem}
