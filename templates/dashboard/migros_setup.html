@@ -43,24 +43,26 @@
        <code>MIGROS_WEBHOOK_USER/PASS</code> değerlerini de Migros'a ilet.</p>
 
     <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
-    <div class="card-title" style="font-size:.95rem">Canlı öncesi kontrol</div>
-    <div class="check-list">
-      {% for check in go_live_checks %}
-      <div class="check-row">
-        <div>
-          <strong>{{ check.label }}</strong><br>
-          <span class="muted">{{ check.text }}</span>
+    <details class="setup-checks">
+      <summary>Bağlantı kontrolü</summary>
+      <div class="check-list">
+        {% for check in go_live_checks %}
+        <div class="check-row">
+          <div>
+            <strong>{{ check.label }}</strong><br>
+            <span class="muted">{{ check.text }}</span>
+          </div>
+          {% if check.state == 'ok' %}
+          <span class="badge green">hazır</span>
+          {% elif check.state == 'danger' %}
+          <span class="badge red">kontrol</span>
+          {% else %}
+          <span class="badge amber">bekliyor</span>
+          {% endif %}
         </div>
-        {% if check.state == 'ok' %}
-        <span class="badge green">hazır</span>
-        {% elif check.state == 'danger' %}
-        <span class="badge red">kontrol</span>
-        {% else %}
-        <span class="badge amber">bekliyor</span>
-        {% endif %}
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
+    </details>
 
     {% if intg %}
     <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">

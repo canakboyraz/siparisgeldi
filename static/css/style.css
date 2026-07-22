@@ -126,6 +126,10 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .row:last-child{border-bottom:none}
 .check-list{display:grid;gap:.65rem;margin-top:.8rem}
 .check-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;border:1px solid var(--line);border-radius:10px;padding:.75rem .85rem;background:#fff}
+.setup-checks summary{cursor:pointer;font-weight:800;color:var(--ink);list-style:none}
+.setup-checks summary::-webkit-details-marker{display:none}
+.setup-checks summary::after{content:"Aç";float:right;color:var(--brand);font-size:.86rem}
+.setup-checks[open] summary::after{content:"Kapat"}
 .inline{display:flex;gap:.5rem;align-items:center}
 .toggle-line{display:flex;align-items:center;gap:.6rem;padding:.4rem 0}
 .toggle-line input{width:auto}
