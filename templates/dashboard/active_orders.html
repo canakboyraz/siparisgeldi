@@ -87,7 +87,7 @@
   </div>
 
   {% if rows %}
-  <table>
+  <table class="mobile-active-table">
     <thead>
       <tr>
         <th>Sipariş</th>
@@ -102,12 +102,12 @@
       {% for row in rows %}
       {% set o = row.order %}
       <tr class="{{ 'row-alert' if row.is_unaccepted_warning else '' }}">
-        <td>
+        <td data-label="Sipariş">
           <a class="table-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}"><strong>#{{ o.order_number or o.external_id }}</strong></a>
           {% if row.is_unaccepted_warning %}<br><span class="badge red">Kabul gecikti</span>{% endif %}
         </td>
-        <td>{{ platform_label(o.platform) }}</td>
-        <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
+        <td data-label="Platform">{{ platform_label(o.platform) }}</td>
+        <td data-label="Durum"><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
         <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
         <td class="note-cell">{{ o.customer_note or '—' }}</td>
         <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>

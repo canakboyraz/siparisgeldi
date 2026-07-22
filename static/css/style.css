@@ -8,7 +8,7 @@
   color-scheme:light;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0}
+html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
   background:var(--bg); color:var(--ink); line-height:1.55;
@@ -122,7 +122,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .auth-alt{text-align:center;margin-top:1.2rem;color:var(--muted);font-size:.92rem}
 
 /* ─── Panel layout ─── */
-.layout{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+.layout{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh;width:100%}
 .sidebar{background:#12141a;color:#c9cdd6;padding:1.4rem 1rem;display:flex;flex-direction:column}
 .sidebar .brand{color:#fff;margin-bottom:1.8rem;padding:0 .4rem}
 .sidebar nav{display:flex;flex-direction:column;gap:.2rem;flex:1}
@@ -137,7 +137,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   color:#c9cdd6;font:inherit;font-weight:600;text-align:left;cursor:pointer
 }
 .sidebar-logout button:hover{background:#20242e;color:#fff}
-.main{padding:2rem;overflow:auto}
+.main{padding:2rem;overflow:auto;min-width:0}
 .page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.4rem;gap:1rem;flex-wrap:wrap}
 .page-head h1{font-size:1.6rem;margin:0}
 
@@ -160,7 +160,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .setup-checks summary::-webkit-details-marker{display:none}
 .setup-checks summary::after{content:"Aç";float:right;color:var(--brand);font-size:.86rem}
 .setup-checks[open] summary::after{content:"Kapat"}
-.inline{display:flex;gap:.5rem;align-items:center}
+.inline{display:flex;gap:.5rem;align-items:center;min-width:0}
 .mini-check{display:inline-flex;align-items:center;gap:.25rem;margin:0;font-size:.82rem;color:var(--muted);white-space:nowrap}
 .mini-check input{width:auto}
 .toggle-line{display:flex;align-items:center;gap:.6rem;padding:.4rem 0}
@@ -170,7 +170,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   padding:.75rem .9rem;border-radius:9px;font-size:.86rem;word-break:break-all;user-select:all}
 .status-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
 .status-dot.on{background:var(--green)} .status-dot.off{background:var(--muted)}
-.section-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.8rem}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.8rem;min-width:0}
 .filters{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:1rem;align-items:end}
 .filters .field{margin-bottom:0}
 .filters .actions{display:flex;gap:.5rem}
@@ -209,18 +209,20 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 @media(max-width:860px){
   .layout{grid-template-columns:1fr}
   .sidebar{
-    position:sticky;top:0;z-index:10;display:block;padding:.7rem .75rem .55rem;
-    box-shadow:0 8px 18px rgba(16,20,30,.14)
+    position:relative;display:block;padding:.65rem .8rem;background:#12141a;
+    box-shadow:none
   }
-  .sidebar .brand{margin:0 0 .55rem;padding:0;font-size:1rem}
+  .sidebar .brand{margin:0;padding:0;font-size:1rem;min-height:32px;padding-right:4.8rem}
   .sidebar nav{
-    display:flex;flex-direction:row;gap:.4rem;overflow-x:auto;overflow-y:hidden;
-    padding-bottom:.25rem;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch
+    position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;flex-direction:row;gap:.35rem;
+    overflow-x:auto;overflow-y:hidden;padding:.5rem .7rem calc(.5rem + env(safe-area-inset-bottom));
+    background:#12141a;border-top:1px solid #262a34;box-shadow:0 -8px 18px rgba(16,20,30,.14);
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch
   }
   .sidebar nav::-webkit-scrollbar{display:none}
   .sidebar a{
-    flex:0 0 auto;white-space:nowrap;padding:.48rem .65rem;border-radius:999px;
-    font-size:.84rem;scroll-snap-align:start
+    flex:0 0 auto;white-space:nowrap;padding:.46rem .58rem;border-radius:999px;
+    font-size:.78rem;scroll-snap-align:start;line-height:1.15
   }
   .sidebar .foot{
     position:absolute;right:.65rem;top:.55rem;border:none;margin:0;padding:0;
@@ -231,11 +233,12 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
     width:auto;padding:.34rem .55rem;border-radius:999px;background:#20242e;
     font-size:.8rem;color:#fff
   }
-  .main{padding:1rem .8rem 1.4rem;overflow:visible}
-  .page-head{margin-bottom:1rem;align-items:flex-start}
+  .main{padding:1rem .8rem calc(5.2rem + env(safe-area-inset-bottom));overflow:visible;width:100%;max-width:100%}
+  .page-head{margin-bottom:1rem;align-items:flex-start;gap:.65rem}
   .page-head h1{font-size:1.25rem}
-  .page-head .inline{width:100%;overflow-x:auto;padding-bottom:.15rem}
-  .card{padding:1rem;border-radius:12px}
+  .page-head .inline{width:100%;overflow-x:auto;padding-bottom:.15rem;align-items:stretch}
+  .page-head .inline .btn,.page-head .inline form{flex:0 0 auto}
+  .card{padding:1rem;border-radius:12px;max-width:100%;overflow:hidden}
   .features,.steps,.stats,.grid-2{grid-template-columns:1fr}
   .pricing-grid,.footer-grid{grid-template-columns:1fr}
   .legal-page{padding:1.2rem}
@@ -247,7 +250,9 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .filters{grid-template-columns:1fr}
   .active-filters{grid-template-columns:1fr}
   .report-filters{grid-template-columns:1fr}
-  .section-head{align-items:flex-start}
+  .filters .actions{display:grid;grid-template-columns:1fr 1fr}
+  .section-head{align-items:flex-start;flex-direction:column}
+  .section-head .inline{width:100%;flex-wrap:wrap}
   .note-cell{max-width:180px}
   table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
   th,td{padding:.58rem .5rem;font-size:.84rem}
@@ -259,4 +264,63 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .detail-list div{display:block}
   .detail-list strong{display:block;text-align:left;max-width:100%;margin-top:.15rem}
   .check-row{align-items:flex-start}
+}
+
+@media(max-width:640px){
+  .main{padding-left:.65rem;padding-right:.65rem}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat{min-width:0}
+  .stat .v{font-size:1.08rem;overflow-wrap:anywhere}
+  .stat .l{line-height:1.25}
+  .btn{min-height:40px}
+  .card table.mobile-orders-table,
+  .card table.mobile-active-table{
+    display:block;width:100%;overflow:visible;white-space:normal
+  }
+  .card table.mobile-orders-table thead,
+  .card table.mobile-active-table thead{display:none}
+  .card table.mobile-orders-table tbody,
+  .card table.mobile-active-table tbody{display:grid;gap:.7rem}
+  .card table.mobile-orders-table tr,
+  .card table.mobile-active-table tr{
+    display:block;border:1px solid var(--line);border-radius:12px;background:#fff;
+    padding:.55rem .65rem
+  }
+  .card table.mobile-orders-table td,
+  .card table.mobile-active-table td{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;
+    border-bottom:1px solid var(--line);padding:.48rem 0;font-size:.86rem;white-space:normal
+  }
+  .card table.mobile-orders-table td:last-child,
+  .card table.mobile-active-table td:last-child{border-bottom:none}
+  .card table.mobile-orders-table td::before,
+  .card table.mobile-active-table td::before{
+    content:attr(data-label);flex:0 0 36%;color:var(--muted);font-weight:800;font-size:.76rem;
+    text-transform:uppercase;letter-spacing:.03em
+  }
+  .mobile-orders-table td:nth-child(1)::before{content:"Siparis"}
+  .mobile-orders-table td:nth-child(2)::before{content:"Platform"}
+  .mobile-orders-table td:nth-child(3)::before{content:"Durum"}
+  .mobile-orders-table td:nth-child(4)::before{content:"Tutar"}
+  .mobile-orders-table td:nth-child(5)::before{content:"Tarih"}
+  .mobile-active-table td:nth-child(1)::before{content:"Siparis"}
+  .mobile-active-table td:nth-child(2)::before{content:"Platform"}
+  .mobile-active-table td:nth-child(3)::before{content:"Durum"}
+  .mobile-active-table td:nth-child(4)::before{content:"Tutar"}
+  .mobile-active-table td:nth-child(5)::before{content:"Not"}
+  .mobile-active-table td:nth-child(6)::before{content:"Tarih"}
+  .card table.mobile-orders-table td:empty::after,
+  .card table.mobile-active-table td:empty::after{content:"-";color:var(--muted)}
+  .note-cell{max-width:none;text-align:right;white-space:normal;overflow:visible;text-overflow:clip}
+  .pagination{justify-content:center}
+  .total-box{min-width:0}
+  .detail-item{padding:.85rem}
+  .item-main{align-items:flex-start}
+}
+
+@media(max-width:380px){
+  .main{padding-left:.5rem;padding-right:.5rem}
+  .stats{grid-template-columns:1fr}
+  .filters .actions{grid-template-columns:1fr}
+  .sidebar a{font-size:.74rem;padding:.42rem .52rem}
 }
