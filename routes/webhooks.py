@@ -15,6 +15,7 @@ MIGROS_WEBHOOK_USER/PASS). Migros başarısız yanıtta 10-20-30 sn ile 3 kez de
 bu yüzden işleyemesek bile 200 dönüp gereksiz retry'ı önleriz.
 """
 import json
+import hmac
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 
@@ -28,11 +29,17 @@ webhooks_bp = Blueprint("webhooks", __name__)
 
 def _check_basic_auth() -> bool:
     user = current_app.config.get("MIGROS_WEBHOOK_USER", "")
-    pw   = current_app.config.get("MIGROS_WEBHOOK_PASS", "")
+    pw = current_app.config.get("MIGROS_WEBHOOK_PASS", "")
     if not user and not pw:
-        return True  # kimlik tanımlı değilse doğrulamayı atla (dev)
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
+    if not user or not pw:
+        return False
     auth = request.authorization
-    return bool(auth and auth.username == user and auth.password == pw)
+    return bool(
+        auth
+        and hmac.compare_digest(auth.username or "", user)
+        and hmac.compare_digest(auth.password or "", pw)
+    )
 
 
 def _find_integration(store_id) -> Integration:

@@ -6,6 +6,7 @@
 
 <div class="card" style="max-width:520px">
   <form method="post">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="field">
       <label>Ad Soyad / İşletme</label>
       <input type="text" name="name" value="{{ current_user.name }}">
@@ -46,6 +47,7 @@
   <p class="muted" style="margin:.2rem 0 1rem">Seçili kanal(lar)a örnek bir bildirim gönderip
      kurulumunu doğrula. Önce yukarıdaki ayarları kaydettiğinden emin ol.</p>
   <form method="post" action="{{ url_for('dashboard.send_test_notification') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-ghost" type="submit">🔔 Test bildirimi gönder</button>
   </form>
 </div>

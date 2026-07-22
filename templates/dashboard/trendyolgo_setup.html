@@ -10,6 +10,7 @@
     <p class="muted" style="margin-top:0">Trendyol Go Satıcı Paneli → Entegrasyon Bilgileri'nden alabilirsin.
        Bilgiler şifreli saklanır.</p>
     <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label>Supplier ID (Satıcı ID)</label>
         <input type="text" name="supplier_id" required value="{{ intg.tgo_supplier_id or '' }}" placeholder="123456">
@@ -30,6 +31,7 @@
   <div class="card">
     <div class="card-title">Bildirim tercihleri</div>
     <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>🆕 Yeni sipariş bildirimi</span></div>
       <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>🔄 Durum değişikliği bildirimi</span></div>
       <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>❌ İptal bildirimi</span></div>
@@ -47,6 +49,7 @@
       </div>
       <form method="post" action="{{ url_for('dashboard.delete_integration', intg_id=intg.id) }}"
             onsubmit="return confirm('Bu entegrasyon silinsin mi?')">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-danger btn-sm">Sil</button>
       </form>
     </div>

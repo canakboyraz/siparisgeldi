@@ -8,6 +8,7 @@
       <h2 style="text-align:center">Tekrar hoş geldin</h2>
       {% include "_flashes.html" %}
       <form method="post">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="field">
           <label>E-posta</label>
           <input type="email" name="email" required autofocus placeholder="ornek@restoran.com">

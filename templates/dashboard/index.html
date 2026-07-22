@@ -7,6 +7,7 @@
   <div class="inline">
     {% if integrations %}
     <form method="post" action="{{ url_for('dashboard.test_report') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-ghost" type="submit">📊 Test rapor gönder</button>
     </form>
     <a class="btn btn-ghost" href="{{ url_for('dashboard.reports') }}">Raporlar</a>
@@ -47,6 +48,7 @@
         </div>
         <div class="inline">
           <form method="post" action="{{ url_for('dashboard.toggle_integration', intg_id=intg.id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-ghost btn-sm">{{ 'Duraklat' if intg.is_active else 'Aktifleştir' }}</button>
           </form>
         </div>

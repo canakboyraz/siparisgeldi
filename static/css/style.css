@@ -107,6 +107,12 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .sidebar a.active{background:var(--brand);color:#fff}
 .sidebar .foot{border-top:1px solid #262a34;padding-top:1rem;margin-top:1rem;font-size:.86rem}
 .sidebar .foot a{padding:.4rem .8rem}
+.sidebar-logout{margin:0}
+.sidebar-logout button{
+  width:100%;padding:.4rem .8rem;border:0;border-radius:9px;background:transparent;
+  color:#c9cdd6;font:inherit;font-weight:600;text-align:left;cursor:pointer
+}
+.sidebar-logout button:hover{background:#20242e;color:#fff}
 .main{padding:2rem;overflow:auto}
 .page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.4rem;gap:1rem;flex-wrap:wrap}
 .page-head h1{font-size:1.6rem;margin:0}

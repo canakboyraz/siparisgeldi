@@ -1,5 +1,7 @@
 """Uygulama fabrikası (application factory)."""
-from flask import Flask
+import secrets
+
+from flask import Flask, abort, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 from sqlalchemy import text
 
@@ -21,6 +23,11 @@ def _ensure_schema():
         "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
         "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
         "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_migros_store_id
+        ON integrations (migros_store_id)
+        WHERE platform = 'migros' AND migros_store_id IS NOT NULL
+        """,
     ]
     with db.engine.begin() as conn:
         for s in stmts:
@@ -65,6 +72,32 @@ def create_app(config_class=Config, start_scheduler=None):
     from routes.admin import is_admin
     from flask_login import current_user
 
+    def csrf_token():
+        token = session.get("_csrf_token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            session["_csrf_token"] = token
+        return token
+
+    @app.before_request
+    def protect_forms():
+        if request.method != "POST" or request.path.startswith("/webhooks/"):
+            return None
+        sent = request.form.get("_csrf_token") or request.headers.get("X-CSRF-Token", "")
+        if not secrets.compare_digest(str(session.get("_csrf_token", "")), str(sent)):
+            abort(400)
+        return None
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        if request.is_secure:
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        return response
+
     @app.context_processor
     def inject_helpers():
         return {
@@ -74,6 +107,7 @@ def create_app(config_class=Config, start_scheduler=None):
             "platform_label": utils.platform_label,
             "bot_username": app.config.get("TELEGRAM_BOT_USERNAME", ""),
             "user_is_admin": is_admin(current_user),
+            "csrf_token": csrf_token,
         }
 
     # Tabloları oluştur + hafif şema güncellemeleri (mevcut Postgres'e yeni kolon)

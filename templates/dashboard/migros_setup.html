@@ -11,6 +11,7 @@
        (Secret Key girmene gerek yok — o firma bazında sistemde tanımlı.)</p>
     <p class="hint">Doğrulama ortamı: <code>{{ migros_api_base }}</code></p>
     <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label>Restoran API Key</label>
         <input type="text" name="api_key" required value="{{ intg.migros_api_key if intg else '' }}" placeholder="XApiKey değeri">
@@ -70,6 +71,7 @@
     <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
     <div class="card-title" style="font-size:.95rem">Bildirim tercihleri</div>
     <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>🆕 Yeni sipariş</span></div>
       <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>🚚 Kurye/durum değişikliği</span></div>
       <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>❌ İptal</span></div>
@@ -85,6 +87,7 @@
       </div>
       <form method="post" action="{{ url_for('dashboard.delete_integration', intg_id=intg.id) }}"
             onsubmit="return confirm('Migros entegrasyonu silinsin mi?')">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-danger btn-sm">Sil</button>
       </form>
     </div>

@@ -9,6 +9,7 @@
   <div class="card-title">✅ Telegram bağlı</div>
   <p class="muted" style="margin:.2rem 0 1rem">Bildirimlerin bağlı Telegram hesabına gönderiliyor.</p>
   <form method="post" action="{{ url_for('dashboard.reset_telegram') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-danger btn-sm">Bağlantıyı sıfırla</button>
   </form>
 </div>

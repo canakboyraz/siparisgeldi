@@ -8,6 +8,7 @@
       <h2 style="text-align:center">Ücretsiz hesap oluştur</h2>
       {% include "_flashes.html" %}
       <form method="post">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="field">
           <label>Ad Soyad / İşletme</label>
           <input type="text" name="name" required autofocus placeholder="Lezzet Restoran">

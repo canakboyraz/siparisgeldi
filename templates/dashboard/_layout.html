@@ -19,7 +19,10 @@
     </nav>
     <div class="foot">
       <div class="muted" style="padding:.4rem .8rem;color:#8b909b">{{ current_user.email }}</div>
-      <a href="{{ url_for('auth.logout') }}">↩ Çıkış yap</a>
+      <form method="post" action="{{ url_for('auth.logout') }}" class="sidebar-logout">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">↩ Çıkış yap</button>
+      </form>
     </div>
   </aside>
   <main class="main">
