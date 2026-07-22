@@ -11,11 +11,11 @@ class Config:
 
     # Genel alan adı / marka
     APP_DOMAIN = os.environ.get("APP_DOMAIN", "siparisgeldi.net")
-    COMPANY_LEGAL_NAME = os.environ.get("COMPANY_LEGAL_NAME", "SiparişGeldi")
+    COMPANY_LEGAL_NAME = os.environ.get("COMPANY_LEGAL_NAME", "Can Akboyraz")
     COMPANY_BRAND_NAME = os.environ.get("COMPANY_BRAND_NAME", "SiparişGeldi")
-    COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "Firma adresi ödeme başvurusu öncesi güncellenecektir.")
-    COMPANY_PHONE = os.environ.get("COMPANY_PHONE", "+90")
-    COMPANY_EMAIL = os.environ.get("COMPANY_EMAIL", "info@siparisgeldi.net")
+    COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "Dumlupınar Mahallesi Hemşire Sokak No 9 Kartepe / Kocaeli")
+    COMPANY_PHONE = os.environ.get("COMPANY_PHONE", "0507 499 87 85")
+    COMPANY_EMAIL = os.environ.get("COMPANY_EMAIL", "siparisgeldinet@gmail.com")
     COMPANY_TAX_OFFICE = os.environ.get("COMPANY_TAX_OFFICE", "")
     COMPANY_TAX_NUMBER = os.environ.get("COMPANY_TAX_NUMBER", "")
     # Admin paneline erişebilecek e-postalar (virgülle ayrık, küçük harf)
