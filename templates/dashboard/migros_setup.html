@@ -29,18 +29,20 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🔗 Webhook adreslerimiz</div>
-    <p class="muted" style="margin-top:0">Bu adresler <b>tüm platform için ortaktır</b> ve Migros
-       entegrasyon ekibine bir kez iletilir. Migros siparişleri bu adreslere gönderir; biz
-       <b>Store ID</b> ile senin hesabına yönlendiririz.</p>
-    <p class="hint" style="margin-bottom:.3rem">🆕 Sipariş oluştu</p>
-    <div class="code">{{ webhook_urls.order_created }}</div>
-    <p class="hint" style="margin:.7rem 0 .3rem">❌ Sipariş iptal</p>
-    <div class="code">{{ webhook_urls.order_canceled }}</div>
-    <p class="hint" style="margin:.7rem 0 .3rem">🚚 Kurye durumu</p>
-    <div class="code">{{ webhook_urls.delivery_status }}</div>
-    <p class="hint" style="margin-top:1rem">Migros webhook'ları <b>Basic Auth</b> ile gönderir.
-       <code>MIGROS_WEBHOOK_USER/PASS</code> değerlerini de Migros'a ilet.</p>
+    <details class="setup-checks">
+      <summary>Webhook bilgileri</summary>
+      <p class="muted" style="margin-top:.8rem">Bu adresler <b>tüm platform için ortaktır</b> ve Migros
+         entegrasyon ekibine bir kez iletilir. Migros siparişleri bu adreslere gönderir; biz
+         <b>Store ID</b> ile senin hesabına yönlendiririz.</p>
+      <p class="hint" style="margin-bottom:.3rem">🆕 Sipariş oluştu</p>
+      <div class="code">{{ webhook_urls.order_created }}</div>
+      <p class="hint" style="margin:.7rem 0 .3rem">❌ Sipariş iptal</p>
+      <div class="code">{{ webhook_urls.order_canceled }}</div>
+      <p class="hint" style="margin:.7rem 0 .3rem">🚚 Kurye durumu</p>
+      <div class="code">{{ webhook_urls.delivery_status }}</div>
+      <p class="hint" style="margin-top:1rem">Migros webhook'ları <b>Basic Auth</b> ile gönderir.
+         <code>MIGROS_WEBHOOK_USER/PASS</code> değerlerini de Migros'a ilet.</p>
+    </details>
 
     <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
     <details class="setup-checks">
