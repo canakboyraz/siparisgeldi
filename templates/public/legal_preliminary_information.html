@@ -10,6 +10,8 @@
   <dt>Adres</dt><dd>{{ company.address }}</dd>
   <dt>E-posta</dt><dd>{{ company.email }}</dd>
   <dt>Telefon</dt><dd>{{ company.phone }}</dd>
+  {% if company.tax_office %}<dt>Vergi dairesi</dt><dd>{{ company.tax_office }}</dd>{% endif %}
+  {% if company.tax_number %}<dt>Vergi numarası</dt><dd>{{ company.tax_number }}</dd>{% endif %}
 </dl>
 
 <h2>Hizmet</h2>

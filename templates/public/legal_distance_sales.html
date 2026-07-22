@@ -26,5 +26,5 @@
 <p>Uyuşmazlıklarda yürürlükteki Türkiye Cumhuriyeti mevzuatı uygulanır. Kullanıcılar tüketici mevzuatı kapsamında yetkili mercilere başvurabilir.</p>
 
 <h2>İletişim</h2>
-<p>{{ company.legal_name }} · {{ company.address }} · {{ company.email }} · {{ company.phone }}</p>
+<p>{{ company.legal_name }} · {{ company.address }} · {{ company.email }} · {{ company.phone }}{% if company.tax_office %} · {{ company.tax_office }} Vergi Dairesi{% endif %}{% if company.tax_number %} · Vergi No: {{ company.tax_number }}{% endif %}</p>
 {% endblock %}

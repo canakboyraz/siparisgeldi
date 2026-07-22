@@ -16,8 +16,8 @@ class Config:
     COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "Dumlupınar Mahallesi Hemşire Sokak No 9 Kartepe / Kocaeli")
     COMPANY_PHONE = os.environ.get("COMPANY_PHONE", "0507 499 87 85")
     COMPANY_EMAIL = os.environ.get("COMPANY_EMAIL", "siparisgeldinet@gmail.com")
-    COMPANY_TAX_OFFICE = os.environ.get("COMPANY_TAX_OFFICE", "")
-    COMPANY_TAX_NUMBER = os.environ.get("COMPANY_TAX_NUMBER", "")
+    COMPANY_TAX_OFFICE = os.environ.get("COMPANY_TAX_OFFICE", "Alemdar")
+    COMPANY_TAX_NUMBER = os.environ.get("COMPANY_TAX_NUMBER", "0160733373")
     # Admin paneline erişebilecek e-postalar (virgülle ayrık, küçük harf)
     ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
     # Reverse proxy (Railway/Render) arkasında dış URL'ler https üretilsin
