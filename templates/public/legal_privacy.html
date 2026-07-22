@@ -1,0 +1,24 @@
+{% extends "public/legal_base.html" %}
+{% block title %}Gizlilik Politikası · SiparişGeldi{% endblock %}
+{% block legal %}
+<h1>Gizlilik Politikası</h1>
+<p class="legal-date">Son güncelleme: {{ now().strftime('%d.%m.%Y') }}</p>
+
+<h2>Toplanan Bilgiler</h2>
+<p>Hesap oluşturma, entegrasyon kurma ve bildirim gönderme süreçlerinde ad, e-posta, telefon numarası, restoran entegrasyon bilgileri, sipariş verileri, ödeme ve abonelik durum bilgileri işlenebilir.</p>
+
+<h2>Kullanım Amaçları</h2>
+<p>Veriler; hizmetin sunulması, sipariş bildirimlerinin iletilmesi, raporların hazırlanması, abonelik durumunun yönetilmesi, destek taleplerinin yanıtlanması ve yasal yükümlülüklerin yerine getirilmesi amacıyla kullanılır.</p>
+
+<h2>Kart Bilgileri</h2>
+<p>Kredi kartı bilgileri SiparişGeldi tarafından saklanmaz. Ödeme işlemleri yetkili ödeme kuruluşu altyapısı üzerinden yürütülür.</p>
+
+<h2>Üçüncü Taraflar</h2>
+<p>Hizmetin çalışması için yemek platformları, bildirim servisleri, barındırma sağlayıcısı ve ödeme kuruluşu ile sınırlı veri paylaşımı yapılabilir.</p>
+
+<h2>Güvenlik</h2>
+<p>Entegrasyon bilgileri şifreli saklanır. Panele erişim kullanıcı hesabı ile korunur. Webhook isteklerinde kimlik doğrulama ve güvenli bağlantı kullanılır.</p>
+
+<h2>İletişim</h2>
+<p>Gizlilik talepleri için: <a href="mailto:{{ company.email }}">{{ company.email }}</a></p>
+{% endblock %}

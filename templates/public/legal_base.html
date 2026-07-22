@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="container">
+  <div class="nav">
+    <a href="{{ url_for('public.landing') }}" class="brand"><span class="dot"></span> {{ company.brand_name }}</a>
+    <div class="inline">
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.login') }}">Giriş</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">Ücretsiz başla</a>
+    </div>
+  </div>
+
+  <main class="legal-page">
+    {% block legal %}{% endblock %}
+  </main>
+</div>
+{% include "public/_footer.html" %}
+{% endblock %}

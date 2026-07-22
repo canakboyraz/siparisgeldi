@@ -1,0 +1,21 @@
+{% extends "public/legal_base.html" %}
+{% block title %}KVKK Aydınlatma Metni · SiparişGeldi{% endblock %}
+{% block legal %}
+<h1>KVKK Aydınlatma Metni</h1>
+<p class="legal-date">Son güncelleme: {{ now().strftime('%d.%m.%Y') }}</p>
+
+<h2>Veri Sorumlusu</h2>
+<p>{{ company.legal_name }}, SiparişGeldi hizmeti kapsamında kişisel verileri veri sorumlusu sıfatıyla işler.</p>
+
+<h2>İşlenen Kişisel Veriler</h2>
+<p>Kimlik ve iletişim bilgileri, kullanıcı hesap bilgileri, restoran entegrasyon bilgileri, sipariş içerikleri, bildirim tercihleri, işlem güvenliği kayıtları ve ödeme/abonelik durum bilgileri işlenebilir.</p>
+
+<h2>İşleme Amaçları</h2>
+<p>Veriler; üyelik oluşturma, hizmet sunumu, entegrasyon yönetimi, bildirim gönderimi, raporlama, ödeme ve abonelik takibi, destek süreçleri ve yasal yükümlülükler için işlenir.</p>
+
+<h2>Aktarım</h2>
+<p>Kişisel veriler; ödeme kuruluşu, barındırma altyapısı, bildirim servisleri ve hizmetin bağlı olduğu yemek platformları ile hizmetin gerektirdiği ölçüde paylaşılabilir.</p>
+
+<h2>Haklarınız</h2>
+<p>KVKK kapsamındaki başvuru, bilgi alma, düzeltme, silme ve itiraz talepleriniz için {{ company.email }} adresinden bize ulaşabilirsiniz.</p>
+{% endblock %}

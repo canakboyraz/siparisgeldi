@@ -1,0 +1,29 @@
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <div class="brand"><span class="dot"></span> {{ company.brand_name }}</div>
+      <p class="muted">Yemek siparişi bildirim ve raporlama servisi.</p>
+      <p class="muted">© {{ now().year }} {{ company.legal_name }}</p>
+    </div>
+    <div>
+      <strong>Ürün</strong>
+      <a href="{{ url_for('public.landing') }}#fiyatlandirma">Fiyatlandırma</a>
+      <a href="{{ url_for('auth.register') }}">Ücretsiz başla</a>
+      <a href="{{ url_for('auth.login') }}">Giriş</a>
+    </div>
+    <div>
+      <strong>Yasal</strong>
+      <a href="{{ url_for('public.preliminary_information') }}">Ön Bilgilendirme Formu</a>
+      <a href="{{ url_for('public.distance_sales_agreement') }}">Mesafeli Satış Sözleşmesi</a>
+      <a href="{{ url_for('public.cancellation_refund_policy') }}">İptal ve İade Politikası</a>
+      <a href="{{ url_for('public.privacy_policy') }}">Gizlilik Politikası</a>
+      <a href="{{ url_for('public.kvkk_notice') }}">KVKK Aydınlatma Metni</a>
+    </div>
+    <div>
+      <strong>İletişim</strong>
+      <a href="{{ url_for('public.contact') }}">İletişim</a>
+      <span>{{ company.email }}</span>
+      <span>{{ company.phone }}</span>
+    </div>
+  </div>
+</footer>

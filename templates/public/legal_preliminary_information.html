@@ -1,0 +1,27 @@
+{% extends "public/legal_base.html" %}
+{% block title %}Ön Bilgilendirme Formu · SiparişGeldi{% endblock %}
+{% block legal %}
+<h1>Ön Bilgilendirme Formu</h1>
+<p class="legal-date">Son güncelleme: {{ now().strftime('%d.%m.%Y') }}</p>
+
+<h2>Satıcı / Hizmet Sağlayıcı</h2>
+<dl class="legal-dl">
+  <dt>Unvan</dt><dd>{{ company.legal_name }}</dd>
+  <dt>Adres</dt><dd>{{ company.address }}</dd>
+  <dt>E-posta</dt><dd>{{ company.email }}</dd>
+  <dt>Telefon</dt><dd>{{ company.phone }}</dd>
+</dl>
+
+<h2>Hizmet</h2>
+<p>SiparişGeldi, restoranların yemek platformu siparişlerini Telegram ve WhatsApp bildirimleriyle takip etmesini ve sipariş raporlarını görüntülemesini sağlayan dijital abonelik hizmetidir.</p>
+
+<h2>Planlar ve Fiyat</h2>
+<p>Ücretsiz plan; Telegram bildirimi, 1 platform bağlantısı ve tüm raporları içerir. Pro plan; WhatsApp bildirimleri ve çoklu platform bağlantısı sağlar.</p>
+<p><strong>Pro plan bedeli:</strong> 250 TL / ay, KDV dahil.</p>
+
+<h2>Ödeme ve İfa</h2>
+<p>Ödeme kredi kartı ile ödeme kuruluşu altyapısı üzerinden alınır. Abonelik başarıyla başlatıldığında Pro özellikleri dijital olarak kullanıcı hesabında aktif edilir.</p>
+
+<h2>Cayma, İptal ve İade</h2>
+<p>Dijital hizmet aboneliklerinde iptal ve iade süreçleri İptal ve İade Politikası'nda belirtilen koşullara göre yürütülür.</p>
+{% endblock %}

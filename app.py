@@ -108,6 +108,15 @@ def create_app(config_class=Config, start_scheduler=None):
             "bot_username": app.config.get("TELEGRAM_BOT_USERNAME", ""),
             "user_is_admin": is_admin(current_user),
             "is_pro_user": lambda user=None: (getattr(user or current_user, "plan", "free") or "free").lower() == "pro",
+            "company": {
+                "legal_name": app.config.get("COMPANY_LEGAL_NAME", "SiparişGeldi"),
+                "brand_name": app.config.get("COMPANY_BRAND_NAME", "SiparişGeldi"),
+                "address": app.config.get("COMPANY_ADDRESS", ""),
+                "phone": app.config.get("COMPANY_PHONE", ""),
+                "email": app.config.get("COMPANY_EMAIL", ""),
+                "tax_office": app.config.get("COMPANY_TAX_OFFICE", ""),
+                "tax_number": app.config.get("COMPANY_TAX_NUMBER", ""),
+            },
             "csrf_token": csrf_token,
         }
 

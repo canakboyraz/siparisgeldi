@@ -1,0 +1,21 @@
+{% extends "public/legal_base.html" %}
+{% block title %}İptal ve İade Politikası · SiparişGeldi{% endblock %}
+{% block legal %}
+<h1>İptal ve İade Politikası</h1>
+<p class="legal-date">Son güncelleme: {{ now().strftime('%d.%m.%Y') }}</p>
+
+<h2>Hizmetin Kapsamı</h2>
+<p>SiparişGeldi, restoranların bağlı yemek platformlarından gelen siparişleri takip etmesi, bildirim alması ve raporları görüntülemesi için sunulan dijital abonelik hizmetidir. Fiziksel ürün teslimatı yapılmaz.</p>
+
+<h2>Abonelik İptali</h2>
+<p>Kullanıcı, Pro aboneliğini panel üzerinden veya {{ company.email }} adresine yazarak iptal talep edebilir. İptal edilen aboneliklerde mevcut ödeme döneminin sonuna kadar Pro özellikleri kullanılabilir.</p>
+
+<h2>İade Koşulları</h2>
+<p>Teknik bir hata nedeniyle ücretli hizmetin hiç kullanılamaması durumunda kullanıcı destek ekibine başvurabilir. İnceleme sonucunda uygun görülürse ilgili ödeme için iade yapılır. Kullanıcının kendi isteğiyle iptal ettiği dönemlerde, ilgili dönem hizmeti başlamış veya kullanılmışsa iade yapılmayabilir.</p>
+
+<h2>Ödeme Hataları</h2>
+<p>Kredi kartından tahsilat yapılamaması halinde abonelik durumu pasife alınabilir veya kullanıcıdan ödeme bilgisini güncellemesi istenebilir.</p>
+
+<h2>İletişim</h2>
+<p>İptal ve iade talepleri için: <a href="mailto:{{ company.email }}">{{ company.email }}</a></p>
+{% endblock %}

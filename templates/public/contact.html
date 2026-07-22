@@ -1,0 +1,25 @@
+{% extends "public/legal_base.html" %}
+{% block title %}İletişim · SiparişGeldi{% endblock %}
+{% block legal %}
+<h1>İletişim</h1>
+<p>SiparişGeldi, restoranların yemek platformlarından gelen siparişleri Telegram ve WhatsApp üzerinden takip etmesini sağlayan bildirim ve raporlama servisidir.</p>
+
+<div class="legal-card">
+  <h2>Firma Bilgileri</h2>
+  <dl class="legal-dl">
+    <dt>Ticari unvan</dt><dd>{{ company.legal_name }}</dd>
+    <dt>Marka</dt><dd>{{ company.brand_name }}</dd>
+    <dt>Adres</dt><dd>{{ company.address }}</dd>
+    <dt>E-posta</dt><dd><a href="mailto:{{ company.email }}">{{ company.email }}</a></dd>
+    <dt>Telefon</dt><dd>{{ company.phone }}</dd>
+    {% if company.tax_office %}<dt>Vergi dairesi</dt><dd>{{ company.tax_office }}</dd>{% endif %}
+    {% if company.tax_number %}<dt>Vergi numarası</dt><dd>{{ company.tax_number }}</dd>{% endif %}
+  </dl>
+</div>
+
+<div class="legal-card">
+  <h2>Hizmet ve Fiyat</h2>
+  <p>Ücretsiz planda Telegram bildirimi, 1 platform bağlantısı ve tüm raporlar kullanılabilir. Pro plan WhatsApp bildirimleri ve çoklu platform bağlantısı sağlar.</p>
+  <p><strong>Pro plan:</strong> 250 TL / ay, KDV dahil.</p>
+</div>
+{% endblock %}

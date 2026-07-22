@@ -1,0 +1,30 @@
+{% extends "public/legal_base.html" %}
+{% block title %}Mesafeli Satış Sözleşmesi · SiparişGeldi{% endblock %}
+{% block legal %}
+<h1>Mesafeli Satış Sözleşmesi</h1>
+<p class="legal-date">Son güncelleme: {{ now().strftime('%d.%m.%Y') }}</p>
+
+<h2>Taraflar</h2>
+<p>İşbu sözleşme, {{ company.legal_name }} ile SiparişGeldi hizmetine elektronik ortamda üye olan kullanıcı arasında kurulmuştur.</p>
+
+<h2>Konu</h2>
+<p>Sözleşmenin konusu, kullanıcının SiparişGeldi dijital abonelik hizmetinden yararlanmasına ilişkin tarafların hak ve yükümlülükleridir.</p>
+
+<h2>Hizmet ve Bedel</h2>
+<p>Ücretsiz plan; Telegram bildirimi, 1 platform bağlantısı ve tüm raporları içerir. Pro plan; WhatsApp bildirimleri ve çoklu platform bağlantısı sağlar. Pro plan bedeli 250 TL / ay, KDV dahil olarak belirlenmiştir.</p>
+
+<h2>Ödeme</h2>
+<p>Ödeme işlemleri kredi kartı ile yetkili ödeme kuruluşu üzerinden gerçekleştirilir. Kart bilgileri SiparişGeldi tarafından saklanmaz.</p>
+
+<h2>Hizmetin Başlaması</h2>
+<p>Pro abonelik ödemesi başarıyla tamamlandığında ücretli özellikler kullanıcının hesabında dijital olarak aktif edilir.</p>
+
+<h2>İptal ve İade</h2>
+<p>Kullanıcı aboneliğini iptal edebilir. İptal ve iade talepleri, İptal ve İade Politikası'nda belirtilen esaslara göre değerlendirilir.</p>
+
+<h2>Uyuşmazlık</h2>
+<p>Uyuşmazlıklarda yürürlükteki Türkiye Cumhuriyeti mevzuatı uygulanır. Kullanıcılar tüketici mevzuatı kapsamında yetkili mercilere başvurabilir.</p>
+
+<h2>İletişim</h2>
+<p>{{ company.legal_name }} · {{ company.address }} · {{ company.email }} · {{ company.phone }}</p>
+{% endblock %}

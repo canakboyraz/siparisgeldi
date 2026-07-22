@@ -36,6 +36,36 @@
     </div>
   </section>
 
+  <section id="fiyatlandirma" class="pricing-section">
+    <h2>Fiyatlandırma</h2>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="card-title">Ücretsiz</div>
+        <div class="price">0 TL</div>
+        <p class="muted">Telegram ile 1 platformdan sipariş bildirimi al. Tüm raporlar dahil.</p>
+        <ul>
+          <li>1 aktif platform</li>
+          <li>Telegram bildirimi</li>
+          <li>Günlük, haftalık ve aylık raporlar</li>
+          <li>Aktif sipariş ekranı</li>
+        </ul>
+        <a class="btn btn-ghost btn-block" href="{{ url_for('auth.register') }}">Ücretsiz başla</a>
+      </div>
+      <div class="price-card featured">
+        <div class="card-title">Pro</div>
+        <div class="price">250 TL <span>/ ay · KDV dahil</span></div>
+        <p class="muted">WhatsApp bildirimleri ve birden fazla platform bağlantısı.</p>
+        <ul>
+          <li>WhatsApp bildirimi</li>
+          <li>Telegram + WhatsApp birlikte kullanım</li>
+          <li>Çoklu platform bağlantısı</li>
+          <li>Tüm raporlar ve sipariş detayları</li>
+        </ul>
+        <a class="btn btn-primary btn-block" href="{{ url_for('auth.register') }}">Pro için hesap aç</a>
+      </div>
+    </div>
+  </section>
+
   <h2 style="text-align:center;margin-top:1rem">Nasıl çalışır?</h2>
   <section class="steps">
     <div class="step"><div class="n">ADIM 1</div><strong>Hesap aç</strong><p class="muted" style="margin:.3rem 0 0">E-posta ile saniyeler içinde kayıt ol.</p></div>
@@ -43,5 +73,5 @@
     <div class="step"><div class="n">ADIM 3</div><strong>Bildirimler aksın</strong><p class="muted" style="margin:.3rem 0 0">Gerisini biz hallederiz — siparişler telefonuna gelir.</p></div>
   </section>
 </div>
-<footer>© {{ now().year }} SiparişGeldi · Yemek siparişi bildirim servisi</footer>
+{% include "public/_footer.html" %}
 {% endblock %}

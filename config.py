@@ -11,6 +11,13 @@ class Config:
 
     # Genel alan adı / marka
     APP_DOMAIN = os.environ.get("APP_DOMAIN", "siparisgeldi.net")
+    COMPANY_LEGAL_NAME = os.environ.get("COMPANY_LEGAL_NAME", "SiparişGeldi")
+    COMPANY_BRAND_NAME = os.environ.get("COMPANY_BRAND_NAME", "SiparişGeldi")
+    COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "Firma adresi ödeme başvurusu öncesi güncellenecektir.")
+    COMPANY_PHONE = os.environ.get("COMPANY_PHONE", "+90")
+    COMPANY_EMAIL = os.environ.get("COMPANY_EMAIL", "info@siparisgeldi.net")
+    COMPANY_TAX_OFFICE = os.environ.get("COMPANY_TAX_OFFICE", "")
+    COMPANY_TAX_NUMBER = os.environ.get("COMPANY_TAX_NUMBER", "")
     # Admin paneline erişebilecek e-postalar (virgülle ayrık, küçük harf)
     ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
     # Reverse proxy (Railway/Render) arkasında dış URL'ler https üretilsin
