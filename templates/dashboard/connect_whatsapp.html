@@ -5,6 +5,11 @@
 
 <div class="card" style="max-width:560px">
   <div class="card-title">WhatsApp numaran</div>
+  {% if not is_pro %}
+  <div class="notice-box" style="margin:.4rem 0 1rem">
+    WhatsApp bildirimleri Pro planda açılır. Ücretsiz planda Telegram, 1 platform ve tüm raporlar açık kalır.
+  </div>
+  {% endif %}
   <p class="muted" style="margin:.2rem 0 1rem">Sipariş bildirimlerinin geleceği WhatsApp
      numaranı gir. Ülke koduyla ya da 0 ile başlayabilirsin.</p>
   <form method="post">
@@ -17,11 +22,14 @@
     </div>
     <div class="field">
       <label>Bildirimleri nereden almak istersin?</label>
-      <select name="notification_channel">
+      <select name="notification_channel" {{ 'disabled' if not is_pro }}>
         <option value="telegram" {{ 'selected' if current_user.notification_channel in [None,'','telegram'] }}>Sadece Telegram</option>
         <option value="whatsapp" {{ 'selected' if current_user.notification_channel=='whatsapp' }}>Sadece WhatsApp</option>
         <option value="both" {{ 'selected' if current_user.notification_channel=='both' }}>Her ikisi (Telegram + WhatsApp)</option>
       </select>
+      {% if not is_pro %}
+      <input type="hidden" name="notification_channel" value="telegram">
+      {% endif %}
     </div>
     <button class="btn btn-primary btn-lg" type="submit">Kaydet</button>
   </form>
@@ -34,8 +42,11 @@
      test mesajı gönderip kurulumu doğrulayabilirsin.</p>
   <form method="post" action="{{ url_for('dashboard.test_whatsapp') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-ghost" type="submit">🔔 WhatsApp test mesajı gönder</button>
+    <button class="btn btn-ghost" type="submit" {{ 'disabled' if not is_pro }}>🔔 WhatsApp test mesajı gönder</button>
   </form>
+  {% if not is_pro %}
+  <p class="hint">Test mesajı ve WhatsApp bildirimi Pro planda kullanılabilir.</p>
+  {% endif %}
 </div>
 {% endif %}
 {% endblock %}

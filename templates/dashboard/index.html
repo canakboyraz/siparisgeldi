@@ -32,7 +32,10 @@
   <div class="stat"><div class="v">{{ recent_orders|length }}</div><div class="l">Son siparişler</div></div>
   <div class="stat"><div class="v">{{ integrations|selectattr('is_active')|list|length }}</div><div class="l">Aktif platform</div></div>
   <div class="stat"><div class="v">{{ '✓' if current_user.telegram_connected else '—' }}</div><div class="l">Telegram</div></div>
-  <div class="stat"><div class="v">{{ current_user.plan|capitalize }}</div><div class="l">Plan</div></div>
+  <div class="stat">
+    <div class="v">{{ 'Pro' if is_pro_user() else 'Ücretsiz' }}</div>
+    <div class="l">{{ 'WhatsApp + çoklu platform' if is_pro_user() else 'Telegram + 1 platform + raporlar' }}</div>
+  </div>
 </div>
 
 <div class="grid-2">

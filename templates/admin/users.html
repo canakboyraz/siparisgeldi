@@ -34,7 +34,7 @@
   <table>
     <thead>
       <tr>
-        <th>Ad / İşletme</th><th>E-posta</th><th>Kayıt</th><th>Platformlar</th>
+        <th>Ad / İşletme</th><th>E-posta</th><th>Plan</th><th>Kayıt</th><th>Platformlar</th>
         <th>Sipariş</th><th>Kanal</th><th>TG</th><th>WA</th>
       </tr>
     </thead>
@@ -43,6 +43,16 @@
       <tr>
         <td><strong>{{ u.name }}</strong></td>
         <td class="muted">{{ u.email }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin.update_user_plan', user_id=u.id) }}" class="inline">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <select name="plan" style="min-width:110px">
+              <option value="free" {{ 'selected' if (u.plan or 'free') == 'free' }}>Ücretsiz</option>
+              <option value="pro" {{ 'selected' if u.plan == 'pro' }}>Pro</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" type="submit">Kaydet</button>
+          </form>
+        </td>
         <td class="muted">{{ u.created_at.strftime('%d.%m.%Y') if u.created_at else '—' }}</td>
         <td>{{ platforms_by_user.get(u.id, '—') }}</td>
         <td>{{ order_counts.get(u.id, 0) }}</td>

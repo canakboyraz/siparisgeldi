@@ -4,7 +4,7 @@ Kullanıcıları, entegrasyonları ve genel istatistikleri görüntüler. Salt-o
 (yönetim/silme aksiyonları ileride eklenebilir).
 """
 from functools import wraps
-from flask import Blueprint, render_template, current_app, abort, request
+from flask import Blueprint, render_template, current_app, abort, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_
 
@@ -119,6 +119,22 @@ def users():
         .order_by(User.created_at.desc())
         .paginate(page=page, per_page=25, error_out=False)
     )
+
+
+@admin_bp.route("/kullanici/<int:user_id>/plan", methods=["POST"])
+@admin_required
+def update_user_plan(user_id):
+    user = User.query.get_or_404(user_id)
+    plan = request.form.get("plan", "free").strip().lower()
+    if plan not in ("free", "pro"):
+        flash("Geçersiz plan seçimi.", "danger")
+        return redirect(url_for("admin.users"))
+    user.plan = plan
+    if plan == "free" and (user.notification_channel or "telegram") in ("whatsapp", "both"):
+        user.notification_channel = "telegram"
+    db.session.commit()
+    flash(f"{user.email} planı {'Pro' if plan == 'pro' else 'Ücretsiz'} olarak güncellendi.", "success")
+    return redirect(url_for("admin.users"))
     user_ids = [u.id for u in users_paged.items]
     order_counts = {}
     platforms_by_user = {}

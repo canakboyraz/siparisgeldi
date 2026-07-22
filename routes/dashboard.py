@@ -25,6 +25,31 @@ ACTIVE_EXCLUDED_STATUSES = PROBLEM_STATUSES | DONE_STATUSES
 UNACCEPTED_WARNING_SECONDS = 120
 
 
+def _is_pro_user(user=None) -> bool:
+    user = user or current_user
+    return (getattr(user, "plan", "free") or "free").lower() == "pro"
+
+
+def _active_integration_count(exclude_id: int = None) -> int:
+    query = Integration.query.filter_by(user_id=current_user.id, is_active=True)
+    if exclude_id:
+        query = query.filter(Integration.id != exclude_id)
+    return query.count()
+
+
+def _can_enable_platform(existing: Integration = None) -> bool:
+    if _is_pro_user():
+        return True
+    if existing and existing.is_active:
+        return True
+    return _active_integration_count(existing.id if existing else None) < 1
+
+
+def _force_free_notification_channel():
+    if not _is_pro_user() and (current_user.notification_channel or "telegram") != "telegram":
+        current_user.notification_channel = "telegram"
+
+
 @dashboard_bp.route("/")
 @login_required
 def index():
@@ -71,18 +96,26 @@ def connect_whatsapp():
         number  = request.form.get("whatsapp_number", "").strip()
         channel = request.form.get("notification_channel", "").strip()
         current_user.whatsapp_number = number or None
-        if channel in ("telegram", "whatsapp", "both"):
+        if not _is_pro_user() and channel in ("whatsapp", "both"):
+            current_user.notification_channel = "telegram"
+            flash("WhatsApp bildirimleri Pro planda kullanılabilir. Ücretsiz planda Telegram açık kalır.", "warning")
+        elif channel in ("telegram", "whatsapp", "both"):
             current_user.notification_channel = channel
         db.session.commit()
         flash("WhatsApp ayarların kaydedildi.", "success")
         return redirect(url_for("dashboard.connect_whatsapp"))
-    return render_template("dashboard/connect_whatsapp.html")
+    _force_free_notification_channel()
+    db.session.commit()
+    return render_template("dashboard/connect_whatsapp.html", is_pro=_is_pro_user())
 
 
 @dashboard_bp.route("/whatsapp/test", methods=["POST"])
 @login_required
 def test_whatsapp():
     """WhatsApp'a örnek sipariş bildirimi gönderir (şablon → serbest metin fallback)."""
+    if not _is_pro_user():
+        flash("WhatsApp test bildirimi Pro planda kullanılabilir.", "warning")
+        return redirect(url_for("dashboard.connect_whatsapp"))
     from notifications import whatsapp
     cfg = current_app.config
     num = current_user.whatsapp_number
@@ -142,6 +175,10 @@ def trendyolgo_setup():
         api_key     = request.form.get("api_key", "").strip()
         api_secret  = request.form.get("api_secret", "").strip()
 
+        if not _can_enable_platform(intg):
+            flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
+            return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+
         if not supplier_id or not api_key or not api_secret:
             flash("Tüm alanlar zorunludur.", "danger")
             return render_template("dashboard/trendyolgo_setup.html", intg=intg)
@@ -180,6 +217,10 @@ def migros_setup():
         api_key  = request.form.get("api_key", "").strip()
         store_id = request.form.get("store_id", "").strip()
         group_id = request.form.get("group_id", "").strip()
+
+        if not _can_enable_platform(intg):
+            flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
+            return render_template("dashboard/migros_setup.html", intg=intg, **_migros_setup_context(intg))
 
         if not api_key or not store_id:
             flash("Restoran API Key ve Store (Restoran) ID zorunludur.", "danger")
@@ -293,6 +334,9 @@ def _migros_webhook_urls():
 @login_required
 def toggle_integration(intg_id):
     intg = Integration.query.filter_by(id=intg_id, user_id=current_user.id).first_or_404()
+    if not intg.is_active and not _can_enable_platform(intg):
+        flash("Ücretsiz planda aynı anda 1 platform aktif olabilir. Çoklu platform için Pro plana geç.", "warning")
+        return redirect(url_for("dashboard.index"))
     intg.is_active = not intg.is_active
     db.session.commit()
     flash(f"Entegrasyon {'aktif' if intg.is_active else 'pasif'} edildi.", "success")
@@ -846,7 +890,10 @@ def profile():
 
         # Bildirim kanalı + WhatsApp numarası
         channel = request.form.get("notification_channel", "").strip()
-        if channel in ("telegram", "whatsapp", "both"):
+        if not _is_pro_user() and channel in ("whatsapp", "both"):
+            current_user.notification_channel = "telegram"
+            flash("WhatsApp bildirimleri Pro planda kullanılabilir. Ücretsiz planda Telegram açık kalır.", "warning")
+        elif channel in ("telegram", "whatsapp", "both"):
             current_user.notification_channel = channel
         wa_number = request.form.get("whatsapp_number", "").strip()
         current_user.whatsapp_number = wa_number or None
@@ -877,6 +924,8 @@ def send_test_notification():
     beklenmeden de test edilebilir."""
     from notifications import whatsapp, telegram as tg
     cfg = current_app.config
+    _force_free_notification_channel()
+    db.session.commit()
     ch = (current_user.notification_channel or "telegram").lower()
     tg_text = "🔔 <b>Test bildirimi</b>\nBildirimlerin çalışıyor! 🎉\n— SiparişGeldi"
     wa_text = "🔔 Test bildirimi — bildirimlerin çalışıyor! 🎉 (SiparişGeldi)"

@@ -107,6 +107,7 @@ def create_app(config_class=Config, start_scheduler=None):
             "platform_label": utils.platform_label,
             "bot_username": app.config.get("TELEGRAM_BOT_USERNAME", ""),
             "user_is_admin": is_admin(current_user),
+            "is_pro_user": lambda user=None: (getattr(user or current_user, "plan", "free") or "free").lower() == "pro",
             "csrf_token": csrf_token,
         }
 
