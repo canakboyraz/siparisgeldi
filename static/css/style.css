@@ -161,6 +161,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .setup-checks summary::after{content:"Aç";float:right;color:var(--brand);font-size:.86rem}
 .setup-checks[open] summary::after{content:"Kapat"}
 .inline{display:flex;gap:.5rem;align-items:center}
+.mini-check{display:inline-flex;align-items:center;gap:.25rem;margin:0;font-size:.82rem;color:var(--muted);white-space:nowrap}
+.mini-check input{width:auto}
 .toggle-line{display:flex;align-items:center;gap:.6rem;padding:.4rem 0}
 .toggle-line input{width:auto}
 .empty{text-align:center;padding:2.5rem 1rem;color:var(--muted)}

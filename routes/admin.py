@@ -1,7 +1,7 @@
-"""Admin paneli — sadece ADMIN_EMAILS'teki kullanıcılar erişebilir.
+﻿"""Admin paneli â€” sadece ADMIN_EMAILS'teki kullanÄ±cÄ±lar eriÅŸebilir.
 
-Kullanıcıları, entegrasyonları ve genel istatistikleri görüntüler. Salt-okunur
-(yönetim/silme aksiyonları ileride eklenebilir).
+KullanÄ±cÄ±larÄ±, entegrasyonlarÄ± ve genel istatistikleri gÃ¶rÃ¼ntÃ¼ler. Salt-okunur
+(yÃ¶netim/silme aksiyonlarÄ± ileride eklenebilir).
 """
 from functools import wraps
 from flask import Blueprint, render_template, current_app, abort, request, redirect, url_for, flash
@@ -15,7 +15,7 @@ admin_bp = Blueprint("admin", __name__)
 
 
 def admin_required(f):
-    """Sadece config'teki ADMIN_EMAILS listesindeki kullanıcıya izin verir."""
+    """Sadece config'teki ADMIN_EMAILS listesindeki kullanÄ±cÄ±ya izin verir."""
     @wraps(f)
     @login_required
     def wrapper(*args, **kwargs):
@@ -27,7 +27,7 @@ def admin_required(f):
 
 
 def is_admin(user) -> bool:
-    """Şablonlarda 'admin linkini göster' kontrolü için."""
+    """Åablonlarda 'admin linkini gÃ¶ster' kontrolÃ¼ iÃ§in."""
     if not user or not getattr(user, "is_authenticated", False):
         return False
     admins = current_app.config.get("ADMIN_EMAILS", [])
@@ -47,13 +47,13 @@ def index():
     telegram_connected = sum(1 for u in users if u.telegram_chat_id)
     whatsapp_connected = sum(1 for u in users if u.whatsapp_number)
 
-    # Her kullanıcı için özet satır verisi
+    # Her kullanÄ±cÄ± iÃ§in Ã¶zet satÄ±r verisi
     rows = []
     for u in users[:5]:
         intgs = u.integrations
         rows.append({
             "user": u,
-            "platforms": ", ".join(sorted({i.platform for i in intgs})) or "—",
+            "platforms": ", ".join(sorted({i.platform for i in intgs})) or "â€”",
             "platform_count": len(intgs),
             "order_count": Order.query.filter_by(user_id=u.id).count(),
             "telegram": bool(u.telegram_chat_id),
@@ -119,22 +119,6 @@ def users():
         .order_by(User.created_at.desc())
         .paginate(page=page, per_page=25, error_out=False)
     )
-
-
-@admin_bp.route("/kullanici/<int:user_id>/plan", methods=["POST"])
-@admin_required
-def update_user_plan(user_id):
-    user = User.query.get_or_404(user_id)
-    plan = request.form.get("plan", "free").strip().lower()
-    if plan not in ("free", "pro"):
-        flash("Geçersiz plan seçimi.", "danger")
-        return redirect(url_for("admin.users"))
-    user.plan = plan
-    if plan == "free" and (user.notification_channel or "telegram") in ("whatsapp", "both"):
-        user.notification_channel = "telegram"
-    db.session.commit()
-    flash(f"{user.email} planı {'Pro' if plan == 'pro' else 'Ücretsiz'} olarak güncellendi.", "success")
-    return redirect(url_for("admin.users"))
     user_ids = [u.id for u in users_paged.items]
     order_counts = {}
     platforms_by_user = {}
@@ -147,7 +131,7 @@ def update_user_plan(user_id):
         )
         order_counts = {user_id: count for user_id, count in counts}
         platforms_by_user = {
-            u.id: ", ".join(sorted({i.platform for i in u.integrations})) or "—"
+            u.id: ", ".join(sorted({i.platform for i in u.integrations})) or "-"
             for u in users_paged.items
         }
 
@@ -159,6 +143,29 @@ def update_user_plan(user_id):
         filters={"q": q, "channel": channel},
     )
 
+
+@admin_bp.route("/kullanici/<int:user_id>/plan", methods=["POST"])
+@admin_required
+def update_user_plan(user_id):
+    user = User.query.get_or_404(user_id)
+    plan = request.form.get("plan", "free").strip().lower()
+    if plan not in ("free", "pro"):
+        flash("Geçersiz plan seçimi.", "danger")
+        return redirect(url_for("admin.users"))
+
+    user.plan = plan
+    user.feature_whatsapp = "feature_whatsapp" in request.form
+    user.feature_multi_platform = "feature_multi_platform" in request.form
+    channel = request.form.get("notification_channel", "").strip().lower()
+    if channel in ("telegram", "whatsapp", "both"):
+        user.notification_channel = channel
+    if plan == "free" and not user.has_whatsapp_access and (user.notification_channel or "telegram") in ("whatsapp", "both"):
+        user.notification_channel = "telegram"
+
+    db.session.commit()
+    label = "Pro" if plan == "pro" else "Ücretsiz"
+    flash(f"{user.email} planı {label} olarak güncellendi.", "success")
+    return redirect(url_for("admin.users"))
 
 @admin_bp.route("/siparisler")
 @admin_required

@@ -1,4 +1,4 @@
-"""Uygulama fabrikası (application factory)."""
+﻿"""Uygulama fabrikasÄ± (application factory)."""
 import secrets
 
 from flask import Flask, abort, request, session
@@ -10,46 +10,72 @@ from extensions import db, login_manager
 
 
 def _ensure_schema():
-    """Var olan Postgres tablolarına eksik kolonları güvenle ekler.
-    create_all() yalnızca eksik TABLOLARI oluşturur, kolon eklemez; bu yüzden
-    sonradan eklenen alanlar için hafif bir 'ADD COLUMN IF NOT EXISTS' geçeriz.
-    SQLite (yerel) taze DB oluşturduğundan atlanır."""
+    """Mevcut veritabanlarina sonradan eklenen kolonlari guvenle ekler."""
     backend = db.engine.url.get_backend_name()
-    if not backend.startswith("postgres"):
+
+    if backend.startswith("postgres"):
+        stmts = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(30)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_channel VARCHAR(20) DEFAULT 'telegram'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_whatsapp BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_multi_platform BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_migros_store_id
+            ON integrations (migros_store_id)
+            WHERE platform = 'migros' AND migros_store_id IS NOT NULL
+            """,
+        ]
+    elif backend.startswith("sqlite"):
+        with db.engine.begin() as conn:
+            user_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+            intg_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(integrations)")).fetchall()}
+            stmts = []
+            if "whatsapp_number" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN whatsapp_number VARCHAR(30)")
+            if "notification_channel" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN notification_channel VARCHAR(20) DEFAULT 'telegram'")
+            if "feature_whatsapp" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN feature_whatsapp BOOLEAN DEFAULT FALSE")
+            if "feature_multi_platform" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN feature_multi_platform BOOLEAN DEFAULT FALSE")
+            if "migros_group_id" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN migros_group_id VARCHAR(50)")
+            if "notify_weekly_report" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN notify_weekly_report BOOLEAN DEFAULT TRUE")
+            if "notify_monthly_report" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN notify_monthly_report BOOLEAN DEFAULT TRUE")
+            for s in stmts:
+                try:
+                    conn.execute(text(s))
+                except Exception as e:
+                    print(f"[SCHEMA] atlandi: {s} -> {e}")
         return
-    stmts = [
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(30)",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_channel VARCHAR(20) DEFAULT 'telegram'",
-        "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
-        "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
-        "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_migros_store_id
-        ON integrations (migros_store_id)
-        WHERE platform = 'migros' AND migros_store_id IS NOT NULL
-        """,
-    ]
+    else:
+        return
+
     with db.engine.begin() as conn:
         for s in stmts:
             try:
                 conn.execute(text(s))
             except Exception as e:
-                print(f"[SCHEMA] atlandı: {s} → {e}")
-
+                print(f"[SCHEMA] atlandi: {s} -> {e}")
 
 def create_app(config_class=Config, start_scheduler=None):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Reverse proxy (Railway/Render/Nginx) arkasında gerçek şema/host'u oku ki
-    # url_for(_external=True) → https://siparisgeldi.net/... doğru üretilsin.
+    # Reverse proxy (Railway/Render/Nginx) arkasÄ±nda gerÃ§ek ÅŸema/host'u oku ki
+    # url_for(_external=True) â†’ https://siparisgeldi.net/... doÄŸru Ã¼retilsin.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-    # Eklentileri bağla
+    # Eklentileri baÄŸla
     db.init_app(app)
     login_manager.init_app(app)
 
-    # Modeller (tablo kaydı için import şart)
+    # Modeller (tablo kaydÄ± iÃ§in import ÅŸart)
     import models  # noqa: F401
 
     # Blueprint'ler
@@ -65,7 +91,7 @@ def create_app(config_class=Config, start_scheduler=None):
     app.register_blueprint(webhooks_bp, url_prefix="/webhooks")
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
-    # Şablonlarda kullanılacak yardımcılar
+    # Åablonlarda kullanÄ±lacak yardÄ±mcÄ±lar
     from datetime import datetime
     import utils
 
@@ -108,9 +134,11 @@ def create_app(config_class=Config, start_scheduler=None):
             "bot_username": app.config.get("TELEGRAM_BOT_USERNAME", ""),
             "user_is_admin": is_admin(current_user),
             "is_pro_user": lambda user=None: (getattr(user or current_user, "plan", "free") or "free").lower() == "pro",
+            "user_can_whatsapp": lambda user=None: bool(getattr(user or current_user, "has_whatsapp_access", False)),
+            "user_can_multi_platform": lambda user=None: bool(getattr(user or current_user, "has_multi_platform_access", False)),
             "company": {
-                "legal_name": app.config.get("COMPANY_LEGAL_NAME", "SiparişGeldi"),
-                "brand_name": app.config.get("COMPANY_BRAND_NAME", "SiparişGeldi"),
+                "legal_name": app.config.get("COMPANY_LEGAL_NAME", "SipariÅŸGeldi"),
+                "brand_name": app.config.get("COMPANY_BRAND_NAME", "SipariÅŸGeldi"),
                 "address": app.config.get("COMPANY_ADDRESS", ""),
                 "phone": app.config.get("COMPANY_PHONE", ""),
                 "email": app.config.get("COMPANY_EMAIL", ""),
@@ -120,12 +148,12 @@ def create_app(config_class=Config, start_scheduler=None):
             "csrf_token": csrf_token,
         }
 
-    # Tabloları oluştur + hafif şema güncellemeleri (mevcut Postgres'e yeni kolon)
+    # TablolarÄ± oluÅŸtur + hafif ÅŸema gÃ¼ncellemeleri (mevcut Postgres'e yeni kolon)
     with app.app_context():
         db.create_all()
         _ensure_schema()
 
-    # Arka plan zamanlayıcı (dev: web süreci içinde)
+    # Arka plan zamanlayÄ±cÄ± (dev: web sÃ¼reci iÃ§inde)
     should_start = app.config.get("RUN_SCHEDULER", True) if start_scheduler is None else start_scheduler
     if should_start:
         from worker import start_scheduler as _start

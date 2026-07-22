@@ -50,6 +50,13 @@
               <option value="free" {{ 'selected' if (u.plan or 'free') == 'free' }}>Ücretsiz</option>
               <option value="pro" {{ 'selected' if u.plan == 'pro' }}>Pro</option>
             </select>
+            <label class="mini-check"><input type="checkbox" name="feature_whatsapp" {{ 'checked' if u.feature_whatsapp }}> WA</label>
+            <label class="mini-check"><input type="checkbox" name="feature_multi_platform" {{ 'checked' if u.feature_multi_platform }}> Çoklu</label>
+            <select name="notification_channel" style="min-width:130px">
+              <option value="telegram" {{ 'selected' if (u.notification_channel or 'telegram') == 'telegram' }}>Telegram</option>
+              <option value="whatsapp" {{ 'selected' if u.notification_channel == 'whatsapp' }}>WhatsApp</option>
+              <option value="both" {{ 'selected' if u.notification_channel == 'both' }}>TG + WA</option>
+            </select>
             <button class="btn btn-ghost btn-sm" type="submit">Kaydet</button>
           </form>
         </td>

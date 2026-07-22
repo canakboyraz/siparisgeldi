@@ -30,6 +30,14 @@ def _is_pro_user(user=None) -> bool:
     return (getattr(user, "plan", "free") or "free").lower() == "pro"
 
 
+def _can_use_whatsapp(user=None) -> bool:
+    return bool(getattr(user or current_user, "has_whatsapp_access", False))
+
+
+def _can_use_multi_platform(user=None) -> bool:
+    return bool(getattr(user or current_user, "has_multi_platform_access", False))
+
+
 def _active_integration_count(exclude_id: int = None) -> int:
     query = Integration.query.filter_by(user_id=current_user.id, is_active=True)
     if exclude_id:
@@ -38,7 +46,7 @@ def _active_integration_count(exclude_id: int = None) -> int:
 
 
 def _can_enable_platform(existing: Integration = None) -> bool:
-    if _is_pro_user():
+    if _can_use_multi_platform():
         return True
     if existing and existing.is_active:
         return True
@@ -46,7 +54,7 @@ def _can_enable_platform(existing: Integration = None) -> bool:
 
 
 def _force_free_notification_channel():
-    if not _is_pro_user() and (current_user.notification_channel or "telegram") != "telegram":
+    if not _can_use_whatsapp() and (current_user.notification_channel or "telegram") != "telegram":
         current_user.notification_channel = "telegram"
 
 
@@ -96,7 +104,7 @@ def connect_whatsapp():
         number  = request.form.get("whatsapp_number", "").strip()
         channel = request.form.get("notification_channel", "").strip()
         current_user.whatsapp_number = number or None
-        if not _is_pro_user() and channel in ("whatsapp", "both"):
+        if not _can_use_whatsapp() and channel in ("whatsapp", "both"):
             current_user.notification_channel = "telegram"
             flash("WhatsApp bildirimleri Pro planda kullanılabilir. Ücretsiz planda Telegram açık kalır.", "warning")
         elif channel in ("telegram", "whatsapp", "both"):
@@ -106,14 +114,14 @@ def connect_whatsapp():
         return redirect(url_for("dashboard.connect_whatsapp"))
     _force_free_notification_channel()
     db.session.commit()
-    return render_template("dashboard/connect_whatsapp.html", is_pro=_is_pro_user())
+    return render_template("dashboard/connect_whatsapp.html", can_use_whatsapp=_can_use_whatsapp())
 
 
 @dashboard_bp.route("/whatsapp/test", methods=["POST"])
 @login_required
 def test_whatsapp():
     """WhatsApp'a örnek sipariş bildirimi gönderir (şablon → serbest metin fallback)."""
-    if not _is_pro_user():
+    if not _can_use_whatsapp():
         flash("WhatsApp test bildirimi Pro planda kullanılabilir.", "warning")
         return redirect(url_for("dashboard.connect_whatsapp"))
     from notifications import whatsapp
@@ -890,7 +898,7 @@ def profile():
 
         # Bildirim kanalı + WhatsApp numarası
         channel = request.form.get("notification_channel", "").strip()
-        if not _is_pro_user() and channel in ("whatsapp", "both"):
+        if not _can_use_whatsapp() and channel in ("whatsapp", "both"):
             current_user.notification_channel = "telegram"
             flash("WhatsApp bildirimleri Pro planda kullanılabilir. Ücretsiz planda Telegram açık kalır.", "warning")
         elif channel in ("telegram", "whatsapp", "both"):

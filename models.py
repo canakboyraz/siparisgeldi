@@ -21,6 +21,8 @@ class User(UserMixin, db.Model):
     name          = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     plan          = db.Column(db.String(20), default="free")   # free | pro
+    feature_whatsapp = db.Column(db.Boolean, default=False)
+    feature_multi_platform = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -49,6 +51,14 @@ class User(UserMixin, db.Model):
     @property
     def telegram_connected(self) -> bool:
         return bool(self.telegram_chat_id)
+
+    @property
+    def has_whatsapp_access(self) -> bool:
+        return (self.plan or "free").lower() == "pro" or bool(self.feature_whatsapp)
+
+    @property
+    def has_multi_platform_access(self) -> bool:
+        return (self.plan or "free").lower() == "pro" or bool(self.feature_multi_platform)
 
     def __repr__(self):
         return f"<User {self.email}>"

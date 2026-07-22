@@ -20,7 +20,7 @@ def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = N
     if not user:
         return False
     channel = (user.notification_channel or "telegram").lower()
-    if (getattr(user, "plan", "free") or "free").lower() != "pro" and channel in ("whatsapp", "both"):
+    if not getattr(user, "has_whatsapp_access", False) and channel in ("whatsapp", "both"):
         channel = "telegram"
     any_sent = False
 
