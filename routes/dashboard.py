@@ -175,7 +175,6 @@ def trendyolgo_setup():
 @login_required
 def migros_setup():
     intg = Integration.query.filter_by(user_id=current_user.id, platform="migros").first()
-    migros_api_base = current_app.config.get("MIGROS_API_BASE")
 
     if request.method == "POST":
         api_key  = request.form.get("api_key", "").strip()
@@ -184,12 +183,16 @@ def migros_setup():
 
         if not api_key or not store_id:
             flash("Restoran API Key ve Store (Restoran) ID zorunludur.", "danger")
-            return render_template("dashboard/migros_setup.html", intg=intg,
-                                   webhook_urls=_migros_webhook_urls(),
-                                   migros_api_base=migros_api_base)
+            return render_template("dashboard/migros_setup.html", intg=intg, **_migros_setup_context(intg))
+
+        conflict = _find_migros_store_conflict(store_id, intg.id if intg else None)
+        if conflict:
+            flash("Bu Store (Restoran) ID başka bir hesapta kayıtlı. Siparişlerin yanlış hesaba düşmemesi için kayıt engellendi.", "danger")
+            return render_template("dashboard/migros_setup.html", intg=intg, **_migros_setup_context(intg))
 
         # Bağlantıyı doğrula (GetStoreGroups — şifreleme gerektirmez, sadece api key)
         secret = current_app.config.get("MIGROS_SECRET_KEY", "")
+        migros_api_base = current_app.config.get("MIGROS_API_BASE")
         ok, msg, _ = migros.test_connection(api_key, secret, migros_api_base)
 
         if not intg:
@@ -211,9 +214,70 @@ def migros_setup():
             flash("Bildirim alabilmek için Telegram'ı da bağlayın.", "warning")
         return redirect(url_for("dashboard.migros_setup"))
 
-    return render_template("dashboard/migros_setup.html", intg=intg,
-                           webhook_urls=_migros_webhook_urls(),
-                           migros_api_base=migros_api_base)
+    return render_template("dashboard/migros_setup.html", intg=intg, **_migros_setup_context(intg))
+
+
+def _find_migros_store_conflict(store_id: str, current_integration_id: int = None) -> Integration:
+    query = Integration.query.filter(
+        Integration.platform == "migros",
+        Integration.migros_store_id == str(store_id).strip(),
+    )
+    if current_integration_id:
+        query = query.filter(Integration.id != current_integration_id)
+    return query.first()
+
+
+def _migros_setup_context(intg: Integration = None) -> dict:
+    migros_api_base = current_app.config.get("MIGROS_API_BASE")
+    return {
+        "webhook_urls": _migros_webhook_urls(),
+        "migros_api_base": migros_api_base,
+        "go_live_checks": _migros_go_live_checks(intg, migros_api_base),
+    }
+
+
+def _migros_go_live_checks(intg: Integration = None, migros_api_base: str = "") -> list:
+    webhook_urls = _migros_webhook_urls()
+    auth_ready = bool(current_app.config.get("MIGROS_WEBHOOK_USER") and current_app.config.get("MIGROS_WEBHOOK_PASS"))
+    has_https = all(str(url).startswith("https://") for url in webhook_urls.values())
+    has_store_id = bool(intg and intg.migros_store_id)
+    has_api_key = bool(intg and intg._migros_api_key)
+    has_sync = bool(intg and intg.last_sync_at)
+    has_error = bool(intg and intg.last_error)
+    duplicate = _find_migros_store_conflict(intg.migros_store_id, intg.id) if has_store_id else None
+
+    return [
+        {
+            "label": "Webhook URL",
+            "state": "ok" if has_https else "warn",
+            "text": "HTTPS adresler hazır" if has_https else "Webhook adreslerini HTTPS olarak paylaşın",
+        },
+        {
+            "label": "Basic Auth",
+            "state": "ok" if auth_ready else "danger",
+            "text": "Kullanıcı/parola tanımlı" if auth_ready else "MIGROS_WEBHOOK_USER/PASS eksik",
+        },
+        {
+            "label": "Store ID eşleşmesi",
+            "state": "ok" if has_store_id and not duplicate else ("danger" if duplicate else "warn"),
+            "text": "Bu hesaba bağlı ve tekil" if has_store_id and not duplicate else ("Başka hesapta da kayıtlı" if duplicate else "Store ID henüz girilmedi"),
+        },
+        {
+            "label": "API doğrulama",
+            "state": "ok" if has_api_key else "warn",
+            "text": f"Base URL: {migros_api_base}" if has_api_key else "Restoran API Key kaydedilmedi",
+        },
+        {
+            "label": "Son webhook",
+            "state": "ok" if has_sync else "warn",
+            "text": intg.last_sync_at.strftime("%d.%m.%Y %H:%M") if has_sync else "Henüz webhook alınmadı",
+        },
+        {
+            "label": "Son hata",
+            "state": "danger" if has_error else "ok",
+            "text": intg.last_error if has_error else "Hata yok",
+        },
+    ]
 
 
 def _migros_webhook_urls():
