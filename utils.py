@@ -20,6 +20,12 @@ _STATUS_LABELS = {
     "Rejected":   "Reddedildi",
     "Refunded":   "İade",
     "Returned":   "İade",
+    "UnDelivered": "Teslim edilemedi",
+    "UnSupplied": "Tedarik edilemedi",
+    "AtCollectionPoint": "Teslimat noktasında",
+    "UnPacked": "Paket bölündü",
+    "Awaiting": "Ödeme bekliyor",
+    "Verified": "Doğrulandı",
 }
 
 _STATUS_COLORS = {
@@ -42,11 +48,18 @@ _STATUS_COLORS = {
     "Rejected":   "red",
     "Refunded":   "red",
     "Returned":   "red",
+    "UnDelivered": "red",
+    "UnSupplied": "red",
+    "AtCollectionPoint": "violet",
+    "UnPacked": "amber",
+    "Awaiting": "gray",
+    "Verified": "blue",
 }
 
 _PLATFORM_LABELS = {
     "trendyolgo": "Trendyol Go",
     "migros":     "Migros Yemek",
+    "trendyol_marketplace": "Trendyol Pazaryeri",
 }
 
 _STATUS_LABELS.update({

@@ -67,6 +67,10 @@ class Config:
     GETIR_APP_SECRET_KEY = os.environ.get("GETIR_APP_SECRET_KEY", "")
     GETIR_WEBHOOK_API_KEY = os.environ.get("GETIR_WEBHOOK_API_KEY", "")
 
+    # Trendyol Pazaryeri (e-ticaret)
+    TRENDYOL_MARKETPLACE_API_BASE = os.environ.get("TRENDYOL_MARKETPLACE_API_BASE", "https://apigw.trendyol.com/integration")
+    TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY = os.environ.get("TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY", "")
+
     # WhatsApp (Meta Cloud API). Değerler Meta Business/Developers'tan alınır.
     WHATSAPP_ACCESS_TOKEN   = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
     WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")

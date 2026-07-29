@@ -8,6 +8,7 @@
     <select name="platform" onchange="this.form.submit()">
       <option value="">Tüm platformlar</option>
       <option value="trendyolgo" {{ 'selected' if platform=='trendyolgo' }}>Trendyol Go</option>
+      <option value="trendyol_marketplace" {{ 'selected' if platform=='trendyol_marketplace' }}>Trendyol Pazaryeri</option>
       <option value="migros" {{ 'selected' if platform=='migros' }}>Migros Yemek</option>
       <option value="getir" {{ 'selected' if platform=='getir' }}>Getir Yemek</option>
     </select>

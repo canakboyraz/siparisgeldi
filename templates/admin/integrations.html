@@ -55,7 +55,7 @@
           <span class="muted">{{ i.user.email }}</span>
         </td>
         <td>{{ platform_label(i.platform) }}</td>
-        <td>{{ i.tgo_supplier_id or i.migros_store_id or i.getir_restaurant_id or '—' }}</td>
+        <td>{{ i.tgo_supplier_id or i.tmp_supplier_id or i.migros_store_id or i.getir_restaurant_id or '—' }}</td>
         <td>
           {% if i.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
           {% if i.last_error %}<span class="badge red">hata</span>{% endif %}

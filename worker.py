@@ -12,10 +12,11 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
+from flask import current_app
 
 from extensions import db
 from models import Integration, Order, User, AppState
-from integrations import getir, trendyolgo as tgo
+from integrations import getir, trendyol_marketplace as tmp, trendyolgo as tgo
 from notifications import telegram
 from notifications.dispatcher import send_to_user
 from utils import status_label
@@ -65,6 +66,91 @@ def poll_trendyolgo(app):
                 intg.last_error = str(e)[:300]
                 db.session.commit()
                 print(f"[WORKER TGO] Hata user={intg.user_id}: {e}")
+
+
+def poll_trendyol_marketplace(app):
+    with app.app_context():
+        integrations = Integration.query.filter_by(platform=tmp.PLATFORM, is_active=True).all()
+        for intg in integrations:
+            if not intg.tmp_supplier_id or not intg._tmp_api_key:
+                continue
+            try:
+                _process_tmp(intg)
+                intg.last_sync_at = datetime.utcnow()
+                intg.last_error = None
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                intg.last_error = str(e)[:300]
+                db.session.commit()
+                print(f"[WORKER TMP] Hata user={intg.user_id}: {e}")
+
+
+def _process_tmp(intg):
+    since = (intg.last_sync_at or intg.created_at or datetime.utcnow()) - timedelta(minutes=10)
+    orders = tmp.get_orders(
+        intg.tmp_supplier_id,
+        intg.tmp_api_key,
+        intg.tmp_api_secret,
+        base_url=current_app.config.get("TRENDYOL_MARKETPLACE_API_BASE"),
+        since=since,
+    )
+    user = db.session.get(User, intg.user_id)
+
+    for order_data in orders:
+        fields = tmp.extract_order_fields(order_data)
+        if not fields["external_id"]:
+            continue
+
+        existing = Order.query.filter_by(
+            user_id=intg.user_id, platform=tmp.PLATFORM, external_id=fields["external_id"]
+        ).first()
+
+        if not existing:
+            order = Order(
+                user_id=intg.user_id,
+                platform=tmp.PLATFORM,
+                raw_json=json.dumps(order_data, ensure_ascii=False),
+                **fields,
+            )
+            order.mark_status_notified("INITIAL")
+            db.session.add(order)
+            db.session.commit()
+
+            if intg.notify_new_order:
+                amount = f"{fields['total_price']:.2f} ₺"
+                send_to_user(
+                    user,
+                    tmp.format_new_order_message(order_data),
+                    wa=["Yeni sipariş · Trendyol Pazaryeri", fields["order_number"], tmp.summarize_items(order_data), amount],
+                )
+                print(f"[TMP] yeni siparis #{fields['order_number']} (user={intg.user_id})")
+            continue
+
+        current_status = fields["status"]
+        if existing.status != current_status:
+            existing.status = current_status
+            existing.order_number = fields["order_number"] or existing.order_number
+            existing.total_price = fields["total_price"]
+            existing.payment_type = fields["payment_type"]
+            existing.customer_note = fields["customer_note"]
+            existing.raw_json = json.dumps(order_data, ensure_ascii=False)
+
+        is_cancel = _is_cancelled_order(existing)
+        is_refund = _is_refunded_order(existing)
+        wants = intg.notify_cancel if (is_cancel or is_refund) else intg.notify_status_change
+        if current_status in tmp.STATUS_NOTIFY and not existing.is_status_notified(current_status) and wants:
+            existing.mark_status_notified(current_status)
+            db.session.commit()
+            amount = f"{fields['total_price']:.2f} ₺"
+            send_to_user(
+                user,
+                tmp.format_status_message(order_data, current_status),
+                wa=[f"{status_label(current_status)} · Trendyol Pazaryeri", fields["order_number"], tmp.summarize_items(order_data), amount],
+            )
+            print(f"[TMP] durum #{fields['order_number']} -> {current_status} (user={intg.user_id})")
+        else:
+            db.session.commit()
 
 
 def _process_tgo(intg):
@@ -232,6 +318,12 @@ def _aggregate_products(orders, max_items: int = 15) -> str:
                     continue
                 name = getir.product_name(it)
                 counts[name] = counts.get(name, 0) + getir.product_quantity(it)
+        elif o.platform == tmp.PLATFORM:
+            for ln in tmp.lines(data):
+                if not isinstance(ln, dict):
+                    continue
+                name = tmp.line_name(ln)
+                counts[name] = counts.get(name, 0) + tmp.line_quantity(ln)
         else:  # trendyolgo
             for ln in (data.get("lines") or []):
                 name = ln.get("name", "?")
@@ -298,7 +390,12 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
     cancelled_total = sum(o.total_price for o in cancelled)
     refunded_total = sum(o.total_price for o in refunded)
     products  = _aggregate_products(active)
-    label = {"trendyolgo": "Trendyol Go", "migros": "Migros Yemek", "getir": "Getir Yemek"}.get(intg.platform, intg.platform)
+    label = {
+        "trendyolgo": "Trendyol Go",
+        "migros": "Migros Yemek",
+        "getir": "Getir Yemek",
+        tmp.PLATFORM: "Trendyol Pazaryeri",
+    }.get(intg.platform, intg.platform)
 
     emoji = {"Günlük": "📊", "Haftalık": "📅", "Aylık": "🗓️"}.get(kind, "📊")
     msg = (
@@ -385,6 +482,9 @@ def start_scheduler(app):
 
     scheduler.add_job(poll_trendyolgo, "interval", seconds=interval,
                       args=[app], id="tgo_poll", replace_existing=True, max_instances=1)
+
+    scheduler.add_job(poll_trendyol_marketplace, "interval", seconds=interval,
+                      args=[app], id="tmp_poll", replace_existing=True, max_instances=1)
 
     scheduler.add_job(poll_telegram_binds, "interval", seconds=5,
                       args=[app], id="tg_bind", replace_existing=True, max_instances=1)

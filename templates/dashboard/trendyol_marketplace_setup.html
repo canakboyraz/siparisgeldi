@@ -1,0 +1,94 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Trendyol Pazaryeri · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>Trendyol Pazaryeri bağlantısı</h1></div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">API bilgileri</div>
+    <p class="muted" style="margin-top:0">
+      Trendyol Satıcı Paneli'ndeki Satıcı ID, API Key ve API Secret bilgilerini gir.
+      Token alanını sistem otomatik üretir.
+    </p>
+    <p class="hint">API ortamı: <code>{{ tmp_api_base }}</code></p>
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label>Satıcı ID (Cari ID)</label>
+        <input type="text" name="supplier_id" required value="{{ intg.tmp_supplier_id or '' if intg else '' }}" placeholder="123456">
+      </div>
+      <div class="field">
+        <label>Entegrasyon Referans Kodu <span class="muted">— opsiyonel</span></label>
+        <input type="text" name="integration_ref" value="{{ intg.tmp_integration_ref or '' if intg else '' }}" placeholder="Referans kodu">
+      </div>
+      <div class="field">
+        <label>API Key</label>
+        <input type="text" name="api_key" {{ 'required' if not (intg and intg._tmp_api_key) }} placeholder="{{ 'Kayıtlı, değiştirmek için yeni değer gir' if intg and intg._tmp_api_key else 'API Key' }}">
+      </div>
+      <div class="field">
+        <label>API Secret</label>
+        <input type="password" name="api_secret" {{ 'required' if not (intg and intg._tmp_api_secret) }} placeholder="{{ 'Kayıtlı, değiştirmek için yeni değer gir' if intg and intg._tmp_api_secret else 'API Secret' }}">
+      </div>
+      <button class="btn btn-primary btn-lg" type="submit">Bağlantıyı test et &amp; kaydet</button>
+    </form>
+  </div>
+
+  {% if intg %}
+  <div class="card">
+    <div class="card-title">Bildirim tercihleri</div>
+    <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>Yeni sipariş</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>Kargo/durum değişikliği</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>İptal/iade</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_daily_report" {{ 'checked' if intg.notify_daily_report }}> <span>Günlük özet</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_weekly_report" {{ 'checked' if intg.notify_weekly_report }}> <span>Haftalık özet</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_monthly_report" {{ 'checked' if intg.notify_monthly_report }}> <span>Aylık özet</span></div>
+      <button class="btn btn-ghost" style="margin-top:1rem" type="submit">Tercihleri kaydet</button>
+    </form>
+
+    <div class="row" style="margin-top:1.2rem">
+      <div class="muted">
+        Durum:
+        {% if intg.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
+        {% if intg.last_error %}<span class="badge red">son hata</span>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('dashboard.delete_integration', intg_id=intg.id) }}"
+            onsubmit="return confirm('Trendyol Pazaryeri entegrasyonu silinsin mi?')">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm">Sil</button>
+      </form>
+    </div>
+    {% if intg.last_error %}<p class="hint" style="color:var(--red)">{{ intg.last_error }}</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-title">Neler bildirilecek?</div>
+    <div class="check-list">
+      <div class="check-row"><strong>Yeni sipariş</strong><span class="badge green">hazır</span></div>
+      <div class="check-row"><strong>Kargo/durum değişikliği</strong><span class="badge green">hazır</span></div>
+      <div class="check-row"><strong>İptal ve iade</strong><span class="badge green">hazır</span></div>
+      <div class="check-row"><strong>Günlük, haftalık, aylık rapor</strong><span class="badge green">hazır</span></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <details class="setup-checks">
+      <summary>Webhook bilgisi</summary>
+      <p class="muted" style="margin-top:.8rem">
+        Trendyol webhook kullanılırsa sipariş statüleri bu adrese POST edilir. Polling yedek olarak çalışmaya devam eder.
+      </p>
+      <div class="code">{{ tmp_webhook_url }}</div>
+      <p class="hint" style="margin-top:1rem">
+        AuthenticationType: <code>API_KEY</code> seçilirse Trendyol <code>x-api-key</code> header'ı gönderir.
+        {% if tmp_webhook_key_ready %}
+        Sistem anahtarı tanımlı.
+        {% else %}
+        Railway tarafında <code>TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY</code> eksik.
+        {% endif %}
+      </p>
+    </details>
+  </div>
+</div>
+{% endblock %}

@@ -9,14 +9,14 @@ import pytz
 
 from extensions import db
 from models import Integration, Order
-from integrations import getir, migros, trendyolgo as tgo
+from integrations import getir, migros, trendyol_marketplace as tmp, trendyolgo as tgo
 
 dashboard_bp = Blueprint("dashboard", __name__)
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
 
-PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New", "Scheduled"}
+PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New", "Scheduled", "Awaiting"}
 PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared", "ScheduledApproved"}
-DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery"}
+DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery", "AtCollectionPoint"}
 CANCELLED_STATUSES = {"Cancelled", "Canceled", "UnSupplied", "Rejected", "REJECTED", "AdminCancelled", "AutoCancelled"}
 REFUNDED_STATUSES = {"Refunded", "Refund", "Returned", "Return", "PartiallyRefunded", "PartialRefunded", "RETURNED", "REFUNDED"}
 PROBLEM_STATUSES = CANCELLED_STATUSES | REFUNDED_STATUSES
@@ -212,6 +212,68 @@ def trendyolgo_setup():
         return redirect(url_for("dashboard.index"))
 
     return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+
+
+@dashboard_bp.route("/trendyol-pazaryeri", methods=["GET", "POST"])
+@login_required
+def trendyol_marketplace_setup():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform=tmp.PLATFORM).first()
+
+    if request.method == "POST":
+        supplier_id = request.form.get("supplier_id", "").strip()
+        integration_ref = request.form.get("integration_ref", "").strip()
+        api_key = request.form.get("api_key", "").strip()
+        api_secret = request.form.get("api_secret", "").strip()
+        has_saved_credentials = bool(intg and intg._tmp_api_key and intg._tmp_api_secret)
+
+        if not _can_enable_platform(intg):
+            flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
+            return render_template("dashboard/trendyol_marketplace_setup.html", intg=intg, **_tmp_setup_context())
+
+        if not supplier_id or (not has_saved_credentials and (not api_key or not api_secret)):
+            flash("Satıcı ID, API Key ve API Secret zorunludur.", "danger")
+            return render_template("dashboard/trendyol_marketplace_setup.html", intg=intg, **_tmp_setup_context())
+
+        test_key = api_key or intg.tmp_api_key
+        test_secret = api_secret or intg.tmp_api_secret
+        ok, msg, _ = tmp.test_connection(
+            supplier_id,
+            test_key,
+            test_secret,
+            current_app.config.get("TRENDYOL_MARKETPLACE_API_BASE"),
+        )
+        if not ok:
+            flash(f"API bağlantısı başarısız: {msg}", "danger")
+            return render_template("dashboard/trendyol_marketplace_setup.html", intg=intg, **_tmp_setup_context())
+
+        if not intg:
+            intg = Integration(user_id=current_user.id, platform=tmp.PLATFORM)
+            db.session.add(intg)
+
+        intg.tmp_supplier_id = supplier_id
+        intg.tmp_integration_ref = integration_ref or None
+        if api_key:
+            intg.tmp_api_key = api_key
+        if api_secret:
+            intg.tmp_api_secret = api_secret
+        intg.is_active = True
+        intg.last_error = None
+        db.session.commit()
+
+        flash(f"Trendyol Pazaryeri bağlandı! {msg}", "success")
+        if not current_user.telegram_connected:
+            flash("Bildirim alabilmek için Telegram'ı da bağlayın.", "warning")
+        return redirect(url_for("dashboard.trendyol_marketplace_setup"))
+
+    return render_template("dashboard/trendyol_marketplace_setup.html", intg=intg, **_tmp_setup_context())
+
+
+def _tmp_setup_context() -> dict:
+    return {
+        "tmp_api_base": current_app.config.get("TRENDYOL_MARKETPLACE_API_BASE"),
+        "tmp_webhook_url": url_for("webhooks.trendyol_marketplace_order", _external=True),
+        "tmp_webhook_key_ready": bool(current_app.config.get("TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY")),
+    }
 
 
 # ── Migros Yemek ────────────────────────────────────────────────────────────
@@ -918,6 +980,12 @@ def _report_products(orders: list, max_items: int = 15) -> list:
                     continue
                 name = getir.product_name(item)
                 counts[name] = counts.get(name, 0) + getir.product_quantity(item)
+        elif order.platform == tmp.PLATFORM:
+            for line in tmp.lines(data):
+                if not isinstance(line, dict):
+                    continue
+                name = tmp.line_name(line)
+                counts[name] = counts.get(name, 0) + tmp.line_quantity(line)
         else:
             for line in data.get("lines") or []:
                 name = line.get("name") or line.get("productName") or "Ürün"
@@ -952,6 +1020,8 @@ def _order_detail_context(order: Order) -> dict:
         return _migros_detail_context(order, raw)
     if order.platform == "getir":
         return _getir_detail_context(order, raw)
+    if order.platform == tmp.PLATFORM:
+        return _tmp_detail_context(order, raw)
     if order.platform == "trendyolgo":
         return _tgo_detail_context(order, raw)
     return {
@@ -1044,6 +1114,36 @@ def _getir_detail_items(raw: dict) -> list:
             "quantity": getir.product_quantity(item),
             "note": "",
             "details": [_display_detail_text(part) for part in getir.item_detail_parts(item)],
+        })
+    return items
+
+
+def _tmp_detail_context(order: Order, raw: dict) -> dict:
+    return {
+        "raw": raw,
+        "items": _tmp_detail_items(raw),
+        "customer": tmp.customer_name(raw) or "-",
+        "store": _first_text(raw, "supplierName", "sellerName", "storeName") or "-",
+        "source": "Trendyol Pazaryeri",
+        "delivery": tmp.cargo_label(raw),
+        "payment": order.payment_type or "-",
+        "address": tmp.address_text(raw),
+        "address_direction": "",
+        "flags": [],
+        "order_note": order.customer_note or "",
+    }
+
+
+def _tmp_detail_items(raw: dict) -> list:
+    items = []
+    for line in tmp.lines(raw):
+        if not isinstance(line, dict):
+            continue
+        items.append({
+            "name": tmp.line_name(line),
+            "quantity": tmp.line_quantity(line),
+            "note": "",
+            "details": tmp.line_details(line),
         })
     return items
 

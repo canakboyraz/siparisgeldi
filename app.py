@@ -23,6 +23,10 @@ def _ensure_schema():
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS getir_restaurant_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS getir_restaurant_name VARCHAR(120)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS getir_restaurant_secret_key VARCHAR(512)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tmp_supplier_id VARCHAR(50)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tmp_integration_ref VARCHAR(120)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tmp_api_key VARCHAR(512)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tmp_api_secret VARCHAR(512)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
             """
@@ -52,6 +56,14 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE integrations ADD COLUMN getir_restaurant_name VARCHAR(120)")
             if "getir_restaurant_secret_key" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN getir_restaurant_secret_key VARCHAR(512)")
+            if "tmp_supplier_id" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN tmp_supplier_id VARCHAR(50)")
+            if "tmp_integration_ref" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN tmp_integration_ref VARCHAR(120)")
+            if "tmp_api_key" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN tmp_api_key VARCHAR(512)")
+            if "tmp_api_secret" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN tmp_api_secret VARCHAR(512)")
             if "notify_weekly_report" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN notify_weekly_report BOOLEAN DEFAULT TRUE")
             if "notify_monthly_report" not in intg_cols:

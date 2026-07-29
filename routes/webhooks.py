@@ -21,8 +21,9 @@ from flask import Blueprint, request, jsonify, current_app
 
 from extensions import db
 from models import Integration, Order, User
-from integrations import migros, getir
+from integrations import migros, getir, trendyol_marketplace as tmp
 from notifications.dispatcher import send_to_user
+from utils import status_label
 
 webhooks_bp = Blueprint("webhooks", __name__)
 
@@ -44,6 +45,14 @@ def _check_basic_auth() -> bool:
 
 def _check_getir_api_key() -> bool:
     expected = current_app.config.get("GETIR_WEBHOOK_API_KEY", "")
+    if not expected:
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
+    sent = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
+    return hmac.compare_digest(str(sent), str(expected))
+
+
+def _check_tmp_api_key() -> bool:
+    expected = current_app.config.get("TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY", "")
     if not expected:
         return bool(current_app.debug or current_app.config.get("ENV") == "development")
     sent = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
@@ -80,6 +89,102 @@ def _ok(note=None):
     if note:
         body["note"] = note
     return jsonify(body), 200
+
+
+@webhooks_bp.route("/marketplace/order", methods=["POST"])
+def trendyol_marketplace_order():
+    if not _check_tmp_api_key():
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    orders = payload.get("content") if isinstance(payload.get("content"), list) else None
+    if orders is None:
+        orders = [payload]
+    processed = 0
+    for order_data in orders:
+        if not isinstance(order_data, dict):
+            continue
+        supplier_id = str(order_data.get("supplierId") or "").strip()
+        if not supplier_id:
+            continue
+        intg = Integration.query.filter_by(
+            platform=tmp.PLATFORM, tmp_supplier_id=supplier_id, is_active=True
+        ).first()
+        if not intg:
+            continue
+        try:
+            _handle_tmp_order(intg, order_data)
+            processed += 1
+        except Exception as e:
+            db.session.rollback()
+            intg.last_error = str(e)[:300]
+            db.session.commit()
+            print(f"[TMP WEBHOOK] Hata user={intg.user_id}: {e}")
+    return _ok(f"processed={processed}")
+
+
+def _handle_tmp_order(intg, order_data):
+    fields = tmp.extract_order_fields(order_data)
+    if not fields["external_id"]:
+        raise ValueError("Trendyol Pazaryeri paket id bulunamadi")
+    user = db.session.get(User, intg.user_id)
+    existing = Order.query.filter_by(
+        user_id=intg.user_id, platform=tmp.PLATFORM, external_id=fields["external_id"]
+    ).first()
+    if not existing:
+        order = Order(
+            user_id=intg.user_id,
+            platform=tmp.PLATFORM,
+            raw_json=json.dumps(order_data, ensure_ascii=False),
+            **fields,
+        )
+        order.mark_status_notified("INITIAL")
+        db.session.add(order)
+        intg.last_sync_at = datetime.utcnow()
+        intg.last_error = None
+        db.session.commit()
+        if intg.notify_new_order:
+            send_to_user(
+                user,
+                tmp.format_new_order_message(order_data),
+                wa=[
+                    "Yeni sipariş · Trendyol Pazaryeri",
+                    fields["order_number"],
+                    tmp.summarize_items(order_data),
+                    f"{fields['total_price']:.2f} ₺",
+                ],
+            )
+        return
+
+    current_status = fields["status"]
+    status_changed = existing.status != current_status
+    existing.status = current_status
+    existing.order_number = fields["order_number"] or existing.order_number
+    existing.total_price = fields["total_price"]
+    existing.payment_type = fields["payment_type"]
+    existing.customer_note = fields["customer_note"]
+    existing.raw_json = json.dumps(order_data, ensure_ascii=False)
+    intg.last_sync_at = datetime.utcnow()
+    intg.last_error = None
+
+    should_notify = status_changed and not existing.is_status_notified(current_status) and current_status in tmp.STATUS_NOTIFY
+    if should_notify:
+        is_problem = current_status in {"Cancelled", "UnSupplied", "Returned", "Refunded", "UnDelivered"}
+        wants = intg.notify_cancel if is_problem else intg.notify_status_change
+        if wants:
+            existing.mark_status_notified(current_status)
+            db.session.commit()
+            send_to_user(
+                user,
+                tmp.format_status_message(order_data, current_status),
+                wa=[
+                    f"{status_label(current_status)} · Trendyol Pazaryeri",
+                    fields["order_number"],
+                    tmp.summarize_items(order_data),
+                    f"{fields['total_price']:.2f} ₺",
+                ],
+            )
+            return
+    db.session.commit()
 
 
 # Getir Yemek webhook endpointleri

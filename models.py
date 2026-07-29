@@ -70,7 +70,7 @@ class Integration(db.Model):
 
     id         = db.Column(db.Integer, primary_key=True)
     user_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    platform   = db.Column(db.String(30), nullable=False)   # trendyolgo | migros | getir
+    platform   = db.Column(db.String(30), nullable=False)   # trendyolgo | migros | getir | trendyol_marketplace
     is_active  = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -91,6 +91,11 @@ class Integration(db.Model):
     getir_restaurant_id = db.Column(db.String(50), index=True)
     getir_restaurant_name = db.Column(db.String(120))
     _getir_restaurant_secret_key = db.Column("getir_restaurant_secret_key", db.String(512))
+
+    tmp_supplier_id = db.Column(db.String(50))
+    tmp_integration_ref = db.Column(db.String(120))
+    _tmp_api_key = db.Column("tmp_api_key", db.String(512))
+    _tmp_api_secret = db.Column("tmp_api_secret", db.String(512))
 
     # Bildirim tercihleri
     notify_new_order      = db.Column(db.Boolean, default=True)
@@ -148,6 +153,22 @@ class Integration(db.Model):
     @getir_restaurant_secret_key.setter
     def getir_restaurant_secret_key(self, value):
         self._getir_restaurant_secret_key = security.encrypt(value)
+
+    @property
+    def tmp_api_key(self):
+        return security.decrypt(self._tmp_api_key)
+
+    @tmp_api_key.setter
+    def tmp_api_key(self, value):
+        self._tmp_api_key = security.encrypt(value)
+
+    @property
+    def tmp_api_secret(self):
+        return security.decrypt(self._tmp_api_secret)
+
+    @tmp_api_secret.setter
+    def tmp_api_secret(self, value):
+        self._tmp_api_secret = security.encrypt(value)
 
     def __repr__(self):
         return f"<Integration user={self.user_id} platform={self.platform}>"
