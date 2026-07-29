@@ -14,6 +14,7 @@
       <a href="{{ url_for('dashboard.connect_whatsapp') }}" class="{{ 'active' if request.endpoint=='dashboard.connect_whatsapp' }}">🟢 WhatsApp</a>
       <a href="{{ url_for('dashboard.subscription') }}" class="{{ 'active' if request.endpoint=='dashboard.subscription' }}">💳 Abonelik</a>
       <a href="{{ url_for('dashboard.profile') }}" class="{{ 'active' if request.endpoint=='dashboard.profile' }}">⚙️ Profil</a>
+      <a href="{{ url_for('dashboard.getir_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.getir_setup' }}">Getir Yemek</a>
       {% if user_is_admin %}
       <a href="{{ url_for('admin.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.') }}">🛡️ Admin</a>
       {% endif %}

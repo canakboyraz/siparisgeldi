@@ -275,6 +275,8 @@ def integrations():
             Integration.tgo_supplier_id.ilike(like),
             Integration.migros_store_id.ilike(like),
             Integration.migros_group_id.ilike(like),
+            Integration.getir_restaurant_id.ilike(like),
+            Integration.getir_restaurant_name.ilike(like),
         ))
     if platform:
         query = query.filter(Integration.platform == platform)

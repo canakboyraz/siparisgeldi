@@ -15,7 +15,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from extensions import db
 from models import Integration, Order, User, AppState
-from integrations import trendyolgo as tgo
+from integrations import getir, trendyolgo as tgo
 from notifications import telegram
 from notifications.dispatcher import send_to_user
 from utils import status_label
@@ -31,6 +31,8 @@ CANCELLED_ORDER_STATUSES = {
     "UnSupplied",
     "Rejected",
     "REJECTED",
+    "AdminCancelled",
+    "AutoCancelled",
 }
 
 REFUNDED_ORDER_STATUSES = {
@@ -224,6 +226,12 @@ def _aggregate_products(orders, max_items: int = 15) -> str:
             for it in (data.get("items") or []):
                 name = it.get("name", "?")
                 counts[name] = counts.get(name, 0) + (it.get("amount", 1) or 1)
+        elif o.platform == "getir":
+            for it in getir.products(data):
+                if not isinstance(it, dict):
+                    continue
+                name = getir.product_name(it)
+                counts[name] = counts.get(name, 0) + getir.product_quantity(it)
         else:  # trendyolgo
             for ln in (data.get("lines") or []):
                 name = ln.get("name", "?")
@@ -290,7 +298,7 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
     cancelled_total = sum(o.total_price for o in cancelled)
     refunded_total = sum(o.total_price for o in refunded)
     products  = _aggregate_products(active)
-    label = {"trendyolgo": "Trendyol Go", "migros": "Migros Yemek"}.get(intg.platform, intg.platform)
+    label = {"trendyolgo": "Trendyol Go", "migros": "Migros Yemek", "getir": "Getir Yemek"}.get(intg.platform, intg.platform)
 
     emoji = {"Günlük": "📊", "Haftalık": "📅", "Aylık": "🗓️"}.get(kind, "📊")
     msg = (

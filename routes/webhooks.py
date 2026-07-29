@@ -21,7 +21,7 @@ from flask import Blueprint, request, jsonify, current_app
 
 from extensions import db
 from models import Integration, Order, User
-from integrations import migros
+from integrations import migros, getir
 from notifications.dispatcher import send_to_user
 
 webhooks_bp = Blueprint("webhooks", __name__)
@@ -42,6 +42,14 @@ def _check_basic_auth() -> bool:
     )
 
 
+def _check_getir_api_key() -> bool:
+    expected = current_app.config.get("GETIR_WEBHOOK_API_KEY", "")
+    if not expected:
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
+    sent = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
+    return hmac.compare_digest(str(sent), str(expected))
+
+
 def _find_integration(store_id) -> Integration:
     if store_id is None:
         return None
@@ -50,11 +58,185 @@ def _find_integration(store_id) -> Integration:
     ).first()
 
 
+def _find_getir_integration(payload: dict) -> Integration:
+    secret_key = getir.restaurant_secret_key(payload)
+    if secret_key:
+        for intg in Integration.query.filter_by(platform="getir", is_active=True).all():
+            if intg.getir_restaurant_secret_key and hmac.compare_digest(
+                intg.getir_restaurant_secret_key, secret_key
+            ):
+                return intg
+
+    restaurant_id = getir.restaurant_id(payload)
+    if restaurant_id:
+        return Integration.query.filter_by(
+            platform="getir", getir_restaurant_id=str(restaurant_id), is_active=True
+        ).first()
+    return None
+
+
 def _ok(note=None):
     body = {"ok": True}
     if note:
         body["note"] = note
     return jsonify(body), 200
+
+
+# Getir Yemek webhook endpointleri
+
+@webhooks_bp.route("/getir/order-created", methods=["POST"])
+def getir_order_created():
+    if not _check_getir_api_key():
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    p = request.get_json(silent=True) or {}
+    intg = _find_getir_integration(p)
+    if not intg:
+        print("[GETIR] order-created: eslesen restoran yok")
+        return _ok("no matching restaurant")
+    return _process_getir(intg, "created", p)
+
+
+@webhooks_bp.route("/getir/order-canceled", methods=["POST"])
+def getir_order_canceled():
+    if not _check_getir_api_key():
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    p = request.get_json(silent=True) or {}
+    intg = _find_getir_integration(p)
+    if not intg:
+        print("[GETIR] order-canceled: eslesen restoran yok")
+        return _ok("no matching restaurant")
+    return _process_getir(intg, "canceled", p)
+
+
+@webhooks_bp.route("/getir/courier-status", methods=["POST"])
+def getir_courier_status():
+    if not _check_getir_api_key():
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    p = request.get_json(silent=True) or {}
+    intg = _find_getir_integration(p)
+    if not intg:
+        return _ok("no matching restaurant")
+    return _process_getir(intg, "courier", p)
+
+
+@webhooks_bp.route("/getir/restaurant-status", methods=["POST"])
+def getir_restaurant_status():
+    if not _check_getir_api_key():
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    p = request.get_json(silent=True) or {}
+    intg = _find_getir_integration(p)
+    if not intg:
+        return _ok("no matching restaurant")
+    return _process_getir(intg, "restaurant", p)
+
+
+def _process_getir(intg, kind, payload):
+    user = db.session.get(User, intg.user_id)
+    try:
+        if kind == "created":
+            _handle_getir_created(intg, user, payload)
+        elif kind == "canceled":
+            _handle_getir_canceled(intg, user, payload)
+        elif kind == "courier":
+            _handle_getir_courier(intg, user, payload)
+        elif kind == "restaurant":
+            _handle_getir_restaurant(intg, user, payload)
+        intg.last_sync_at = datetime.utcnow()
+        intg.last_error = None
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        intg.last_error = str(e)[:300]
+        db.session.commit()
+        print(f"[GETIR WEBHOOK] Hata user={intg.user_id}: {e}")
+        return _ok("error-logged")
+    return _ok()
+
+
+def _handle_getir_created(intg, user, payload):
+    fields = getir.extract_order_fields(payload)
+    if not fields["external_id"]:
+        raise ValueError("Getir order id bulunamadi")
+    existing = Order.query.filter_by(
+        user_id=intg.user_id, platform="getir", external_id=fields["external_id"]
+    ).first()
+    if existing:
+        existing.status = fields["status"] or existing.status
+        existing.raw_json = json.dumps(payload, ensure_ascii=False)
+        return
+
+    order = Order(user_id=intg.user_id, platform="getir",
+                  raw_json=json.dumps(payload, ensure_ascii=False), **fields)
+    order.mark_status_notified("INITIAL")
+    db.session.add(order)
+    db.session.commit()
+    if intg.notify_new_order:
+        amount = f"{fields['total_price']:.2f} ₺"
+        send_to_user(user, getir.format_order_created(payload),
+                     wa=["Yeni sipariş · Getir Yemek", fields["order_number"],
+                         getir.summarize_items(payload), amount])
+        print(f"[GETIR] yeni siparis #{fields['order_number']} (user={intg.user_id})")
+
+
+def _handle_getir_canceled(intg, user, payload):
+    fields = getir.extract_order_fields(payload)
+    ext_id = fields["external_id"]
+    order = Order.query.filter_by(
+        user_id=intg.user_id, platform="getir", external_id=ext_id
+    ).first() if ext_id else None
+
+    original_payload = None
+    if order:
+        try:
+            original_payload = json.loads(order.raw_json) if order.raw_json else None
+        except (TypeError, ValueError):
+            original_payload = None
+        order.status = fields["status"] if fields["status"] in ("AdminCancelled", "AutoCancelled") else "Cancelled"
+        order.raw_json = json.dumps(payload, ensure_ascii=False)
+        order.mark_status_notified(order.status)
+        db.session.commit()
+    elif ext_id:
+        fields["status"] = fields["status"] if fields["status"] in ("AdminCancelled", "AutoCancelled") else "Cancelled"
+        order = Order(user_id=intg.user_id, platform="getir",
+                      raw_json=json.dumps(payload, ensure_ascii=False), **fields)
+        order.mark_status_notified(order.status)
+        db.session.add(order)
+        db.session.commit()
+
+    if intg.notify_cancel:
+        amount = f"{(order.total_price if order else fields['total_price']):.2f} ₺"
+        items = getir.summarize_items(original_payload or payload)
+        send_to_user(user, getir.format_order_canceled(payload, original_payload),
+                     wa=["Sipariş iptal · Getir Yemek", fields["order_number"] or ext_id or "-",
+                         items, amount])
+        print(f"[GETIR] iptal #{fields['order_number'] or ext_id} (user={intg.user_id})")
+
+
+def _handle_getir_courier(intg, user, payload):
+    ext_id = getir.order_id(payload)
+    order = Order.query.filter_by(
+        user_id=intg.user_id, platform="getir", external_id=ext_id
+    ).first() if ext_id else None
+    if order:
+        status_key = f"COURIER:{payload.get('courierStatus') or payload.get('status') or 'updated'}"
+        if order.is_status_notified(status_key):
+            return
+        order.mark_status_notified(status_key)
+        db.session.commit()
+    if intg.notify_status_change:
+        send_to_user(user, getir.format_courier_status(payload),
+                     wa=["Kurye durumu · Getir Yemek", getir.order_number(payload) or ext_id or "-",
+                         "-", "-"])
+
+
+def _handle_getir_restaurant(intg, user, payload):
+    if intg.getir_restaurant_name is None:
+        intg.getir_restaurant_name = getir.restaurant_name(payload) or intg.getir_restaurant_name
+    if intg.notify_status_change:
+        send_to_user(user, getir.format_restaurant_status(payload),
+                     wa=["Restoran durumu · Getir Yemek",
+                         getir.restaurant_name(payload) or getir.restaurant_id(payload) or "-",
+                         "-", "-"])
 
 
 # ── Migros'un çağıracağı 3 endpoint ─────────────────────────────────────────

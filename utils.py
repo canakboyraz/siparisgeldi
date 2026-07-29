@@ -49,6 +49,22 @@ _PLATFORM_LABELS = {
     "migros":     "Migros Yemek",
 }
 
+_STATUS_LABELS.update({
+    "Scheduled": "İleri tarihli",
+    "ScheduledApproved": "İleri tarihli onaylandı",
+    "AdminCancelled": "Admin iptal",
+    "AutoCancelled": "Otomatik iptal",
+})
+
+_STATUS_COLORS.update({
+    "Scheduled": "blue",
+    "ScheduledApproved": "amber",
+    "AdminCancelled": "red",
+    "AutoCancelled": "red",
+})
+
+_PLATFORM_LABELS["getir"] = "Getir Yemek"
+
 
 def status_label(status: str) -> str:
     return _STATUS_LABELS.get(status, status or "-")

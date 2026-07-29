@@ -9,15 +9,15 @@ import pytz
 
 from extensions import db
 from models import Integration, Order
-from integrations import migros, trendyolgo as tgo
+from integrations import getir, migros, trendyolgo as tgo
 
 dashboard_bp = Blueprint("dashboard", __name__)
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
 
-PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New"}
-PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared"}
+PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New", "Scheduled"}
+PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared", "ScheduledApproved"}
 DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery"}
-CANCELLED_STATUSES = {"Cancelled", "Canceled", "UnSupplied", "Rejected", "REJECTED"}
+CANCELLED_STATUSES = {"Cancelled", "Canceled", "UnSupplied", "Rejected", "REJECTED", "AdminCancelled", "AutoCancelled"}
 REFUNDED_STATUSES = {"Refunded", "Refund", "Returned", "Return", "PartiallyRefunded", "PartialRefunded", "RETURNED", "REFUNDED"}
 PROBLEM_STATUSES = CANCELLED_STATUSES | REFUNDED_STATUSES
 DONE_STATUSES = {"Delivered", "Completed"}
@@ -335,6 +335,118 @@ def _migros_webhook_urls():
         "order_created":  url_for("webhooks.migros_order_created", _external=True),
         "order_canceled": url_for("webhooks.migros_order_canceled", _external=True),
         "delivery_status": url_for("webhooks.migros_delivery_status", _external=True),
+    }
+
+
+@dashboard_bp.route("/getir", methods=["GET", "POST"])
+@login_required
+def getir_setup():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="getir").first()
+
+    if request.method == "POST":
+        restaurant_id = request.form.get("restaurant_id", "").strip()
+        restaurant_name = request.form.get("restaurant_name", "").strip()
+        restaurant_secret_key = request.form.get("restaurant_secret_key", "").strip()
+
+        if not _can_enable_platform(intg):
+            flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
+            return render_template("dashboard/getir_setup.html", intg=intg, **_getir_setup_context(intg))
+
+        if not restaurant_id and not restaurant_secret_key:
+            flash("Restoran ID veya Restaurant Secret Key alanlarından en az biri zorunludur.", "danger")
+            return render_template("dashboard/getir_setup.html", intg=intg, **_getir_setup_context(intg))
+
+        conflict = _find_getir_restaurant_conflict(restaurant_id, restaurant_secret_key, intg.id if intg else None)
+        if conflict:
+            flash("Bu Getir restoran bilgisi başka bir hesapta kayıtlı. Siparişlerin yanlış hesaba düşmemesi için kayıt engellendi.", "danger")
+            return render_template("dashboard/getir_setup.html", intg=intg, **_getir_setup_context(intg))
+
+        if not intg:
+            intg = Integration(user_id=current_user.id, platform="getir")
+            db.session.add(intg)
+
+        intg.getir_restaurant_id = restaurant_id or None
+        intg.getir_restaurant_name = restaurant_name or None
+        if restaurant_secret_key:
+            intg.getir_restaurant_secret_key = restaurant_secret_key
+        intg.is_active = True
+        db.session.commit()
+
+        if current_app.config.get("GETIR_APP_SECRET_KEY") and restaurant_secret_key:
+            try:
+                getir.login(
+                    current_app.config.get("GETIR_APP_SECRET_KEY"),
+                    restaurant_secret_key,
+                    current_app.config.get("GETIR_API_BASE"),
+                )
+                flash("✅ Getir Yemek bağlandı! API bilgileri doğrulandı.", "success")
+            except Exception as e:
+                intg.last_error = str(e)[:300]
+                db.session.commit()
+                flash(f"⚠️ Bilgiler kaydedildi ama API doğrulanamadı: {e}", "warning")
+        else:
+            flash("✅ Getir Yemek bilgileri kaydedildi. Webhook'lar bu restoran bilgisiyle eşleşecek.", "success")
+
+        if not current_user.telegram_connected:
+            flash("Bildirim alabilmek için Telegram'ı da bağlayın.", "warning")
+        return redirect(url_for("dashboard.getir_setup"))
+
+    return render_template("dashboard/getir_setup.html", intg=intg, **_getir_setup_context(intg))
+
+
+def _find_getir_restaurant_conflict(restaurant_id: str = "", restaurant_secret_key: str = "", current_integration_id: int = None) -> Integration:
+    if restaurant_id:
+        query = Integration.query.filter(
+            Integration.platform == "getir",
+            Integration.getir_restaurant_id == str(restaurant_id).strip(),
+        )
+        if current_integration_id:
+            query = query.filter(Integration.id != current_integration_id)
+        found = query.first()
+        if found:
+            return found
+
+    if restaurant_secret_key:
+        for intg in Integration.query.filter(Integration.platform == "getir").all():
+            if current_integration_id and intg.id == current_integration_id:
+                continue
+            if intg.getir_restaurant_secret_key and intg.getir_restaurant_secret_key == restaurant_secret_key:
+                return intg
+    return None
+
+
+def _getir_setup_context(intg: Integration = None) -> dict:
+    return {
+        "webhook_urls": _getir_webhook_urls(),
+        "getir_api_base": current_app.config.get("GETIR_API_BASE"),
+        "go_live_checks": _getir_go_live_checks(intg),
+    }
+
+
+def _getir_go_live_checks(intg: Integration = None) -> list:
+    webhook_urls = _getir_webhook_urls()
+    has_https = all(str(url).startswith("https://") for url in webhook_urls.values())
+    has_webhook_key = bool(current_app.config.get("GETIR_WEBHOOK_API_KEY"))
+    has_app_secret = bool(current_app.config.get("GETIR_APP_SECRET_KEY"))
+    has_match_key = bool(intg and (intg.getir_restaurant_id or intg._getir_restaurant_secret_key))
+    has_sync = bool(intg and intg.last_sync_at)
+    has_error = bool(intg and intg.last_error)
+    return [
+        {"label": "Webhook URL", "state": "ok" if has_https else "warn", "text": "HTTPS adresler hazır" if has_https else "Webhook adreslerini HTTPS olarak paylaşın"},
+        {"label": "x-api-key", "state": "ok" if has_webhook_key else "danger", "text": "GETIR_WEBHOOK_API_KEY tanımlı" if has_webhook_key else "Railway GETIR_WEBHOOK_API_KEY eksik"},
+        {"label": "Restoran eşleşmesi", "state": "ok" if has_match_key else "warn", "text": "Restoran bilgisi kayıtlı" if has_match_key else "Restoran ID veya secret key henüz girilmedi"},
+        {"label": "API doğrulama", "state": "ok" if has_app_secret else "warn", "text": f"Base URL: {current_app.config.get('GETIR_API_BASE')}" if has_app_secret else "GETIR_APP_SECRET_KEY gelince doğrulama açılır"},
+        {"label": "Son webhook", "state": "ok" if has_sync else "warn", "text": intg.last_sync_at.strftime("%d.%m.%Y %H:%M") if has_sync else "Henüz webhook alınmadı"},
+        {"label": "Son hata", "state": "danger" if has_error else "ok", "text": intg.last_error if has_error else "Hata yok"},
+    ]
+
+
+def _getir_webhook_urls():
+    return {
+        "order_created": url_for("webhooks.getir_order_created", _external=True),
+        "order_canceled": url_for("webhooks.getir_order_canceled", _external=True),
+        "courier_status": url_for("webhooks.getir_courier_status", _external=True),
+        "restaurant_status": url_for("webhooks.getir_restaurant_status", _external=True),
     }
 
 
@@ -717,6 +829,12 @@ def _report_products(orders: list, max_items: int = 15) -> list:
             for item in data.get("items") or []:
                 name = item.get("name") or "Ürün"
                 counts[name] = counts.get(name, 0) + (item.get("amount") or 1)
+        elif order.platform == "getir":
+            for item in getir.products(data):
+                if not isinstance(item, dict):
+                    continue
+                name = getir.product_name(item)
+                counts[name] = counts.get(name, 0) + getir.product_quantity(item)
         else:
             for line in data.get("lines") or []:
                 name = line.get("name") or line.get("productName") or "Ürün"
@@ -749,6 +867,8 @@ def _order_detail_context(order: Order) -> dict:
     raw = _parse_raw_json(order.raw_json)
     if order.platform == "migros":
         return _migros_detail_context(order, raw)
+    if order.platform == "getir":
+        return _getir_detail_context(order, raw)
     if order.platform == "trendyolgo":
         return _tgo_detail_context(order, raw)
     return {
@@ -811,6 +931,36 @@ def _tgo_detail_items(raw: dict) -> list:
             "quantity": tgo._line_quantity(line),
             "note": "",
             "details": details,
+        })
+    return items
+
+
+def _getir_detail_context(order: Order, raw: dict) -> dict:
+    return {
+        "raw": raw,
+        "items": _getir_detail_items(raw),
+        "customer": getir.customer_name(raw) or "-",
+        "store": getir.restaurant_name(raw) or "-",
+        "source": "Getir Yemek",
+        "delivery": getir.delivery_label(raw),
+        "payment": order.payment_type or getir.payment_label(raw),
+        "address": getir.address_text(raw),
+        "address_direction": getir.address_direction(raw),
+        "flags": [],
+        "order_note": getir.customer_note(raw) or order.customer_note or "",
+    }
+
+
+def _getir_detail_items(raw: dict) -> list:
+    items = []
+    for item in getir.products(raw):
+        if not isinstance(item, dict):
+            continue
+        items.append({
+            "name": getir.product_name(item),
+            "quantity": getir.product_quantity(item),
+            "note": "",
+            "details": [_display_detail_text(part) for part in getir.item_detail_parts(item)],
         })
     return items
 

@@ -1,0 +1,95 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Getir Yemek · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>Getir Yemek bağlantısı</h1></div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Restoran bilgileri</div>
+    <p class="muted" style="margin-top:0">Getir test/canlı hesap bilgileri geldiğinde restoran ID ve Restaurant Secret Key değerlerini buraya gir. Webhook siparişleri bu bilgilerle doğru hesaba eşleşir.</p>
+    <p class="hint">API ortamı: <code>{{ getir_api_base }}</code></p>
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label>Restoran ID</label>
+        <input type="text" name="restaurant_id" value="{{ intg.getir_restaurant_id or '' if intg else '' }}" placeholder="Getir restoran ID">
+      </div>
+      <div class="field">
+        <label>Restoran adı <span class="muted">— opsiyonel</span></label>
+        <input type="text" name="restaurant_name" value="{{ intg.getir_restaurant_name or '' if intg else '' }}" placeholder="Örn: Pion Coffee">
+      </div>
+      <div class="field">
+        <label>Restaurant Secret Key</label>
+        <input type="password" name="restaurant_secret_key" placeholder="{{ 'Kayıtlı, değiştirmek için yeni değer gir' if intg and intg._getir_restaurant_secret_key else 'Getir restaurantSecretKey' }}">
+        <p class="hint">Getir webhook payload'ında secret key gelirse en güvenli eşleşme bu alanla yapılır.</p>
+      </div>
+      <button class="btn btn-primary btn-lg" type="submit">Kaydet</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <details class="setup-checks">
+      <summary>Webhook bilgileri</summary>
+      <p class="muted" style="margin-top:.8rem">Bu adresler Getir ekibine iletildi. Getir tüm webhook'larda aynı <b>x-api-key</b> değerini gönderir.</p>
+      <p class="hint" style="margin-bottom:.3rem">Yeni sipariş</p>
+      <div class="code">{{ webhook_urls.order_created }}</div>
+      <p class="hint" style="margin:.7rem 0 .3rem">Sipariş iptali</p>
+      <div class="code">{{ webhook_urls.order_canceled }}</div>
+      <p class="hint" style="margin:.7rem 0 .3rem">Kurye restoran varış bilgisi</p>
+      <div class="code">{{ webhook_urls.courier_status }}</div>
+      <p class="hint" style="margin:.7rem 0 .3rem">Restoran statüsü</p>
+      <div class="code">{{ webhook_urls.restaurant_status }}</div>
+      <p class="hint" style="margin-top:1rem"><code>GETIR_WEBHOOK_API_KEY</code> Railway tarafında tanımlı olmalı.</p>
+    </details>
+
+    <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
+    <details class="setup-checks" open>
+      <summary>Bağlantı kontrolü</summary>
+      <div class="check-list">
+        {% for check in go_live_checks %}
+        <div class="check-row">
+          <div>
+            <strong>{{ check.label }}</strong><br>
+            <span class="muted">{{ check.text }}</span>
+          </div>
+          {% if check.state == 'ok' %}
+          <span class="badge green">hazır</span>
+          {% elif check.state == 'danger' %}
+          <span class="badge red">kontrol</span>
+          {% else %}
+          <span class="badge amber">bekliyor</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+
+    {% if intg %}
+    <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
+    <div class="card-title" style="font-size:.95rem">Bildirim tercihleri</div>
+    <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>Yeni sipariş</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>Kurye/durum değişikliği</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>İptal</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_daily_report" {{ 'checked' if intg.notify_daily_report }}> <span>Günlük özet</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_weekly_report" {{ 'checked' if intg.notify_weekly_report }}> <span>Haftalık özet</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_monthly_report" {{ 'checked' if intg.notify_monthly_report }}> <span>Aylık özet</span></div>
+      <button class="btn btn-ghost" style="margin-top:1rem" type="submit">Tercihleri kaydet</button>
+    </form>
+    <div class="row" style="margin-top:1rem">
+      <div class="muted">Durum:
+        {% if intg.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
+        {% if intg.last_error %}<span class="badge red">son hata</span>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('dashboard.delete_integration', intg_id=intg.id) }}"
+            onsubmit="return confirm('Getir entegrasyonu silinsin mi?')">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm">Sil</button>
+      </form>
+    </div>
+    {% if intg.last_error %}<p class="hint" style="color:var(--red)">{{ intg.last_error }}</p>{% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

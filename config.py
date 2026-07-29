@@ -62,6 +62,11 @@ class Config:
     MIGROS_WEBHOOK_USER = os.environ.get("MIGROS_WEBHOOK_USER", "")
     MIGROS_WEBHOOK_PASS = os.environ.get("MIGROS_WEBHOOK_PASS", "")
 
+    # Getir Yemek API / webhook
+    GETIR_API_BASE = os.environ.get("GETIR_API_BASE", "https://food-external-api-gateway.getirapi.com")
+    GETIR_APP_SECRET_KEY = os.environ.get("GETIR_APP_SECRET_KEY", "")
+    GETIR_WEBHOOK_API_KEY = os.environ.get("GETIR_WEBHOOK_API_KEY", "")
+
     # WhatsApp (Meta Cloud API). Değerler Meta Business/Developers'tan alınır.
     WHATSAPP_ACCESS_TOKEN   = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
     WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
