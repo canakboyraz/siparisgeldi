@@ -5,23 +5,18 @@
 
 <div class="grid-2">
   <div class="card">
-    <div class="card-title">Restoran bilgileri</div>
-    <p class="muted" style="margin-top:0">Getir test/canlı hesap bilgileri geldiğinde restoran ID ve Restaurant Secret Key değerlerini buraya gir. Webhook siparişleri bu bilgilerle doğru hesaba eşleşir.</p>
+    <div class="card-title">Restaurant Secret Key</div>
+    <p class="muted" style="margin-top:0">
+      Getir Yemek Restoran Paneli'nde POS firması olarak <b>SiparişGeldi</b> seçildikten sonra
+      oluşan <b>Restaurant Secret Key</b> değerini buraya gir.
+    </p>
     <p class="hint">API ortamı: <code>{{ getir_api_base }}</code></p>
     <form method="post">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field">
-        <label>Restoran ID</label>
-        <input type="text" name="restaurant_id" value="{{ intg.getir_restaurant_id or '' if intg else '' }}" placeholder="Getir restoran ID">
-      </div>
-      <div class="field">
-        <label>Restoran adı <span class="muted">— opsiyonel</span></label>
-        <input type="text" name="restaurant_name" value="{{ intg.getir_restaurant_name or '' if intg else '' }}" placeholder="Örn: Pion Coffee">
-      </div>
-      <div class="field">
         <label>Restaurant Secret Key</label>
-        <input type="password" name="restaurant_secret_key" placeholder="{{ 'Kayıtlı, değiştirmek için yeni değer gir' if intg and intg._getir_restaurant_secret_key else 'Getir restaurantSecretKey' }}">
-        <p class="hint">Getir webhook payload'ında secret key gelirse en güvenli eşleşme bu alanla yapılır.</p>
+        <input type="password" name="restaurant_secret_key" {{ 'required' if not (intg and intg._getir_restaurant_secret_key) }} placeholder="{{ 'Kayıtlı, değiştirmek için yeni değer gir' if intg and intg._getir_restaurant_secret_key else 'Getir panelindeki Restaurant Secret Key' }}">
+        <p class="hint">Siparişler bu key ile senin hesabına eşleşir. Bu değeri kimseyle paylaşma.</p>
       </div>
       <button class="btn btn-primary btn-lg" type="submit">Kaydet</button>
     </form>

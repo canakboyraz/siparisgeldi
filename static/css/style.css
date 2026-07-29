@@ -126,9 +126,16 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .sidebar{background:#12141a;color:#c9cdd6;padding:1.4rem 1rem;display:flex;flex-direction:column}
 .sidebar .brand{color:#fff;margin-bottom:1.8rem;padding:0 .4rem}
 .sidebar nav{display:flex;flex-direction:column;gap:.2rem;flex:1}
-.sidebar a{padding:.62rem .8rem;border-radius:9px;font-weight:600;font-size:.95rem;color:#c9cdd6;display:flex;gap:.6rem;align-items:center;transition:.12s}
-.sidebar a:hover{background:#20242e;color:#fff}
-.sidebar a.active{background:var(--brand);color:#fff}
+.sidebar a,.sidebar summary{padding:.62rem .8rem;border-radius:9px;font-weight:600;font-size:.95rem;color:#c9cdd6;display:flex;gap:.6rem;align-items:center;transition:.12s}
+.sidebar a:hover,.sidebar summary:hover{background:#20242e;color:#fff}
+.sidebar a.active,.sidebar summary.active{background:var(--brand);color:#fff}
+.sidebar summary{cursor:pointer;list-style:none;justify-content:space-between}
+.sidebar summary::-webkit-details-marker{display:none}
+.sidebar summary::after{content:"›";font-size:1rem;transition:.12s}
+.sidebar details[open] summary::after{transform:rotate(90deg)}
+.nav-group{margin:.1rem 0}
+.nav-sub{display:grid;gap:.15rem;margin:.25rem 0 .45rem .65rem;padding-left:.55rem;border-left:1px solid #2a2f3a}
+.nav-sub a{font-size:.88rem;padding:.48rem .7rem}
 .sidebar .foot{border-top:1px solid #262a34;padding-top:1rem;margin-top:1rem;font-size:.86rem}
 .sidebar .foot a{padding:.4rem .8rem}
 .sidebar-logout{margin:0}
@@ -224,6 +231,19 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
     flex:0 0 auto;white-space:nowrap;padding:.46rem .58rem;border-radius:999px;
     font-size:.78rem;scroll-snap-align:start;line-height:1.15
   }
+  .sidebar summary{
+    flex:0 0 auto;white-space:nowrap;padding:.46rem .58rem;border-radius:999px;
+    font-size:.78rem;line-height:1.15
+  }
+  .sidebar summary::after{content:"⌃";font-size:.8rem}
+  .sidebar details[open] summary::after{transform:none}
+  .nav-group{flex:0 0 auto;position:relative;margin:0;scroll-snap-align:start}
+  .nav-sub{
+    position:fixed;left:.7rem;right:.7rem;bottom:calc(3.2rem + env(safe-area-inset-bottom));
+    z-index:25;display:flex;gap:.35rem;overflow-x:auto;margin:0;padding:.5rem;
+    border:1px solid #2a2f3a;border-radius:12px;background:#12141a;box-shadow:0 -8px 18px rgba(16,20,30,.18)
+  }
+  .nav-sub a{flex:0 0 auto;font-size:.78rem;padding:.46rem .58rem;border-radius:999px}
   .sidebar .foot{
     position:absolute;right:.65rem;top:.55rem;border:none;margin:0;padding:0;
     display:flex;align-items:center;gap:.35rem

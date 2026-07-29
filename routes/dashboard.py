@@ -347,13 +347,14 @@ def getir_setup():
         restaurant_id = request.form.get("restaurant_id", "").strip()
         restaurant_name = request.form.get("restaurant_name", "").strip()
         restaurant_secret_key = request.form.get("restaurant_secret_key", "").strip()
+        has_saved_secret = bool(intg and intg._getir_restaurant_secret_key)
 
         if not _can_enable_platform(intg):
             flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
             return render_template("dashboard/getir_setup.html", intg=intg, **_getir_setup_context(intg))
 
-        if not restaurant_id and not restaurant_secret_key:
-            flash("Restoran ID veya Restaurant Secret Key alanlarından en az biri zorunludur.", "danger")
+        if not restaurant_secret_key and not has_saved_secret:
+            flash("Restaurant Secret Key zorunludur.", "danger")
             return render_template("dashboard/getir_setup.html", intg=intg, **_getir_setup_context(intg))
 
         conflict = _find_getir_restaurant_conflict(restaurant_id, restaurant_secret_key, intg.id if intg else None)
@@ -365,8 +366,10 @@ def getir_setup():
             intg = Integration(user_id=current_user.id, platform="getir")
             db.session.add(intg)
 
-        intg.getir_restaurant_id = restaurant_id or None
-        intg.getir_restaurant_name = restaurant_name or None
+        if restaurant_id:
+            intg.getir_restaurant_id = restaurant_id
+        if restaurant_name:
+            intg.getir_restaurant_name = restaurant_name
         if restaurant_secret_key:
             intg.getir_restaurant_secret_key = restaurant_secret_key
         intg.is_active = True
