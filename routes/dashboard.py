@@ -377,11 +377,18 @@ def getir_setup():
 
         if current_app.config.get("GETIR_APP_SECRET_KEY") and restaurant_secret_key:
             try:
-                getir.login(
+                login_response = getir.login(
                     current_app.config.get("GETIR_APP_SECRET_KEY"),
                     restaurant_secret_key,
                     current_app.config.get("GETIR_API_BASE"),
                 )
+                restaurant_info = getir.restaurant_info_from_login_response(login_response)
+                if restaurant_info.get("restaurant_id") and not intg.getir_restaurant_id:
+                    intg.getir_restaurant_id = restaurant_info["restaurant_id"]
+                if restaurant_info.get("restaurant_name") and not intg.getir_restaurant_name:
+                    intg.getir_restaurant_name = restaurant_info["restaurant_name"]
+                intg.last_error = None
+                db.session.commit()
                 flash("✅ Getir Yemek bağlandı! API bilgileri doğrulandı.", "success")
             except Exception as e:
                 intg.last_error = str(e)[:300]

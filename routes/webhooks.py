@@ -218,7 +218,11 @@ def _handle_getir_courier(intg, user, payload):
         user_id=intg.user_id, platform="getir", external_id=ext_id
     ).first() if ext_id else None
     if order:
-        status_key = f"COURIER:{payload.get('courierStatus') or payload.get('status') or 'updated'}"
+        pickup = payload.get("pickup") if isinstance(payload.get("pickup"), dict) else {}
+        pickup_min = pickup.get("min") or ""
+        pickup_max = pickup.get("max") or ""
+        pickup_range = f"{pickup_min}-{pickup_max}" if (pickup_min or pickup_max) else ""
+        status_key = f"COURIER:{payload.get('courierStatus') or payload.get('status') or pickup_range or 'updated'}"
         if order.is_status_notified(status_key):
             return
         order.mark_status_notified(status_key)

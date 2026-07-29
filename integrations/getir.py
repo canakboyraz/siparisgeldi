@@ -122,6 +122,28 @@ def restaurant_secret_key(payload: dict) -> str:
     )
 
 
+def _walk_dicts(value):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _walk_dicts(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_dicts(child)
+
+
+def restaurant_info_from_login_response(payload: dict) -> dict:
+    """Getir test/canli cevaplarinda restoran bilgisi farkli seviyelerde gelebilir."""
+    if not isinstance(payload, dict):
+        return {}
+    for data in _walk_dicts(payload):
+        rid = restaurant_id(data)
+        name = restaurant_name(data)
+        if rid or name:
+            return {"restaurant_id": rid, "restaurant_name": name}
+    return {}
+
+
 def total_price(payload: dict) -> float:
     value = _first(payload, "totalDiscountedPrice", "totalPrice", "total", "price")
     try:
@@ -336,13 +358,18 @@ def format_order_canceled(payload: dict, original_payload: dict = None) -> str:
 
 def format_courier_status(payload: dict) -> str:
     status = _clean(_first(payload, "courierStatus", "courierStatusText", "status"))
-    eta = _clean(_first(payload, "eta", "courierEta", "arrivalTime"))
+    pickup = payload.get("pickup") if isinstance(payload.get("pickup"), dict) else {}
+    pickup_min = _clean(pickup.get("min"))
+    pickup_max = _clean(pickup.get("max"))
+    eta = _clean(_first(payload, "eta", "courierEta", "arrivalTime", "calculationDate"))
     msg = (
         "🚚 <b>GETİR KURYE DURUMU</b>\n"
         f"{'━'*28}\n"
         f"📋 <b>Sipariş No:</b> #{html.escape(order_number(payload) or order_id(payload) or '-')}\n"
         f"ℹ️ <b>Durum:</b> {html.escape(status or 'Kurye durumu güncellendi')}\n"
     )
+    if pickup_min or pickup_max:
+        msg += f"Kurye restorana varış: {html.escape(pickup_min or '-')} - {html.escape(pickup_max or '-')}\n"
     if eta:
         msg += f"⏱️ <b>Tahmini varış:</b> {html.escape(eta)}\n"
     return msg
