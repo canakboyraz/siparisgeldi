@@ -389,9 +389,77 @@ def api_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
+def _token_from_login_response(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    for data in _walk_dicts(payload):
+        token = _first(data, "accessToken", "access_token", "token", "jwt")
+        if token:
+            return _clean(token)
+    return ""
+
+
 def login(app_secret_key: str, restaurant_secret_key: str, base_url: str = None):
     base = (base_url or DEFAULT_BASE).rstrip("/")
     payload = {"appSecretKey": app_secret_key, "restaurantSecretKey": restaurant_secret_key}
     response = requests.post(f"{base}/auth/login", json=payload, timeout=15)
     response.raise_for_status()
     return response.json()
+
+
+def _authenticated_request(method: str, endpoint: str, app_secret_key: str,
+                           restaurant_secret_key: str, base_url: str = None,
+                           body: dict = None):
+    login_response = login(app_secret_key, restaurant_secret_key, base_url)
+    token = _token_from_login_response(login_response)
+    if not token:
+        raise ValueError("Getir login cevabinda token bulunamadi")
+    base = (base_url or DEFAULT_BASE).rstrip("/")
+    kwargs = {"headers": api_headers(token), "timeout": 20}
+    if body is not None:
+        kwargs["json"] = body
+    response = requests.request(method, f"{base}{endpoint}", **kwargs)
+    response.raise_for_status()
+    if not response.content:
+        return {}
+    try:
+        return response.json()
+    except ValueError:
+        return {"raw": response.text}
+
+
+def update_order_status(order_id: str, action: str, app_secret_key: str,
+                        restaurant_secret_key: str, base_url: str = None):
+    endpoints = {
+        "verify": f"/food-orders/{order_id}/verify",
+        "verify_scheduled": f"/food-orders/{order_id}/verify-scheduled",
+        "prepare": f"/food-orders/{order_id}/prepare",
+        "handover": f"/food-orders/{order_id}/handover",
+        "deliver": f"/food-orders/{order_id}/deliver",
+    }
+    endpoint = endpoints.get(action)
+    if not endpoint:
+        raise ValueError("Gecersiz Getir siparis aksiyonu")
+    return _authenticated_request("POST", endpoint, app_secret_key, restaurant_secret_key, base_url)
+
+
+def get_order(order_id: str, app_secret_key: str, restaurant_secret_key: str,
+              base_url: str = None):
+    return _authenticated_request(
+        "GET",
+        f"/food-orders/{order_id}/",
+        app_secret_key,
+        restaurant_secret_key,
+        base_url,
+        body=None,
+    )
+
+
+def active_orders(app_secret_key: str, restaurant_secret_key: str, base_url: str = None):
+    return _authenticated_request(
+        "POST",
+        "/food-orders/active",
+        app_secret_key,
+        restaurant_secret_key,
+        base_url,
+    )

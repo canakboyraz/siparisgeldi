@@ -19,6 +19,31 @@
   <div class="stat"><div class="v">{{ detail.delivery }}</div><div class="l">Teslimat</div></div>
 </div>
 
+{% if getir_actions %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <div class="card-title">Getir sipariş işlemleri</div>
+      <div class="muted">Getir API'ye statü güncellemesi gönderir. Ardışık işlemlerde en az 1 dakika beklenir.</div>
+    </div>
+    <div class="inline">
+      {% for action in getir_actions %}
+      <form method="post" action="{{ url_for('dashboard.update_getir_order_status', order_id=order.id) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="{{ action.action }}">
+        <button class="btn btn-primary" type="submit" {% if action.disabled %}disabled title="{{ action.disabled_reason }}"{% endif %}>
+          {{ action.label }}
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+  {% for action in getir_actions if action.disabled %}
+  <p class="hint" style="margin-bottom:0">{{ action.disabled_reason }}</p>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="grid-2 detail-grid">
   <div class="card">
     <div class="card-title">Sipariş bilgileri</div>

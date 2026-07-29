@@ -559,7 +559,49 @@ def subscription():
 def order_detail(order_id):
     order = Order.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
     detail = _order_detail_context(order)
-    return render_template("dashboard/order_detail.html", order=order, detail=detail)
+    getir_actions = _getir_order_actions(order, detail)
+    return render_template("dashboard/order_detail.html", order=order, detail=detail, getir_actions=getir_actions)
+
+
+@dashboard_bp.route("/siparis/<int:order_id>/getir-durum", methods=["POST"])
+@login_required
+def update_getir_order_status(order_id):
+    order = Order.query.filter_by(id=order_id, user_id=current_user.id, platform="getir").first_or_404()
+    action = request.form.get("action", "").strip()
+    detail = _order_detail_context(order)
+    actions = {item["action"]: item for item in _getir_order_actions(order, detail)}
+    selected = actions.get(action)
+    if not selected:
+        flash("Bu sipariş durumu için Getir işlemi kullanılamaz.", "warning")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+    if selected.get("disabled"):
+        flash(selected.get("disabled_reason") or "Bu islem icin biraz beklemek gerekiyor.", "warning")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="getir", is_active=True).first()
+    if not intg or not intg.getir_restaurant_secret_key:
+        flash("Getir bağlantısı eksik. Önce Restaurant Secret Key kaydedilmeli.", "danger")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+    if not current_app.config.get("GETIR_APP_SECRET_KEY"):
+        flash("GETIR_APP_SECRET_KEY Railway tarafında tanımlı değil.", "danger")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+    try:
+        getir.update_order_status(
+            order.external_id,
+            action,
+            current_app.config.get("GETIR_APP_SECRET_KEY"),
+            intg.getir_restaurant_secret_key,
+            current_app.config.get("GETIR_API_BASE"),
+        )
+        order.status = selected["next_status"]
+        db.session.commit()
+        flash(f"Getir siparişi güncellendi: {selected['label']}", "success")
+    except Exception as e:
+        intg.last_error = str(e)[:300]
+        db.session.commit()
+        flash(f"Getir işlemi başarısız: {e}", "danger")
+    return redirect(url_for("dashboard.order_detail", order_id=order.id))
 
 
 @dashboard_bp.route("/aktif-siparisler")
@@ -725,6 +767,37 @@ def _active_order_counts(orders: list, now: datetime) -> dict:
         if _active_order_row(order, now)["is_unaccepted_warning"]:
             counts["warning"] += 1
     return counts
+
+
+def _getir_order_actions(order: Order, detail: dict = None) -> list:
+    if order.platform != "getir" or order.status in ACTIVE_EXCLUDED_STATUSES:
+        return []
+    detail = detail or _order_detail_context(order)
+    raw = detail.get("raw") or {}
+    delivery_type = getir._as_int(getir._first(raw, "deliveryType", "deliveryProvider"))
+    status = order.status or ""
+    actions = []
+
+    if status == "Scheduled":
+        actions.append({"action": "verify_scheduled", "label": "İleri tarihli onayla", "next_status": "ScheduledApproved"})
+    elif status in {"Created", "NEW_PENDING", "Pending", "New"}:
+        actions.append({"action": "verify", "label": "Onayla", "next_status": "Approved"})
+    elif status in {"Approved", "ScheduledApproved"}:
+        actions.append({"action": "prepare", "label": "Hazırlanıyor yap", "next_status": "Picking"})
+    elif status in {"Picking", "Prepared"}:
+        if delivery_type == 1:
+            actions.append({"action": "handover", "label": "Getir kuryesine teslim", "next_status": "Shipped"})
+        else:
+            actions.append({"action": "deliver", "label": "Teslim edildi yap", "next_status": "Delivered"})
+
+    if actions and order.updated_at:
+        elapsed = (datetime.utcnow() - order.updated_at).total_seconds()
+        if status not in {"Created", "NEW_PENDING", "Pending", "New", "Scheduled"} and elapsed < 60:
+            remaining = max(1, int(60 - elapsed))
+            for item in actions:
+                item["disabled"] = True
+                item["disabled_reason"] = f"Getir kuralı gereği sonraki işlem için {remaining} sn bekle."
+    return actions
 
 
 def _order_group(status: str) -> str:
