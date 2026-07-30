@@ -1,6 +1,7 @@
 """Trendyol Pazaryeri order polling helpers."""
 import base64
 import html
+import re
 from datetime import datetime, timedelta
 
 import requests
@@ -141,8 +142,41 @@ def lines(order: dict) -> list:
     return value if isinstance(value, list) else []
 
 
+def _text(value) -> str:
+    return str(value or "").strip()
+
+
+def _first_text(data: dict, *keys: str) -> str:
+    for key in keys:
+        value = _text(data.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _clean_product_name(name: str, line: dict) -> str:
+    result = _text(name)
+    details = [
+        _first_text(line, "stockCode", "merchantSku", "sku"),
+        _first_text(line, "productSize", "size", "variantValue"),
+        _first_text(line, "barcode"),
+    ]
+    changed = True
+    while changed:
+        changed = False
+        for detail in details:
+            if not detail:
+                continue
+            cleaned = re.sub(rf"\s*,?\s*{re.escape(detail)}\s*$", "", result, flags=re.IGNORECASE).strip()
+            if cleaned != result:
+                result = cleaned
+                changed = True
+    result = re.sub(r"\s{2,}", " ", result).strip(" ,-")
+    return result or _text(name) or "Urun"
+
+
 def line_name(line: dict) -> str:
-    return str(line.get("productName") or line.get("name") or line.get("barcode") or "Urun").strip()
+    return _clean_product_name(line.get("productName") or line.get("name") or line.get("barcode") or "Urun", line)
 
 
 def line_quantity(line: dict) -> int:
@@ -154,15 +188,25 @@ def line_quantity(line: dict) -> int:
 
 def line_details(line: dict) -> list:
     parts = []
+    stock_code = _first_text(line, "stockCode", "merchantSku", "sku")
+    option = _first_text(line, "productSize", "size", "variantValue")
+    color = _first_text(line, "productColor", "color")
+    barcode = _first_text(line, "barcode")
+
+    if stock_code:
+        parts.append(f"Stok kodu: {stock_code}")
+    if option:
+        parts.append(f"Seçenek: {option}")
+    if color:
+        parts.append(f"Renk: {color}")
+    if barcode and not stock_code:
+        parts.append(f"Barkod: {barcode}")
+
     for key, label in (
-        ("barcode", "Barkod"),
-        ("stockCode", "Stok kodu"),
-        ("merchantSku", "Stok kodu"),
-        ("sku", "SKU"),
-        ("productColor", "Renk"),
-        ("productSize", "Beden"),
+        ("productOrigin", "Menşei"),
+        ("deliveryType", "Teslimat"),
     ):
-        value = str(line.get(key) or "").strip()
+        value = _text(line.get(key))
         if value:
             parts.append(f"{label}: {value}")
     return parts
@@ -178,6 +222,35 @@ def summarize_items(order: dict, max_items: int = 4) -> str:
     if more > 0:
         result += f" +{more} urun"
     return result[:900]
+
+
+def detailed_items_summary(order: dict, max_items: int = 4, max_length: int = 900) -> str:
+    parts = []
+    for line in lines(order)[:max_items]:
+        if not isinstance(line, dict):
+            continue
+        block = [f"- {line_name(line)} x{line_quantity(line)}"]
+        for detail in line_details(line):
+            block.append(f"  {detail}")
+        parts.append("\n".join(block))
+
+    if not parts:
+        result = "-"
+    else:
+        result = "\n".join(parts)
+        more = len(lines(order)) - max_items
+        if more > 0:
+            result += f"\n+{more} urun"
+
+    cargo = cargo_label(order)
+    if cargo and cargo != "-":
+        result += f"\nKargo: {cargo}"
+
+    deadline = agreed_delivery_text(order)
+    if deadline:
+        result += f"\nSon kargoya verme: {deadline}"
+
+    return result[:max_length]
 
 
 def address_text(order: dict) -> str:
@@ -205,6 +278,31 @@ def cargo_label(order: dict) -> str:
     ).strip()
 
 
+def package_number(order: dict) -> str:
+    return _first_text(order, "shipmentPackageId", "packageId", "id")
+
+
+def _format_timestamp_ms(value) -> str:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return ""
+    if number <= 0:
+        return ""
+    try:
+        return (datetime.utcfromtimestamp(number / 1000) + timedelta(hours=3)).strftime("%d.%m.%Y %H:%M")
+    except (OSError, OverflowError, ValueError):
+        return ""
+
+
+def agreed_delivery_text(order: dict) -> str:
+    return (
+        _format_timestamp_ms(order.get("agreedDeliveryDate"))
+        or _format_timestamp_ms(order.get("agreedDeliveryExtensionEndDate"))
+        or _text(order.get("agreedDeliveryDate"))
+    )
+
+
 def extract_order_fields(order: dict) -> dict:
     return {
         "external_id": order_id(order),
@@ -229,9 +327,10 @@ def format_new_order_message(order: dict) -> str:
         items = "  (Urun bilgisi yok)\n"
 
     msg = (
-        "🛒 <b>YENI SIPARIS — Trendyol Pazaryeri</b>\n"
+        "🛒 <b>YENI PAZARYERI SIPARISI — Trendyol</b>\n"
         f"{'━'*28}\n"
         f"📋 <b>Siparis No:</b> #{html.escape(order_number(order) or '-')}\n"
+        f"📦 <b>Paket No:</b> {html.escape(package_number(order) or '-')}\n"
         f"👤 <b>Musteri:</b> {html.escape(customer_name(order) or '-')}\n"
         f"{'━'*28}\n"
         f"📦 <b>Urunler:</b>\n{items}"
@@ -239,6 +338,9 @@ def format_new_order_message(order: dict) -> str:
         f"💰 <b>Tutar:</b> {total_price(order):.2f} TL\n"
         f"🚚 <b>Kargo:</b> {html.escape(cargo_label(order))}\n"
     )
+    deadline = agreed_delivery_text(order)
+    if deadline:
+        msg += f"⏱️ <b>Son kargoya verme:</b> {html.escape(deadline)}\n"
     address = address_text(order)
     if address:
         msg += f"📍 <b>Adres:</b> {html.escape(address)}\n"
@@ -253,7 +355,8 @@ def format_status_message(order: dict, current_status: str) -> str:
         f"🔄 <b>Trendyol Pazaryeri durum güncellendi</b>\n"
         f"{'━'*28}\n"
         f"📋 <b>Siparis No:</b> #{html.escape(order_number(order) or '-')}\n"
+        f"📦 <b>Paket No:</b> {html.escape(package_number(order) or '-')}\n"
         f"ℹ️ <b>Durum:</b> {html.escape(current_status or '-')}\n"
-        f"📦 <b>Urunler:</b> {html.escape(summarize_items(order))}\n"
+        f"📦 <b>Urunler:</b>\n{html.escape(detailed_items_summary(order))}\n"
         f"💰 <b>Tutar:</b> {total_price(order):.2f} TL\n"
     )

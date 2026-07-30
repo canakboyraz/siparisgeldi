@@ -254,7 +254,7 @@ def _process_tmp(intg):
                 send_to_user(
                     user,
                     tmp.format_new_order_message(order_data),
-                    wa=["Yeni sipariş · Trendyol Pazaryeri", fields["order_number"], tmp.summarize_items(order_data), amount],
+                    wa=["Yeni pazaryeri siparişi · Trendyol", fields["order_number"], tmp.detailed_items_summary(order_data), amount],
                 )
                 print(f"[TMP] yeni siparis #{fields['order_number']} (user={intg.user_id})")
             continue
@@ -278,7 +278,7 @@ def _process_tmp(intg):
             send_to_user(
                 user,
                 tmp.format_status_message(order_data, current_status),
-                wa=[f"{status_label(current_status)} · Trendyol Pazaryeri", fields["order_number"], tmp.summarize_items(order_data), amount],
+                wa=[f"{status_label(current_status)} · Trendyol Pazaryeri", fields["order_number"], tmp.detailed_items_summary(order_data), amount],
             )
             print(f"[TMP] durum #{fields['order_number']} -> {current_status} (user={intg.user_id})")
         else:

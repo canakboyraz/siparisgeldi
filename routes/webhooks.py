@@ -147,9 +147,9 @@ def _handle_tmp_order(intg, order_data):
                 user,
                 tmp.format_new_order_message(order_data),
                 wa=[
-                    "Yeni sipariş · Trendyol Pazaryeri",
+                    "Yeni pazaryeri siparişi · Trendyol",
                     fields["order_number"],
-                    tmp.summarize_items(order_data),
+                    tmp.detailed_items_summary(order_data),
                     f"{fields['total_price']:.2f} ₺",
                 ],
             )
@@ -179,7 +179,7 @@ def _handle_tmp_order(intg, order_data):
                 wa=[
                     f"{status_label(current_status)} · Trendyol Pazaryeri",
                     fields["order_number"],
-                    tmp.summarize_items(order_data),
+                    tmp.detailed_items_summary(order_data),
                     f"{fields['total_price']:.2f} ₺",
                 ],
             )
