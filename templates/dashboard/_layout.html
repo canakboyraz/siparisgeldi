@@ -13,7 +13,7 @@
       <a href="{{ url_for('dashboard.orders') }}" class="{{ 'active' if request.endpoint=='dashboard.orders' }}">Siparişler</a>
       <a href="{{ url_for('dashboard.reports') }}" class="{{ 'active' if request.endpoint=='dashboard.reports' }}">Raporlar</a>
 
-      <details class="nav-group" {{ 'open' if request.endpoint in platform_endpoints }}>
+      <details class="nav-group" data-mobile-nav="food" {{ 'open' if request.endpoint in platform_endpoints }}>
         <summary class="{{ 'active' if request.endpoint in platform_endpoints }}">Yemek Platformları</summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.trendyolgo_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyolgo_setup' }}">Trendyol Go</a>
@@ -22,7 +22,7 @@
         </div>
       </details>
 
-      <details class="nav-group" {{ 'open' if request.endpoint in ecommerce_endpoints }}>
+      <details class="nav-group" data-mobile-nav="ecommerce" {{ 'open' if request.endpoint in ecommerce_endpoints }}>
         <summary class="{{ 'active' if request.endpoint in ecommerce_endpoints }}">E-Ticaret Platformları</summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.trendyol_marketplace_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyol_marketplace_setup' }}">Trendyol Pazaryeri</a>
@@ -30,7 +30,7 @@
         </div>
       </details>
 
-      <details class="nav-group" {{ 'open' if request.endpoint in contact_endpoints }}>
+      <details class="nav-group" data-mobile-nav="contact" {{ 'open' if request.endpoint in contact_endpoints }}>
         <summary class="{{ 'active' if request.endpoint in contact_endpoints }}">İletişim</summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.connect_telegram') }}" class="{{ 'active' if request.endpoint in ['dashboard.connect_telegram','dashboard.reset_telegram'] }}">Telegram</a>
@@ -52,9 +52,61 @@
       </form>
     </div>
   </aside>
+  <div class="mobile-nav-popover" id="mobile-nav-popover" hidden>
+    <div class="mobile-nav-popover-title" id="mobile-nav-popover-title"></div>
+    <div class="mobile-nav-popover-links" id="mobile-nav-popover-links"></div>
+  </div>
   <main class="main">
     {% include "_flashes.html" %}
     {% block panel %}{% endblock %}
   </main>
 </div>
+<script>
+  (function () {
+    var popover = document.getElementById("mobile-nav-popover");
+    var title = document.getElementById("mobile-nav-popover-title");
+    var links = document.getElementById("mobile-nav-popover-links");
+    var mobileQuery = window.matchMedia("(max-width: 860px)");
+
+    function closePopover() {
+      if (!popover) return;
+      popover.hidden = true;
+      document.querySelectorAll(".nav-group.is-mobile-open").forEach(function (group) {
+        group.classList.remove("is-mobile-open");
+      });
+    }
+
+    document.querySelectorAll(".nav-group > summary").forEach(function (summary) {
+      summary.addEventListener("click", function (event) {
+        if (!mobileQuery.matches || !popover || !title || !links) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        var group = summary.closest(".nav-group");
+        var source = group ? group.querySelector(".nav-sub") : null;
+        if (!group || !source) return;
+
+        var wasOpen = group.classList.contains("is-mobile-open") && !popover.hidden;
+        closePopover();
+        if (wasOpen) return;
+
+        title.textContent = summary.textContent.trim();
+        links.innerHTML = source.innerHTML;
+        links.querySelectorAll("a").forEach(function (link) {
+          link.addEventListener("click", closePopover);
+        });
+        group.classList.add("is-mobile-open");
+        popover.hidden = false;
+      });
+    });
+
+    document.addEventListener("click", function (event) {
+      if (!mobileQuery.matches || !popover || popover.hidden) return;
+      if (popover.contains(event.target) || event.target.closest(".nav-group")) return;
+      closePopover();
+    });
+
+    window.addEventListener("resize", closePopover);
+  })();
+</script>
 {% endblock %}

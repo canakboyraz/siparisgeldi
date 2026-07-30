@@ -136,6 +136,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .nav-group{margin:.1rem 0}
 .nav-sub{display:grid;gap:.15rem;margin:.25rem 0 .45rem .65rem;padding-left:.55rem;border-left:1px solid #2a2f3a}
 .nav-sub a{font-size:.88rem;padding:.48rem .7rem}
+.mobile-nav-popover{display:none}
 .sidebar .foot{border-top:1px solid #262a34;padding-top:1rem;margin-top:1rem;font-size:.86rem}
 .sidebar .foot a{padding:.4rem .8rem}
 .sidebar-logout{margin:0}
@@ -237,6 +238,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   }
   .sidebar summary::after{content:"⌃";font-size:.8rem}
   .sidebar details[open] summary::after{transform:none}
+  .sidebar .nav-sub{display:none}
+  .sidebar details.is-mobile-open summary{background:var(--brand);color:#fff}
   .nav-group{flex:0 0 auto;position:relative;margin:0;scroll-snap-align:start}
   .nav-sub{
     position:fixed;left:.7rem;right:.7rem;bottom:calc(3.75rem + env(safe-area-inset-bottom));
@@ -245,6 +248,20 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
     border:1px solid #2a2f3a;border-radius:12px;background:#12141a;box-shadow:0 -8px 18px rgba(16,20,30,.18)
   }
   .nav-sub a{flex:0 0 auto;font-size:.78rem;padding:.46rem .58rem;border-radius:999px}
+  .mobile-nav-popover{
+    position:fixed;left:.7rem;right:.7rem;bottom:calc(3.85rem + env(safe-area-inset-bottom));
+    z-index:80;display:block;padding:.65rem;background:#12141a;color:#fff;
+    border:1px solid #2a2f3a;border-radius:12px;box-shadow:0 -12px 28px rgba(16,20,30,.24)
+  }
+  .mobile-nav-popover[hidden]{display:none}
+  .mobile-nav-popover-title{font-weight:800;font-size:.82rem;margin:0 0 .45rem;color:#c9cdd6}
+  .mobile-nav-popover-links{display:flex;gap:.4rem;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .mobile-nav-popover-links::-webkit-scrollbar{display:none}
+  .mobile-nav-popover-links a{
+    flex:0 0 auto;white-space:nowrap;padding:.52rem .65rem;border-radius:999px;
+    color:#c9cdd6;background:#20242e;font-size:.78rem;font-weight:700
+  }
+  .mobile-nav-popover-links a.active{background:var(--brand);color:#fff}
   .sidebar .foot{
     position:absolute;right:.65rem;top:.55rem;border:none;margin:0;padding:0;
     display:flex;align-items:center;gap:.35rem
