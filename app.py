@@ -27,6 +27,11 @@ def _ensure_schema():
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tmp_integration_ref VARCHAR(120)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tmp_api_key VARCHAR(512)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tmp_api_secret VARCHAR(512)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS hb_merchant_id VARCHAR(80)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS hb_username VARCHAR(120)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS hb_service_key VARCHAR(512)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS hb_environment VARCHAR(20) DEFAULT 'live'",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS hb_auto_packaging BOOLEAN DEFAULT FALSE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
             """
@@ -64,6 +69,16 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE integrations ADD COLUMN tmp_api_key VARCHAR(512)")
             if "tmp_api_secret" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN tmp_api_secret VARCHAR(512)")
+            if "hb_merchant_id" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN hb_merchant_id VARCHAR(80)")
+            if "hb_username" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN hb_username VARCHAR(120)")
+            if "hb_service_key" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN hb_service_key VARCHAR(512)")
+            if "hb_environment" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN hb_environment VARCHAR(20) DEFAULT 'live'")
+            if "hb_auto_packaging" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN hb_auto_packaging BOOLEAN DEFAULT FALSE")
             if "notify_weekly_report" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN notify_weekly_report BOOLEAN DEFAULT TRUE")
             if "notify_monthly_report" not in intg_cols:

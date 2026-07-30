@@ -70,7 +70,7 @@ class Integration(db.Model):
 
     id         = db.Column(db.Integer, primary_key=True)
     user_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    platform   = db.Column(db.String(30), nullable=False)   # trendyolgo | migros | getir | trendyol_marketplace
+    platform   = db.Column(db.String(30), nullable=False)   # trendyolgo | migros | getir | trendyol_marketplace | hepsiburada
     is_active  = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -96,6 +96,12 @@ class Integration(db.Model):
     tmp_integration_ref = db.Column(db.String(120))
     _tmp_api_key = db.Column("tmp_api_key", db.String(512))
     _tmp_api_secret = db.Column("tmp_api_secret", db.String(512))
+
+    hb_merchant_id = db.Column(db.String(80), index=True)
+    hb_username = db.Column(db.String(120))
+    _hb_service_key = db.Column("hb_service_key", db.String(512))
+    hb_environment = db.Column(db.String(20), default="live")  # test | live
+    hb_auto_packaging = db.Column(db.Boolean, default=False)
 
     # Bildirim tercihleri
     notify_new_order      = db.Column(db.Boolean, default=True)
@@ -169,6 +175,14 @@ class Integration(db.Model):
     @tmp_api_secret.setter
     def tmp_api_secret(self, value):
         self._tmp_api_secret = security.encrypt(value)
+
+    @property
+    def hb_service_key(self):
+        return security.decrypt(self._hb_service_key)
+
+    @hb_service_key.setter
+    def hb_service_key(self, value):
+        self._hb_service_key = security.encrypt(value)
 
     def __repr__(self):
         return f"<Integration user={self.user_id} platform={self.platform}>"

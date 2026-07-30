@@ -77,6 +77,19 @@ _STATUS_COLORS.update({
 })
 
 _PLATFORM_LABELS["getir"] = "Getir Yemek"
+_PLATFORM_LABELS["hepsiburada"] = "Hepsiburada"
+
+_STATUS_LABELS.update({
+    "Open": "Yeni",
+    "Undelivered": "Teslim edilemedi",
+    "Unpacked": "Paket bozuldu",
+})
+
+_STATUS_COLORS.update({
+    "Open": "blue",
+    "Undelivered": "red",
+    "Unpacked": "amber",
+})
 
 
 def status_label(status: str) -> str:

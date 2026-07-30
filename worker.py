@@ -16,7 +16,7 @@ from flask import current_app
 
 from extensions import db
 from models import Integration, Order, User, AppState
-from integrations import getir, trendyol_marketplace as tmp, trendyolgo as tgo
+from integrations import getir, hepsiburada as hb, trendyol_marketplace as tmp, trendyolgo as tgo
 from notifications import telegram
 from notifications.dispatcher import send_to_user
 from utils import status_label
@@ -46,6 +46,12 @@ REFUNDED_ORDER_STATUSES = {
     "RETURNED",
     "REFUNDED",
 }
+
+
+def _hb_api_base(environment: str) -> str:
+    if environment == "test":
+        return current_app.config.get("HEPSIBURADA_API_BASE_TEST")
+    return current_app.config.get("HEPSIBURADA_API_BASE_LIVE")
 
 
 # ── Sipariş polling ─────────────────────────────────────────────────────────
@@ -84,6 +90,132 @@ def poll_trendyol_marketplace(app):
                 intg.last_error = str(e)[:300]
                 db.session.commit()
                 print(f"[WORKER TMP] Hata user={intg.user_id}: {e}")
+
+
+def poll_hepsiburada(app):
+    with app.app_context():
+        integrations = Integration.query.filter_by(platform=hb.PLATFORM, is_active=True).all()
+        for intg in integrations:
+            if not intg.hb_merchant_id or not intg.hb_username or not intg._hb_service_key:
+                continue
+            try:
+                _process_hb(intg)
+                intg.last_sync_at = datetime.utcnow()
+                intg.last_error = None
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                intg.last_error = str(e)[:300]
+                db.session.commit()
+                print(f"[WORKER HB] Hata user={intg.user_id}: {e}")
+
+
+def _process_hb(intg):
+    since = (intg.last_sync_at or intg.created_at or datetime.utcnow()) - timedelta(minutes=20)
+    environment = intg.hb_environment or "live"
+    base = _hb_api_base(environment)
+    orders = hb.get_open_orders(
+        intg.hb_merchant_id,
+        intg.hb_username,
+        intg.hb_service_key,
+        environment=environment,
+        since=since,
+        override_base=base,
+    )
+    if intg.hb_auto_packaging:
+        orders.extend(hb.get_packages(
+            intg.hb_merchant_id,
+            intg.hb_username,
+            intg.hb_service_key,
+            environment=environment,
+            since=since,
+            override_base=base,
+        ))
+    cancellations = hb.get_cancelled_orders(
+        intg.hb_merchant_id,
+        intg.hb_username,
+        intg.hb_service_key,
+        environment=environment,
+        since=since,
+        override_base=base,
+    )
+    user = db.session.get(User, intg.user_id)
+
+    for order_data in orders:
+        _upsert_hb_order(intg, user, order_data, is_cancel=False)
+    for order_data in cancellations:
+        _upsert_hb_order(intg, user, order_data, is_cancel=True)
+
+
+def _upsert_hb_order(intg, user, order_data: dict, is_cancel: bool = False):
+    fields = hb.extract_order_fields(order_data)
+    if not fields["external_id"]:
+        return
+    if is_cancel:
+        fields["status"] = "Cancelled"
+
+    existing = Order.query.filter_by(
+        user_id=intg.user_id, platform=hb.PLATFORM, external_id=fields["external_id"]
+    ).first()
+
+    if not existing:
+        order = Order(
+            user_id=intg.user_id,
+            platform=hb.PLATFORM,
+            raw_json=json.dumps(order_data, ensure_ascii=False),
+            **fields,
+        )
+        order.mark_status_notified("Cancelled" if is_cancel else "INITIAL")
+        db.session.add(order)
+        db.session.commit()
+
+        if is_cancel and intg.notify_cancel:
+            amount = f"{fields['total_price']:.2f} ₺"
+            send_to_user(
+                user,
+                hb.format_cancel_message(order_data),
+                wa=["Sipariş iptal · Hepsiburada", fields["order_number"], hb.summarize_items(order_data), amount],
+            )
+            print(f"[HB] iptal #{fields['order_number']} (user={intg.user_id})")
+        elif not is_cancel and intg.notify_new_order:
+            amount = f"{fields['total_price']:.2f} ₺"
+            send_to_user(
+                user,
+                hb.format_new_order_message(order_data),
+                wa=["Yeni sipariş · Hepsiburada", fields["order_number"], hb.summarize_items(order_data), amount],
+            )
+            print(f"[HB] yeni siparis #{fields['order_number']} (user={intg.user_id})")
+        return
+
+    current_status = fields["status"]
+    if existing.status != current_status:
+        existing.status = current_status
+        existing.order_number = fields["order_number"] or existing.order_number
+        existing.total_price = fields["total_price"]
+        existing.payment_type = fields["payment_type"]
+        existing.customer_note = fields["customer_note"]
+        existing.raw_json = json.dumps(order_data, ensure_ascii=False)
+
+    wants = intg.notify_cancel if is_cancel else intg.notify_status_change
+    if current_status in hb.STATUS_NOTIFY and not existing.is_status_notified(current_status) and wants:
+        existing.mark_status_notified(current_status)
+        db.session.commit()
+        amount = f"{fields['total_price']:.2f} ₺"
+        if is_cancel:
+            send_to_user(
+                user,
+                hb.format_cancel_message(order_data),
+                wa=["Sipariş iptal · Hepsiburada", fields["order_number"], hb.summarize_items(order_data), amount],
+            )
+        else:
+            send_to_user(
+                user,
+                hb.format_status_message(order_data, current_status),
+                wa=[f"{status_label(current_status)} · Hepsiburada", fields["order_number"], hb.summarize_items(order_data), amount],
+            )
+        print(f"[HB] durum #{fields['order_number']} -> {current_status} (user={intg.user_id})")
+    else:
+        db.session.commit()
 
 
 def _process_tmp(intg):
@@ -324,6 +456,12 @@ def _aggregate_products(orders, max_items: int = 15) -> str:
                     continue
                 name = tmp.line_name(ln)
                 counts[name] = counts.get(name, 0) + tmp.line_quantity(ln)
+        elif o.platform == hb.PLATFORM:
+            for ln in hb.lines(data):
+                if not isinstance(ln, dict):
+                    continue
+                name = hb.line_name(ln)
+                counts[name] = counts.get(name, 0) + hb.line_quantity(ln)
         else:  # trendyolgo
             for ln in (data.get("lines") or []):
                 name = ln.get("name", "?")
@@ -395,6 +533,7 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
         "migros": "Migros Yemek",
         "getir": "Getir Yemek",
         tmp.PLATFORM: "Trendyol Pazaryeri",
+        hb.PLATFORM: "Hepsiburada",
     }.get(intg.platform, intg.platform)
 
     emoji = {"Günlük": "📊", "Haftalık": "📅", "Aylık": "🗓️"}.get(kind, "📊")
@@ -485,6 +624,9 @@ def start_scheduler(app):
 
     scheduler.add_job(poll_trendyol_marketplace, "interval", seconds=interval,
                       args=[app], id="tmp_poll", replace_existing=True, max_instances=1)
+
+    scheduler.add_job(poll_hepsiburada, "interval", seconds=interval,
+                      args=[app], id="hb_poll", replace_existing=True, max_instances=1)
 
     scheduler.add_job(poll_telegram_binds, "interval", seconds=5,
                       args=[app], id="tg_bind", replace_existing=True, max_instances=1)

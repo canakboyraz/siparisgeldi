@@ -74,7 +74,7 @@
       <tr>
         <td>{{ platform_label(i.platform) }}</td>
         <td>{% if i.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}</td>
-        <td>{{ i.tgo_supplier_id or i.tmp_supplier_id or i.migros_store_id or i.getir_restaurant_id or '-' }}</td>
+        <td>{{ i.tgo_supplier_id or i.tmp_supplier_id or i.hb_merchant_id or i.migros_store_id or i.getir_restaurant_id or '-' }}</td>
         <td class="muted">{{ i.last_sync_at.strftime('%d.%m %H:%M') if i.last_sync_at else '-' }}</td>
         <td class="muted">{{ i.last_error or '-' }}</td>
       </tr>

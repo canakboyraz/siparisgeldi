@@ -9,7 +9,7 @@ import pytz
 
 from extensions import db
 from models import Integration, Order
-from integrations import getir, migros, trendyol_marketplace as tmp, trendyolgo as tgo
+from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo
 
 dashboard_bp = Blueprint("dashboard", __name__)
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
@@ -277,6 +277,80 @@ def _tmp_setup_context() -> dict:
 
 
 # ── Migros Yemek ────────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/hepsiburada", methods=["GET", "POST"])
+@login_required
+def hepsiburada_setup():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform=hb.PLATFORM).first()
+
+    if request.method == "POST":
+        merchant_id = request.form.get("merchant_id", "").strip()
+        username = request.form.get("username", "").strip()
+        service_key = request.form.get("service_key", "").strip()
+        environment = request.form.get("environment", "live").strip()
+        auto_packaging = "auto_packaging" in request.form
+        has_saved_service_key = bool(intg and intg._hb_service_key)
+
+        if environment not in ("test", "live"):
+            environment = "live"
+
+        if not _can_enable_platform(intg):
+            flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
+            return render_template("dashboard/hepsiburada_setup.html", intg=intg, **_hb_setup_context(intg))
+
+        if not merchant_id or not username or (not has_saved_service_key and not service_key):
+            flash("Mağaza ID, kullanıcı adı ve servis anahtarı zorunludur.", "danger")
+            return render_template("dashboard/hepsiburada_setup.html", intg=intg, **_hb_setup_context(intg))
+
+        test_service_key = service_key or intg.hb_service_key
+        ok, msg, _ = hb.test_connection(
+            merchant_id,
+            username,
+            test_service_key,
+            environment,
+            _hb_api_base(environment),
+        )
+
+        if not intg:
+            intg = Integration(user_id=current_user.id, platform=hb.PLATFORM)
+            db.session.add(intg)
+
+        intg.hb_merchant_id = merchant_id
+        intg.hb_username = username
+        if service_key:
+            intg.hb_service_key = service_key
+        intg.hb_environment = environment
+        intg.hb_auto_packaging = auto_packaging
+        intg.is_active = True
+        intg.last_error = None if ok else msg[:300]
+        db.session.commit()
+
+        if ok:
+            flash(f"Hepsiburada bağlandı! {msg}", "success")
+        else:
+            flash(f"Bilgiler kaydedildi ama API doğrulanamadı: {msg}. Yetki yeni verildiyse Hepsiburada tarafında 2 saate kadar beklemek gerekebilir.", "warning")
+        if not current_user.telegram_connected:
+            flash("Bildirim alabilmek için Telegram'ı da bağlayın.", "warning")
+        return redirect(url_for("dashboard.hepsiburada_setup"))
+
+    return render_template("dashboard/hepsiburada_setup.html", intg=intg, **_hb_setup_context(intg))
+
+
+def _hb_api_base(environment: str) -> str:
+    if environment == "test":
+        return current_app.config.get("HEPSIBURADA_API_BASE_TEST")
+    return current_app.config.get("HEPSIBURADA_API_BASE_LIVE")
+
+
+def _hb_setup_context(intg: Integration = None) -> dict:
+    environment = (intg.hb_environment if intg else "live") or "live"
+    return {
+        "hb_api_base_test": current_app.config.get("HEPSIBURADA_API_BASE_TEST"),
+        "hb_api_base_live": current_app.config.get("HEPSIBURADA_API_BASE_LIVE"),
+        "hb_active_base": _hb_api_base(environment),
+        "hb_stub_base": current_app.config.get("HEPSIBURADA_STUB_API_BASE"),
+    }
+
 
 @dashboard_bp.route("/migros", methods=["GET", "POST"])
 @login_required
@@ -986,6 +1060,12 @@ def _report_products(orders: list, max_items: int = 15) -> list:
                     continue
                 name = tmp.line_name(line)
                 counts[name] = counts.get(name, 0) + tmp.line_quantity(line)
+        elif order.platform == hb.PLATFORM:
+            for line in hb.lines(data):
+                if not isinstance(line, dict):
+                    continue
+                name = hb.line_name(line)
+                counts[name] = counts.get(name, 0) + hb.line_quantity(line)
         else:
             for line in data.get("lines") or []:
                 name = line.get("name") or line.get("productName") or "Ürün"
@@ -1022,6 +1102,8 @@ def _order_detail_context(order: Order) -> dict:
         return _getir_detail_context(order, raw)
     if order.platform == tmp.PLATFORM:
         return _tmp_detail_context(order, raw)
+    if order.platform == hb.PLATFORM:
+        return _hb_detail_context(order, raw)
     if order.platform == "trendyolgo":
         return _tgo_detail_context(order, raw)
     return {
@@ -1144,6 +1226,36 @@ def _tmp_detail_items(raw: dict) -> list:
             "quantity": tmp.line_quantity(line),
             "note": "",
             "details": tmp.line_details(line),
+        })
+    return items
+
+
+def _hb_detail_context(order: Order, raw: dict) -> dict:
+    return {
+        "raw": raw,
+        "items": _hb_detail_items(raw),
+        "customer": hb.customer_name(raw) or "-",
+        "store": "-",
+        "source": "Hepsiburada",
+        "delivery": hb.cargo_label(raw),
+        "payment": order.payment_type or "Hepsiburada",
+        "address": hb.address_text(raw),
+        "address_direction": "",
+        "flags": [],
+        "order_note": order.customer_note or "",
+    }
+
+
+def _hb_detail_items(raw: dict) -> list:
+    items = []
+    for line in hb.lines(raw):
+        if not isinstance(line, dict):
+            continue
+        items.append({
+            "name": hb.line_name(line),
+            "quantity": hb.line_quantity(line),
+            "note": "",
+            "details": hb.line_details(line),
         })
     return items
 

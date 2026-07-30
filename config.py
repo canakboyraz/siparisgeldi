@@ -71,6 +71,11 @@ class Config:
     TRENDYOL_MARKETPLACE_API_BASE = os.environ.get("TRENDYOL_MARKETPLACE_API_BASE", "https://apigw.trendyol.com/integration")
     TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY = os.environ.get("TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY", "")
 
+    # Hepsiburada Pazaryeri (e-ticaret)
+    HEPSIBURADA_API_BASE_TEST = os.environ.get("HEPSIBURADA_API_BASE_TEST", "https://oms-external-sit.hepsiburada.com")
+    HEPSIBURADA_API_BASE_LIVE = os.environ.get("HEPSIBURADA_API_BASE_LIVE", "https://oms-external.hepsiburada.com")
+    HEPSIBURADA_STUB_API_BASE = os.environ.get("HEPSIBURADA_STUB_API_BASE", "https://oms-stub-external-sit.hepsiburada.com")
+
     # WhatsApp (Meta Cloud API). Değerler Meta Business/Developers'tan alınır.
     WHATSAPP_ACCESS_TOKEN   = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
     WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")

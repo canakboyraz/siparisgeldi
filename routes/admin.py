@@ -279,6 +279,8 @@ def integrations():
             Integration.getir_restaurant_name.ilike(like),
             Integration.tmp_supplier_id.ilike(like),
             Integration.tmp_integration_ref.ilike(like),
+            Integration.hb_merchant_id.ilike(like),
+            Integration.hb_username.ilike(like),
         ))
     if platform:
         query = query.filter(Integration.platform == platform)

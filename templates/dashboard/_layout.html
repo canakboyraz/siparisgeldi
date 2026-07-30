@@ -5,7 +5,7 @@
     <div class="brand"><span class="dot"></span> SiparişGeldi</div>
     <nav>
       {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.migros_setup', 'dashboard.getir_setup'] %}
-      {% set ecommerce_endpoints = ['dashboard.trendyol_marketplace_setup'] %}
+      {% set ecommerce_endpoints = ['dashboard.trendyol_marketplace_setup', 'dashboard.hepsiburada_setup'] %}
       {% set contact_endpoints = ['dashboard.connect_telegram', 'dashboard.reset_telegram', 'dashboard.connect_whatsapp'] %}
 
       <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint=='dashboard.index' }}">Panel</a>
@@ -26,6 +26,7 @@
         <summary class="{{ 'active' if request.endpoint in ecommerce_endpoints }}">E-Ticaret Platformları</summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.trendyol_marketplace_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyol_marketplace_setup' }}">Trendyol Pazaryeri</a>
+          <a href="{{ url_for('dashboard.hepsiburada_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.hepsiburada_setup' }}">Hepsiburada</a>
         </div>
       </details>
 

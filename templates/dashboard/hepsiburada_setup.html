@@ -1,0 +1,97 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Hepsiburada · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>Hepsiburada bağlantısı</h1></div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">API bilgileri</div>
+    <p class="muted" style="margin-top:0">
+      Hepsiburada Merchant Panel'de entegratör yetkisi verildikten sonra Mağaza ID,
+      developer kullanıcı adı ve Servis Anahtarı bilgisini gir.
+    </p>
+    <p class="hint">Aktif API ortamı: <code>{{ hb_active_base }}</code></p>
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label>Mağaza ID / Merchant ID</label>
+        <input type="text" name="merchant_id" required value="{{ intg.hb_merchant_id or '' if intg else '' }}" placeholder="Hepsiburada Mağaza ID">
+      </div>
+      <div class="field">
+        <label>Kullanıcı adı</label>
+        <input type="text" name="username" required value="{{ intg.hb_username or '' if intg else '' }}" placeholder="Developer / entegratör kullanıcı adı">
+      </div>
+      <div class="field">
+        <label>Servis Anahtarı</label>
+        <input type="password" name="service_key" {{ 'required' if not (intg and intg._hb_service_key) }} placeholder="{{ 'Kayıtlı, değiştirmek için yeni değer gir' if intg and intg._hb_service_key else 'Servis Anahtarı' }}">
+      </div>
+      <div class="field">
+        <label>Ortam</label>
+        {% set env = intg.hb_environment if intg else 'live' %}
+        <select name="environment">
+          <option value="live" {{ 'selected' if env != 'test' }}>Canlı</option>
+          <option value="test" {{ 'selected' if env == 'test' }}>Test</option>
+        </select>
+      </div>
+      <label class="toggle-line">
+        <input type="checkbox" name="auto_packaging" {{ 'checked' if intg and intg.hb_auto_packaging }}>
+        <span>Hepsiburada'da otomatik paketleme açık</span>
+      </label>
+      <button class="btn btn-primary btn-lg" type="submit">Bağlantıyı test et &amp; kaydet</button>
+    </form>
+  </div>
+
+  {% if intg %}
+  <div class="card">
+    <div class="card-title">Bildirim tercihleri</div>
+    <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>Yeni sipariş</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>Paket/kargo durum değişikliği</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>İptal/iade</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_daily_report" {{ 'checked' if intg.notify_daily_report }}> <span>Günlük özet</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_weekly_report" {{ 'checked' if intg.notify_weekly_report }}> <span>Haftalık özet</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_monthly_report" {{ 'checked' if intg.notify_monthly_report }}> <span>Aylık özet</span></div>
+      <button class="btn btn-ghost" style="margin-top:1rem" type="submit">Tercihleri kaydet</button>
+    </form>
+
+    <div class="row" style="margin-top:1.2rem">
+      <div class="muted">
+        Durum:
+        {% if intg.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
+        {% if intg.last_error %}<span class="badge red">son hata</span>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('dashboard.delete_integration', intg_id=intg.id) }}"
+            onsubmit="return confirm('Hepsiburada entegrasyonu silinsin mi?')">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm">Sil</button>
+      </form>
+    </div>
+    {% if intg.last_error %}<p class="hint" style="color:var(--red)">{{ intg.last_error }}</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-title">Neler bildirilecek?</div>
+    <div class="check-list">
+      <div class="check-row"><strong>Yeni sipariş</strong><span class="badge green">hazır</span></div>
+      <div class="check-row"><strong>İptal sipariş</strong><span class="badge green">hazır</span></div>
+      <div class="check-row"><strong>Paket/kargo durumları</strong><span class="badge amber">otomatik paketlemeye göre</span></div>
+      <div class="check-row"><strong>Günlük, haftalık, aylık rapor</strong><span class="badge green">hazır</span></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <details class="setup-checks">
+      <summary>Test ve canlı ortam notları</summary>
+      <p class="muted" style="margin-top:.8rem">
+        Hepsiburada entegratör yetkisi verildikten sonra aktif olması 2 saate kadar sürebilir.
+        Test siparişi oluşturma sadece test ortamında çalışır.
+      </p>
+      <div class="code">Test API: {{ hb_api_base_test }}</div>
+      <div class="code" style="margin-top:.5rem">Canlı API: {{ hb_api_base_live }}</div>
+      <div class="code" style="margin-top:.5rem">Test siparişi API: {{ hb_stub_base }}</div>
+    </details>
+  </div>
+</div>
+{% endblock %}
