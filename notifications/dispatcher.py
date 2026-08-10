@@ -9,6 +9,29 @@ from . import telegram
 from . import whatsapp
 
 
+def _sanitize_wa_params(params: list) -> list:
+    """WhatsApp şablon parametrelerini Meta'nın kabul edeceği hale getirir.
+
+    Meta, şablon değişkenlerinde yeni satır, aşırı uzun metin ve özel
+    karakterler (&, <, >, \u2028 vb.) kabul etmez; aksi halde mesaj hata
+    verir ve hiç gönderilmez. HTML entity'leri deşifre edip güvenli
+    temiz metin bırakır.
+    """
+    import html
+    import re
+
+    cleaned = []
+    for p in params or []:
+        s = str(p) if p is not None else ""
+        s = html.unescape(s)
+        s = re.sub(r"[<\">']", "", s)
+        s = s.replace("&", " ve ")
+        s = s.replace("\u2028", " ").replace("\u2029", " ")
+        s = " ".join(s.split())
+        cleaned.append(s[:900])
+    return cleaned
+
+
 def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = None) -> bool:
     """Kullanıcının seçtiği kanal(lar)a bildirim gönderir.
 
@@ -40,11 +63,12 @@ def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = N
         pnid  = cfg.get("WHATSAPP_PHONE_NUMBER_ID", "")
         template = wa_template or cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim")
         if token and pnid:
+            wa_params = _sanitize_wa_params(wa)
             ok, err = whatsapp.send_template(
                 to=user.whatsapp_number,
                 template_name=template,
                 lang=cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
-                params=wa,
+                params=wa_params,
                 token=token,
                 phone_number_id=pnid,
                 version=cfg.get("WHATSAPP_API_VERSION", "v21.0"),

@@ -253,6 +253,39 @@ def detailed_items_summary(order: dict, max_items: int = 4, max_length: int = 90
     return result[:max_length]
 
 
+def whatsapp_items_summary(order: dict, max_items: int = 4, max_length: int = 700) -> str:
+    """Meta şablon değişkeni için tek akışlı, kısa ürün özeti."""
+    parts = []
+    for line in lines(order)[:max_items]:
+        if not isinstance(line, dict):
+            continue
+        detail_text = line_details(line)
+        item = f"{line_name(line)} x{line_quantity(line)}"
+        if detail_text:
+            item += f" ({'; '.join(detail_text)})"
+        parts.append(item)
+
+    if not parts:
+        result = "-"
+    else:
+        result = ", ".join(parts)
+        more = len(lines(order)) - max_items
+        if more > 0:
+            result += f" +{more} urun"
+
+    extras = []
+    cargo = cargo_label(order)
+    if cargo and cargo != "-":
+        extras.append(f"Kargo: {cargo}")
+    deadline = agreed_delivery_text(order)
+    if deadline:
+        extras.append(f"Son kargoya verme: {deadline}")
+    if extras:
+        result += " | " + " | ".join(extras)
+
+    return result[:max_length]
+
+
 def address_text(order: dict) -> str:
     address = order.get("shipmentAddress") or order.get("invoiceAddress") or {}
     if not isinstance(address, dict):
