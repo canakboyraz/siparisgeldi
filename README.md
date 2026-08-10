@@ -1,18 +1,16 @@
 # SiparişGeldi — Çok Kullanıcılı Yemek Sipariş Bildirim SaaS'ı
 
-Restoranların Trendyol Go, Migros Yemek, Getir Yemek, Trendyol Pazaryeri ve
-Hepsiburada siparişlerini web'den kaydolup kendi API bilgileriyle bağladıkları,
-siparişlerin **merkezi Telegram botu** ve/veya **WhatsApp** üzerinden anlık
-olarak telefonlarına düştüğü SaaS.
+Restoranların Trendyol Go (ve yakında Migros Yemek / Getir) siparişlerini
+web'den kaydolup kendi API bilgileriyle bağladıkları, siparişlerin **merkezi
+bir Telegram botu** üzerinden anlık olarak telefonlarına düştüğü SaaS.
 
 ## Mimari
 
 ```
 Web (Flask + Jinja)          Arka plan (APScheduler)
-  ├─ Kayıt / Giriş             ├─ Her N sn: TrendyolGo / TMP / HB polling
+  ├─ Kayıt / Giriş             ├─ Her 30 sn: TrendyolGo sipariş polling
   ├─ Panel                     ├─ Her 5 sn : Telegram /start bağlama
-  ├─ Platform kurulum          ├─ 23:45   : Günlük özet raporu
-  └─ Telegram bağla            └─ Webhook: Migros + Getir
+  ├─ Platform kurulum          └─ 23:45   : Günlük özet raporu
   └─ Telegram bağla                    │
         │                              ▼
         └──────► SQLite/Postgres ◄──── Merkezi Telegram Botu ──► Kullanıcı
@@ -64,11 +62,9 @@ polling ve bildirimler mükerrer olur.
 
 - [x] Çok kullanıcılı çekirdek: kayıt/giriş, TrendyolGo, merkezi bot, polling, günlük rapor
 - [x] Şifreli credential saklama
-- [x] Migros Yemek (webhook + Rijndael çözme)
-- [x] Getir Yemek (webhook)
-- [x] Trendyol Pazaryeri (webhook + polling)
-- [x] Hepsiburada (polling)
-- [x] WhatsApp kanalı (Pro)
+- [ ] Migros Yemek (webhook + Rijndael çözme) — endpoint iskeleti hazır
+- [ ] Getir Yemek
+- [ ] WhatsApp kanalı (Pro)
 - [ ] Excel/PDF rapor indirme
 - [ ] Ödeme/abonelik planları
 ```

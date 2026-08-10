@@ -1,25 +1,4 @@
-"""Şablon yardımcıları — durum etiketleri, renkler, platform adları, durum grupları."""
-
-CANCELLED_ORDER_STATUSES = {
-    "Cancelled",
-    "Canceled",
-    "UnSupplied",
-    "Rejected",
-    "REJECTED",
-    "AdminCancelled",
-    "AutoCancelled",
-}
-
-REFUNDED_ORDER_STATUSES = {
-    "Refunded",
-    "Refund",
-    "Returned",
-    "Return",
-    "PartiallyRefunded",
-    "PartialRefunded",
-    "RETURNED",
-    "REFUNDED",
-}
+"""Şablon yardımcıları — durum etiketleri, renkler, platform adları."""
 
 _STATUS_LABELS = {
     "Created":    "Yeni",
@@ -37,11 +16,12 @@ _STATUS_LABELS = {
     "Delivered":  "Teslim edildi",
     "Completed":  "Tamamlandı",
     "Cancelled":  "İptal",
-    "UnSupplied": "Tedarik edilemedi",
+    "UnSupplied": "Restoran iptal",
     "Rejected":   "Reddedildi",
     "Refunded":   "İade",
     "Returned":   "İade",
     "UnDelivered": "Teslim edilemedi",
+    "UnSupplied": "Tedarik edilemedi",
     "AtCollectionPoint": "Teslimat noktasında",
     "UnPacked": "Paket bölündü",
     "Awaiting": "Ödeme bekliyor",
@@ -69,6 +49,7 @@ _STATUS_COLORS = {
     "Refunded":   "red",
     "Returned":   "red",
     "UnDelivered": "red",
+    "UnSupplied": "red",
     "AtCollectionPoint": "violet",
     "UnPacked": "amber",
     "Awaiting": "gray",

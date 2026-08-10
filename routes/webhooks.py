@@ -19,27 +19,20 @@ import hmac
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 
-from sqlalchemy.exc import IntegrityError
-
 from extensions import db
 from models import Integration, Order, User
 from integrations import migros, getir, trendyol_marketplace as tmp
 from notifications.dispatcher import send_to_user
-from utils import status_label, CANCELLED_ORDER_STATUSES, REFUNDED_ORDER_STATUSES
+from utils import status_label
 
 webhooks_bp = Blueprint("webhooks", __name__)
-
-
-def _webhook_auth_disabled() -> bool:
-    """Webhook doğrulaması config üzerinden açıkça kapatıldıysa True."""
-    return bool(current_app.config.get("WEBHOOK_AUTH_DISABLED", False))
 
 
 def _check_basic_auth() -> bool:
     user = current_app.config.get("MIGROS_WEBHOOK_USER", "")
     pw = current_app.config.get("MIGROS_WEBHOOK_PASS", "")
     if not user and not pw:
-        return _webhook_auth_disabled()
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
     if not user or not pw:
         return False
     auth = request.authorization
@@ -53,7 +46,7 @@ def _check_basic_auth() -> bool:
 def _check_getir_api_key() -> bool:
     expected = current_app.config.get("GETIR_WEBHOOK_API_KEY", "")
     if not expected:
-        return _webhook_auth_disabled()
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
     sent = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
     return hmac.compare_digest(str(sent), str(expected))
 
@@ -61,7 +54,7 @@ def _check_getir_api_key() -> bool:
 def _check_tmp_api_key() -> bool:
     expected = current_app.config.get("TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY", "")
     if not expected:
-        return _webhook_auth_disabled()
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
     sent = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
     return hmac.compare_digest(str(sent), str(expected))
 
@@ -146,42 +139,20 @@ def _handle_tmp_order(intg, order_data):
         )
         order.mark_status_notified("INITIAL")
         db.session.add(order)
-        try:
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            # Aynı anda poller ekledi; idempotent devam et
-            existing = Order.query.filter_by(
-                user_id=intg.user_id, platform=tmp.PLATFORM, external_id=fields["external_id"]
-            ).first()
-            if existing:
-                existing.status = fields["status"] if fields["status"] else existing.status
-                existing.order_number = fields["order_number"] or existing.order_number
-                existing.total_price = fields["total_price"]
-                existing.payment_type = fields["payment_type"]
-                existing.customer_note = fields["customer_note"]
-                existing.raw_json = json.dumps(order_data, ensure_ascii=False)
-            intg.last_sync_at = datetime.utcnow()
-            intg.last_error = None
-            db.session.commit()
-            return
         intg.last_sync_at = datetime.utcnow()
         intg.last_error = None
         db.session.commit()
         if intg.notify_new_order:
-            print(f"[TMP WEBHOOK] yeni sipariş bildirimi gönderiliyor (user={intg.user_id}, order={fields['order_number']}, channel={user.notification_channel})")
             send_to_user(
                 user,
                 tmp.format_new_order_message(order_data),
                 wa=[
                     "Yeni pazaryeri siparişi · Trendyol",
                     fields["order_number"],
-                    tmp.summarize_items(order_data),
+                    tmp.detailed_items_summary(order_data),
                     f"{fields['total_price']:.2f} ₺",
                 ],
             )
-        else:
-            print(f"[TMP WEBHOOK] yeni sipariş bildirimi kapalı (user={intg.user_id})")
         return
 
     current_status = fields["status"]
@@ -197,27 +168,22 @@ def _handle_tmp_order(intg, order_data):
 
     should_notify = status_changed and not existing.is_status_notified(current_status) and current_status in tmp.STATUS_NOTIFY
     if should_notify:
-        is_problem = current_status in (CANCELLED_ORDER_STATUSES | REFUNDED_ORDER_STATUSES)
+        is_problem = current_status in {"Cancelled", "UnSupplied", "Returned", "Refunded", "UnDelivered"}
         wants = intg.notify_cancel if is_problem else intg.notify_status_change
         if wants:
             existing.mark_status_notified(current_status)
             db.session.commit()
-            print(f"[TMP WEBHOOK] durum değişikliği bildirimi gönderiliyor (user={intg.user_id}, order={fields['order_number']}, status={current_status}, channel={user.notification_channel})")
             send_to_user(
                 user,
                 tmp.format_status_message(order_data, current_status),
                 wa=[
                     f"{status_label(current_status)} · Trendyol Pazaryeri",
                     fields["order_number"],
-                    tmp.summarize_items(order_data),
+                    tmp.detailed_items_summary(order_data),
                     f"{fields['total_price']:.2f} ₺",
                 ],
             )
             return
-        else:
-            print(f"[TMP WEBHOOK] durum değişikliği bildirimi kapalı (user={intg.user_id}, status={current_status})")
-    else:
-        print(f"[TMP WEBHOOK] durum bildirim koşulu sağlanmadı (user={intg.user_id}, status={current_status}, changed={status_changed}, already_notified={existing.is_status_notified(current_status)}, in_status_notify={current_status in tmp.STATUS_NOTIFY})")
     db.session.commit()
 
 
@@ -325,7 +291,6 @@ def _handle_getir_canceled(intg, user, payload):
     ).first() if ext_id else None
 
     original_payload = None
-    already = False
     if order:
         try:
             original_payload = json.loads(order.raw_json) if order.raw_json else None
@@ -333,7 +298,6 @@ def _handle_getir_canceled(intg, user, payload):
             original_payload = None
         order.status = fields["status"] if fields["status"] in ("AdminCancelled", "AutoCancelled") else "Cancelled"
         order.raw_json = json.dumps(payload, ensure_ascii=False)
-        already = order.is_status_notified(order.status)
         order.mark_status_notified(order.status)
         db.session.commit()
     elif ext_id:
@@ -344,7 +308,7 @@ def _handle_getir_canceled(intg, user, payload):
         db.session.add(order)
         db.session.commit()
 
-    if intg.notify_cancel and not already:
+    if intg.notify_cancel:
         amount = f"{(order.total_price if order else fields['total_price']):.2f} ₺"
         items = getir.summarize_items(original_payload or payload)
         send_to_user(user, getir.format_order_canceled(payload, original_payload),
@@ -495,18 +459,16 @@ def _handle_canceled(intg, user, payload):
         user_id=intg.user_id, platform="migros", external_id=ext_id
     ).first()
     original_payload = None
-    already = False
     if order:
         try:
             original_payload = json.loads(order.raw_json) if order.raw_json else None
         except (TypeError, ValueError):
             original_payload = None
         order.status = "Cancelled"
-        already = order.is_status_notified("Cancelled")
-        if not already:
+        if not order.is_status_notified("Cancelled"):
             order.mark_status_notified("Cancelled")
         db.session.commit()
-    if intg.notify_cancel and not already:
+    if intg.notify_cancel:
         amount = f"{order.total_price:.2f} ₺" if order else "-"
         items = migros.summarize_items(original_payload) if original_payload else "-"
         send_to_user(user, migros.format_order_canceled(payload, original_payload),

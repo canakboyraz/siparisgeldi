@@ -203,7 +203,7 @@ class Order(db.Model):
     app_source     = db.Column(db.String(30))
     customer_note  = db.Column(db.String(500))
     raw_json       = db.Column(db.Text)
-    notified_statuses = db.Column(db.Text, default="")
+    notified_statuses = db.Column(db.String(200), default="")
     created_at     = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

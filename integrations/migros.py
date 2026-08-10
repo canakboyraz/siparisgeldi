@@ -190,6 +190,8 @@ def summarize_items_for_display(p: dict, max_items: int = 4) -> str:
         "Zili calin": "Zili çalın",
         "Temassiz teslimat": "Temassız teslimat",
         "Catal bicak gondermeyin": "Çatal bıçak göndermeyin",
+        "Adres tarifi": "Adres tarifi",
+        "+": "+",
     }
     for old, new in replacements.items():
         text = text.replace(old, new)

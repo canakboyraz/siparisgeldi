@@ -1,4 +1,4 @@
-"""Uygulama fabrikası (application factory)."""
+﻿"""Uygulama fabrikasÄ± (application factory)."""
 import secrets
 
 from flask import Flask, abort, request, session
@@ -38,18 +38,6 @@ def _ensure_schema():
             CREATE UNIQUE INDEX IF NOT EXISTS uq_migros_store_id
             ON integrations (migros_store_id)
             WHERE platform = 'migros' AND migros_store_id IS NOT NULL
-            """,
-            """
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1 FROM information_schema.columns
-                    WHERE table_name='orders' AND column_name='notified_statuses'
-                      AND data_type='character varying'
-                ) THEN
-                    ALTER TABLE orders ALTER COLUMN notified_statuses TYPE TEXT;
-                END IF;
-            END $$;
             """,
         ]
     elif backend.startswith("sqlite"):
@@ -115,15 +103,15 @@ def create_app(config_class=Config, start_scheduler=None):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Reverse proxy (Railway/Render/Nginx) arkasında gerçek şema/host'u oku ki
-    # url_for(_external=True) → https://siparisgeldi.net/... doğru üretilsin.
+    # Reverse proxy (Railway/Render/Nginx) arkasÄ±nda gerÃ§ek ÅŸema/host'u oku ki
+    # url_for(_external=True) â†’ https://siparisgeldi.net/... doÄŸru Ã¼retilsin.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-    # Eklentileri bağla
+    # Eklentileri baÄŸla
     db.init_app(app)
     login_manager.init_app(app)
 
-    # Modeller (tablo kaydı için import şart)
+    # Modeller (tablo kaydÄ± iÃ§in import ÅŸart)
     import models  # noqa: F401
 
     # Blueprint'ler
@@ -139,7 +127,7 @@ def create_app(config_class=Config, start_scheduler=None):
     app.register_blueprint(webhooks_bp, url_prefix="/webhooks")
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
-    # Şablonlarda kullanılacak yardımcılar
+    # Åablonlarda kullanÄ±lacak yardÄ±mcÄ±lar
     from datetime import datetime
     import utils
 
@@ -185,8 +173,8 @@ def create_app(config_class=Config, start_scheduler=None):
             "user_can_whatsapp": lambda user=None: bool(getattr(user or current_user, "has_whatsapp_access", False)),
             "user_can_multi_platform": lambda user=None: bool(getattr(user or current_user, "has_multi_platform_access", False)),
             "company": {
-                "legal_name": app.config.get("COMPANY_LEGAL_NAME", "SiparişGeldi"),
-                "brand_name": app.config.get("COMPANY_BRAND_NAME", "SiparişGeldi"),
+                "legal_name": app.config.get("COMPANY_LEGAL_NAME", "SipariÅŸGeldi"),
+                "brand_name": app.config.get("COMPANY_BRAND_NAME", "SipariÅŸGeldi"),
                 "address": app.config.get("COMPANY_ADDRESS", ""),
                 "phone": app.config.get("COMPANY_PHONE", ""),
                 "email": app.config.get("COMPANY_EMAIL", ""),
@@ -196,12 +184,12 @@ def create_app(config_class=Config, start_scheduler=None):
             "csrf_token": csrf_token,
         }
 
-    # Tabloları oluştur + hafif şema güncellemeleri (mevcut Postgres'e yeni kolon)
+    # TablolarÄ± oluÅŸtur + hafif ÅŸema gÃ¼ncellemeleri (mevcut Postgres'e yeni kolon)
     with app.app_context():
         db.create_all()
         _ensure_schema()
 
-    # Arka plan zamanlayıcı (dev: web süreci içinde)
+    # Arka plan zamanlayÄ±cÄ± (dev: web sÃ¼reci iÃ§inde)
     should_start = app.config.get("RUN_SCHEDULER", True) if start_scheduler is None else start_scheduler
     if should_start:
         from worker import start_scheduler as _start
