@@ -19,34 +19,13 @@ from models import Integration, Order, User, AppState
 from integrations import getir, hepsiburada as hb, trendyol_marketplace as tmp, trendyolgo as tgo
 from notifications import telegram
 from notifications.dispatcher import send_to_user
-from utils import status_label
+from utils import status_label, CANCELLED_ORDER_STATUSES, REFUNDED_ORDER_STATUSES
+from sqlalchemy.exc import IntegrityError
 
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
 scheduler = BackgroundScheduler(timezone=TURKEY_TZ)
 
 TGO_UNACCEPTED_ALERT_STATUS = "UNACCEPTED_2MIN"
-
-CANCELLED_ORDER_STATUSES = {
-    "Cancelled",
-    "Canceled",
-    "UnSupplied",
-    "Rejected",
-    "REJECTED",
-    "AdminCancelled",
-    "AutoCancelled",
-}
-
-REFUNDED_ORDER_STATUSES = {
-    "Refunded",
-    "Refund",
-    "Returned",
-    "Return",
-    "PartiallyRefunded",
-    "PartialRefunded",
-    "RETURNED",
-    "REFUNDED",
-}
-
 
 def _hb_api_base(environment: str) -> str:
     if environment == "test":
@@ -247,16 +226,35 @@ def _process_tmp(intg):
             )
             order.mark_status_notified("INITIAL")
             db.session.add(order)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                # Aynı anda webhook ekledi; idempotent devam et
+                existing = Order.query.filter_by(
+                    user_id=intg.user_id, platform=tmp.PLATFORM, external_id=fields["external_id"]
+                ).first()
+                if existing:
+                    existing.status = fields["status"] if fields["status"] else existing.status
+                    existing.order_number = fields["order_number"] or existing.order_number
+                    existing.total_price = fields["total_price"]
+                    existing.payment_type = fields["payment_type"]
+                    existing.customer_note = fields["customer_note"]
+                    existing.raw_json = json.dumps(order_data, ensure_ascii=False)
+                    db.session.commit()
+                continue
 
             if intg.notify_new_order:
                 amount = f"{fields['total_price']:.2f} ₺"
+                print(f"[TMP POLLER] yeni sipariş bildirimi gönderiliyor (user={intg.user_id}, order={fields['order_number']}, channel={user.notification_channel})")
                 send_to_user(
                     user,
                     tmp.format_new_order_message(order_data),
-                    wa=["Yeni pazaryeri siparişi · Trendyol", fields["order_number"], tmp.detailed_items_summary(order_data), amount],
+                    wa=["Yeni pazaryeri siparişi · Trendyol", fields["order_number"], tmp.summarize_items(order_data), amount],
                 )
                 print(f"[TMP] yeni siparis #{fields['order_number']} (user={intg.user_id})")
+            else:
+                print(f"[TMP POLLER] yeni sipariş bildirimi kapalı (user={intg.user_id})")
             continue
 
         current_status = fields["status"]
@@ -275,13 +273,15 @@ def _process_tmp(intg):
             existing.mark_status_notified(current_status)
             db.session.commit()
             amount = f"{fields['total_price']:.2f} ₺"
+            print(f"[TMP POLLER] durum değişikliği bildirimi gönderiliyor (user={intg.user_id}, order={fields['order_number']}, status={current_status}, channel={user.notification_channel})")
             send_to_user(
                 user,
                 tmp.format_status_message(order_data, current_status),
-                wa=[f"{status_label(current_status)} · Trendyol Pazaryeri", fields["order_number"], tmp.detailed_items_summary(order_data), amount],
+                wa=[f"{status_label(current_status)} · Trendyol Pazaryeri", fields["order_number"], tmp.summarize_items(order_data), amount],
             )
             print(f"[TMP] durum #{fields['order_number']} -> {current_status} (user={intg.user_id})")
         else:
+            print(f"[TMP POLLER] durum bildirim koşulu sağlanmadı (user={intg.user_id}, order={fields['order_number']}, status={current_status}, changed={existing.status != current_status}, already_notified={existing.is_status_notified(current_status)}, in_status_notify={current_status in tmp.STATUS_NOTIFY}, wants={wants})")
             db.session.commit()
 
 
@@ -337,7 +337,7 @@ def _process_tgo(intg):
                 print(f"[TGO] ⚠️ #{order_number} 2 dk kabul edilmedi (user={intg.user_id})")
                 continue
 
-            is_cancel = current_status in ("Cancelled", "UnSupplied")
+            is_cancel = current_status in CANCELLED_ORDER_STATUSES
             wants = intg.notify_cancel if is_cancel else intg.notify_status_change
 
             if (current_status in tgo.STATUS_NOTIFY
@@ -465,7 +465,7 @@ def _aggregate_products(orders, max_items: int = 15) -> str:
         else:  # trendyolgo
             for ln in (data.get("lines") or []):
                 name = ln.get("name", "?")
-                qty = len(ln.get("items", [])) or 1
+                qty = tgo._line_quantity(ln)
                 counts[name] = counts.get(name, 0) + qty
 
     if not counts:

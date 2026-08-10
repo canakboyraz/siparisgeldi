@@ -6,4 +6,4 @@ worker.py'yi tek bir ayrı süreç olarak çalıştırın.
 """
 from app import create_app
 
-application = create_app()
+application = create_app(start_scheduler=False)

@@ -11,13 +11,13 @@ class Config:
 
     # Genel alan adı / marka
     APP_DOMAIN = os.environ.get("APP_DOMAIN", "siparisgeldi.net")
-    COMPANY_LEGAL_NAME = os.environ.get("COMPANY_LEGAL_NAME", "Can Akboyraz")
+    COMPANY_LEGAL_NAME = os.environ.get("COMPANY_LEGAL_NAME", "")
     COMPANY_BRAND_NAME = os.environ.get("COMPANY_BRAND_NAME", "SiparişGeldi")
-    COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "Dumlupınar Mahallesi Hemşire Sokak No 9 Kartepe / Kocaeli")
-    COMPANY_PHONE = os.environ.get("COMPANY_PHONE", "0507 499 87 85")
-    COMPANY_EMAIL = os.environ.get("COMPANY_EMAIL", "siparisgeldinet@gmail.com")
-    COMPANY_TAX_OFFICE = os.environ.get("COMPANY_TAX_OFFICE", "Alemdar")
-    COMPANY_TAX_NUMBER = os.environ.get("COMPANY_TAX_NUMBER", "0160733373")
+    COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "")
+    COMPANY_PHONE = os.environ.get("COMPANY_PHONE", "")
+    COMPANY_EMAIL = os.environ.get("COMPANY_EMAIL", "")
+    COMPANY_TAX_OFFICE = os.environ.get("COMPANY_TAX_OFFICE", "")
+    COMPANY_TAX_NUMBER = os.environ.get("COMPANY_TAX_NUMBER", "")
     # Admin paneline erişebilecek e-postalar (virgülle ayrık, küçük harf)
     ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
     # Reverse proxy (Railway/Render) arkasında dış URL'ler https üretilsin
@@ -70,6 +70,10 @@ class Config:
     # Trendyol Pazaryeri (e-ticaret)
     TRENDYOL_MARKETPLACE_API_BASE = os.environ.get("TRENDYOL_MARKETPLACE_API_BASE", "https://apigw.trendyol.com/integration")
     TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY = os.environ.get("TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY", "")
+
+    # Webhook kimlik doğrulamasını açıkça devre dışı bırakma (sadece local test için).
+    # 1 ise key'ler boş olsa bile webhook'lar doğrulamasız kabul edilir.
+    WEBHOOK_AUTH_DISABLED = os.environ.get("WEBHOOK_AUTH_DISABLED", "") == "1"
 
     # Hepsiburada Pazaryeri (e-ticaret)
     HEPSIBURADA_API_BASE_TEST = os.environ.get("HEPSIBURADA_API_BASE_TEST", "https://oms-external-sit.hepsiburada.com")

@@ -27,5 +27,7 @@ def decrypt(ciphertext: str) -> str:
     try:
         return _cipher().decrypt(ciphertext.encode()).decode()
     except (InvalidToken, ValueError):
-        # Eski/şifrelenmemiş veri olabilir — güvenli tarafta kal
+        # Eski/şifrelenmemiş veri veya ENCRYPTION_KEY değişimi olabilir — sessiz
+        # boş dönme yine de güvenli tarafta kal, ama logla ki tespit edilebilsin.
+        print("[SECURITY] decrypt başarısız: ENCRYPTION_KEY değişmiş veya veri bozuk olabilir")
         return ""

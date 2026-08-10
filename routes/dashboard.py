@@ -10,6 +10,7 @@ import pytz
 from extensions import db
 from models import Integration, Order
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo
+from utils import CANCELLED_ORDER_STATUSES, REFUNDED_ORDER_STATUSES
 
 dashboard_bp = Blueprint("dashboard", __name__)
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
@@ -17,8 +18,8 @@ TURKEY_TZ = pytz.timezone("Europe/Istanbul")
 PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New", "Scheduled", "Awaiting"}
 PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared", "ScheduledApproved"}
 DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery", "AtCollectionPoint"}
-CANCELLED_STATUSES = {"Cancelled", "Canceled", "UnSupplied", "Rejected", "REJECTED", "AdminCancelled", "AutoCancelled"}
-REFUNDED_STATUSES = {"Refunded", "Refund", "Returned", "Return", "PartiallyRefunded", "PartialRefunded", "RETURNED", "REFUNDED"}
+CANCELLED_STATUSES = CANCELLED_ORDER_STATUSES
+REFUNDED_STATUSES = REFUNDED_ORDER_STATUSES
 PROBLEM_STATUSES = CANCELLED_STATUSES | REFUNDED_STATUSES
 DONE_STATUSES = {"Delivered", "Completed"}
 ACTIVE_EXCLUDED_STATUSES = PROBLEM_STATUSES | DONE_STATUSES
@@ -156,7 +157,7 @@ def test_report():
     today = datetime.now(TZ).date()
     intgs = Integration.query.filter_by(user_id=current_user.id, is_active=True).all()
     if not intgs:
-        flash("Önce bir platform (TrendyolGo/Migros) bağla.", "warning")
+        flash("Önce bir platform (TrendyolGo/Migros/Getir/Trendyol Pazaryeri/Hepsiburada) bağla.", "warning")
         return redirect(url_for("dashboard.index"))
     count = 0
     for intg in intgs:

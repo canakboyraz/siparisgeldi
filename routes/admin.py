@@ -1,7 +1,7 @@
-﻿"""Admin paneli â€” sadece ADMIN_EMAILS'teki kullanÄ±cÄ±lar eriÅŸebilir.
+"""Admin paneli — sadece ADMIN_EMAILS'teki kullanıcılar erişebilir.
 
-KullanÄ±cÄ±larÄ±, entegrasyonlarÄ± ve genel istatistikleri gÃ¶rÃ¼ntÃ¼ler. Salt-okunur
-(yÃ¶netim/silme aksiyonlarÄ± ileride eklenebilir).
+Kullanıcıları, entegrasyonları ve genel istatistikleri görüntüler. Salt-okunur
+(yönetim/silme aksiyonları ileride eklenebilir).
 """
 from functools import wraps
 from flask import Blueprint, render_template, current_app, abort, request, redirect, url_for, flash
@@ -15,7 +15,7 @@ admin_bp = Blueprint("admin", __name__)
 
 
 def admin_required(f):
-    """Sadece config'teki ADMIN_EMAILS listesindeki kullanÄ±cÄ±ya izin verir."""
+    """Sadece config'teki ADMIN_EMAILS listesindeki kullanıcıya izin verir."""
     @wraps(f)
     @login_required
     def wrapper(*args, **kwargs):
@@ -27,7 +27,7 @@ def admin_required(f):
 
 
 def is_admin(user) -> bool:
-    """Åablonlarda 'admin linkini gÃ¶ster' kontrolÃ¼ iÃ§in."""
+    """Şablonlarda 'admin linkini göster' kontrolü için."""
     if not user or not getattr(user, "is_authenticated", False):
         return False
     admins = current_app.config.get("ADMIN_EMAILS", [])
@@ -47,13 +47,13 @@ def index():
     telegram_connected = sum(1 for u in users if u.telegram_chat_id)
     whatsapp_connected = sum(1 for u in users if u.whatsapp_number)
 
-    # Her kullanÄ±cÄ± iÃ§in Ã¶zet satÄ±r verisi
+    # Her kullanıcı için özet satır verisi
     rows = []
     for u in users[:5]:
         intgs = u.integrations
         rows.append({
             "user": u,
-            "platforms": ", ".join(sorted({i.platform for i in intgs})) or "â€”",
+            "platforms": ", ".join(sorted({i.platform for i in intgs})) or "—",
             "platform_count": len(intgs),
             "order_count": Order.query.filter_by(user_id=u.id).count(),
             "telegram": bool(u.telegram_chat_id),
