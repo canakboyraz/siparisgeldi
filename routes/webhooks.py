@@ -311,7 +311,6 @@ def _handle_getir_created(intg, user, payload):
     db.session.commit()
     if intg.notify_new_order:
         amount = f"{fields['total_price']:.2f} ₺"
-        print(f"[GETIR] yeni sipariş bildirimi gönderiliyor (user={intg.user_id}, order={fields['order_number']}, channel={user.notification_channel})")
         send_to_user(user, getir.format_order_created(payload),
                      wa=["Yeni sipariş · Getir Yemek", fields["order_number"],
                          getir.summarize_items(payload), amount])
@@ -348,7 +347,6 @@ def _handle_getir_canceled(intg, user, payload):
     if intg.notify_cancel and not already:
         amount = f"{(order.total_price if order else fields['total_price']):.2f} ₺"
         items = getir.summarize_items(original_payload or payload)
-        print(f"[GETIR] iptal bildirimi gönderiliyor (user={intg.user_id}, order={fields['order_number'] or ext_id}, channel={user.notification_channel})")
         send_to_user(user, getir.format_order_canceled(payload, original_payload),
                      wa=["Sipariş iptal · Getir Yemek", fields["order_number"] or ext_id or "-",
                          items, amount])
@@ -485,7 +483,6 @@ def _handle_created(intg, user, payload):
     db.session.commit()
     if intg.notify_new_order:
         amount = f"{fields['total_price']:.2f} ₺"
-        print(f"[MIGROS] yeni sipariş bildirimi gönderiliyor (user={intg.user_id}, order={fields['order_number']}, channel={user.notification_channel})")
         send_to_user(user, migros.format_order_created(payload),
                      wa=["Yeni sipariş · Migros Yemek", fields["order_number"],
                          migros.summarize_items(payload), amount])
@@ -512,7 +509,6 @@ def _handle_canceled(intg, user, payload):
     if intg.notify_cancel and not already:
         amount = f"{order.total_price:.2f} ₺" if order else "-"
         items = migros.summarize_items(original_payload) if original_payload else "-"
-        print(f"[MIGROS] iptal bildirimi gönderiliyor (user={intg.user_id}, order={ext_id}, channel={user.notification_channel})")
         send_to_user(user, migros.format_order_canceled(payload, original_payload),
                      wa=["Sipariş iptal · Migros Yemek", ext_id or "-", items, amount])
         print(f"[MIGROS] ❌ iptal #{ext_id} (user={intg.user_id})")
@@ -533,7 +529,6 @@ def _handle_delivery(intg, user, payload):
         db.session.commit()
     if intg.notify_status_change:
         title = migros._DELIVERY_MAP.get(ds, ("", "Kurye durumu", ""))[1]
-        print(f"[MIGROS] kurye durumu bildirimi gönderiliyor (user={intg.user_id}, order={ext_id}, status={ds}, channel={user.notification_channel})")
         send_to_user(user, migros.format_delivery_status(payload),
                      wa=[f"{title} · Migros Yemek", ext_id or "-", "-", "-"])
         print(f"[MIGROS] 🚚 {ds} #{ext_id} (user={intg.user_id})")

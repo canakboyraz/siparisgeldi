@@ -317,7 +317,6 @@ def _process_tgo(intg):
 
             if intg.notify_new_order:
                 amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
-                print(f"[TGO] yeni sipariş bildirimi gönderiliyor (user={intg.user_id}, order={order_number}, channel={user.notification_channel})")
                 send_to_user(user, tgo.format_new_order_message(order_data),
                              wa=["Yeni sipariş · Trendyol Go", str(order_number),
                                  tgo.summarize_items(order_data), amount])
@@ -332,7 +331,6 @@ def _process_tgo(intg):
                 existing.mark_status_notified(TGO_UNACCEPTED_ALERT_STATUS)
                 db.session.commit()
                 amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
-                print(f"[TGO] kabul edilmedi alarmı gönderiliyor (user={intg.user_id}, order={order_number}, channel={user.notification_channel})")
                 send_to_user(user, _format_unaccepted_tgo_message(order_data),
                              wa=["Acil: siparis kabul edilmedi", str(order_number),
                                  tgo.summarize_items(order_data), amount])
@@ -347,7 +345,6 @@ def _process_tgo(intg):
                 existing.mark_status_notified(current_status)
                 db.session.commit()
                 amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
-                print(f"[TGO] durum bildirimi gönderiliyor (user={intg.user_id}, order={order_number}, status={current_status}, channel={user.notification_channel})")
                 send_to_user(user, tgo.format_status_message(order_data, current_status),
                              wa=[f"{status_label(current_status)} · Trendyol Go", str(order_number),
                                  tgo.summarize_items(order_data), amount])
