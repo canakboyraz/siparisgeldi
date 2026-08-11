@@ -21,7 +21,7 @@ from flask import Blueprint, request, jsonify, current_app
 
 from extensions import db
 from models import Integration, Order, User
-from integrations import migros, getir, trendyol_marketplace as tmp
+from integrations import migros, getir, trendyol_marketplace as tmp, yemeksepeti as ys
 from notifications.dispatcher import send_to_user
 from utils import status_label
 
@@ -56,6 +56,25 @@ def _check_tmp_api_key() -> bool:
     if not expected:
         return bool(current_app.debug or current_app.config.get("ENV") == "development")
     sent = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
+    return hmac.compare_digest(str(sent), str(expected))
+
+
+def _check_yemeksepeti_token() -> bool:
+    expected = current_app.config.get("YEMEKSEPETI_WEBHOOK_TOKEN", "")
+    if not expected:
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
+    sent = (
+        request.headers.get("X-Webhook-Key")
+        or request.headers.get("X-API-Key")
+        or request.headers.get("x-api-key")
+        or ""
+    )
+    if not sent:
+        authorization = request.headers.get("Authorization", "")
+        if authorization.lower().startswith("bearer "):
+            sent = authorization[7:].strip()
+        else:
+            sent = authorization.strip()
     return hmac.compare_digest(str(sent), str(expected))
 
 
@@ -185,6 +204,93 @@ def _handle_tmp_order(intg, order_data):
             )
             return
     db.session.commit()
+
+
+@webhooks_bp.route("/yemeksepeti/order", methods=["POST"])
+def yemeksepeti_order():
+    if not _check_yemeksepeti_token():
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return _ok("ignored")
+
+    store_id = ys.store_id(payload)
+    intg = Integration.query.filter_by(
+        platform=ys.PLATFORM, ys_store_id=store_id, is_active=True
+    ).first()
+    if not intg:
+        print(f"[YEMEKSEPETI] eşleşen restoran yok (store={store_id})")
+        return _ok("no matching store")
+
+    user = db.session.get(User, intg.user_id)
+    fields = ys.extract_order_fields(payload)
+    if not fields["external_id"]:
+        return _ok("missing order id")
+
+    existing = Order.query.filter_by(
+        user_id=intg.user_id, platform=ys.PLATFORM, external_id=fields["external_id"]
+    ).first()
+    current_status = fields["status"]
+
+    if not existing:
+        order = Order(
+            user_id=intg.user_id,
+            platform=ys.PLATFORM,
+            raw_json=json.dumps(payload, ensure_ascii=False),
+            **fields,
+        )
+        order.mark_status_notified("INITIAL")
+        db.session.add(order)
+        db.session.commit()
+
+        if current_status == ys.STATUS_CANCELLED:
+            should_notify = intg.notify_cancel
+        else:
+            should_notify = intg.notify_new_order
+        if should_notify:
+            amount = f"{fields['total_price']:.2f} ₺"
+            send_to_user(
+                user,
+                ys.format_cancelled(payload) if current_status == ys.STATUS_CANCELLED else ys.format_order_created(payload),
+                wa=[
+                    "Sipariş iptal · Yemeksepeti" if current_status == ys.STATUS_CANCELLED else "Yeni sipariş · Yemeksepeti",
+                    fields["order_number"],
+                    ys.summarize_items(payload),
+                    amount,
+                ],
+            )
+        return _ok("created")
+
+    status_changed = existing.status != current_status
+    existing.status = current_status
+    existing.order_number = fields["order_number"] or existing.order_number
+    existing.total_price = fields["total_price"]
+    existing.payment_type = fields["payment_type"]
+    existing.customer_note = fields["customer_note"]
+    existing.raw_json = json.dumps(payload, ensure_ascii=False)
+
+    if status_changed and current_status in ys.STATUS_NOTIFY and not existing.is_status_notified(current_status):
+        is_cancelled = current_status == ys.STATUS_CANCELLED
+        wants = intg.notify_cancel if is_cancelled else intg.notify_status_change
+        if wants:
+            existing.mark_status_notified(current_status)
+            db.session.commit()
+            amount = f"{fields['total_price']:.2f} ₺"
+            send_to_user(
+                user,
+                ys.format_cancelled(payload) if is_cancelled else ys.format_status(payload),
+                wa=[
+                    "Sipariş iptal · Yemeksepeti" if is_cancelled else f"{status_label(current_status)} · Yemeksepeti",
+                    fields["order_number"],
+                    ys.summarize_items(payload),
+                    amount,
+                ],
+            )
+            return _ok("status-notified")
+
+    db.session.commit()
+    return _ok("updated")
 
 
 # Getir Yemek webhook endpointleri

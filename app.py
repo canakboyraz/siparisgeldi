@@ -32,6 +32,12 @@ def _ensure_schema():
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS hb_service_key VARCHAR(512)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS hb_environment VARCHAR(20) DEFAULT 'live'",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS hb_auto_packaging BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_chain_id VARCHAR(100)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_store_id VARCHAR(100)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_vendor_id VARCHAR(100)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_environment VARCHAR(20) DEFAULT 'live'",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_client_id VARCHAR(512)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_client_secret VARCHAR(512)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
             """
@@ -79,6 +85,18 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE integrations ADD COLUMN hb_environment VARCHAR(20) DEFAULT 'live'")
             if "hb_auto_packaging" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN hb_auto_packaging BOOLEAN DEFAULT FALSE")
+            if "ys_chain_id" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN ys_chain_id VARCHAR(100)")
+            if "ys_store_id" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN ys_store_id VARCHAR(100)")
+            if "ys_vendor_id" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN ys_vendor_id VARCHAR(100)")
+            if "ys_environment" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN ys_environment VARCHAR(20) DEFAULT 'live'")
+            if "ys_client_id" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN ys_client_id VARCHAR(512)")
+            if "ys_client_secret" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN ys_client_secret VARCHAR(512)")
             if "notify_weekly_report" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN notify_weekly_report BOOLEAN DEFAULT TRUE")
             if "notify_monthly_report" not in intg_cols:

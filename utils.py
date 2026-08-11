@@ -26,6 +26,10 @@ _STATUS_LABELS = {
     "UnPacked": "Paket bölündü",
     "Awaiting": "Ödeme bekliyor",
     "Verified": "Doğrulandı",
+    "RECEIVED": "Yeni",
+    "READY_FOR_PICKUP": "Teslim almaya hazır",
+    "DISPATCHED": "Sevk edildi",
+    "CANCELED": "İptal",
 }
 
 _STATUS_COLORS = {
@@ -54,6 +58,10 @@ _STATUS_COLORS = {
     "UnPacked": "amber",
     "Awaiting": "gray",
     "Verified": "blue",
+    "RECEIVED": "blue",
+    "READY_FOR_PICKUP": "amber",
+    "DISPATCHED": "violet",
+    "CANCELED": "red",
 }
 
 _PLATFORM_LABELS = {
@@ -78,17 +86,20 @@ _STATUS_COLORS.update({
 
 _PLATFORM_LABELS["getir"] = "Getir Yemek"
 _PLATFORM_LABELS["hepsiburada"] = "Hepsiburada"
+_PLATFORM_LABELS["yemeksepeti"] = "Yemeksepeti"
 
 _STATUS_LABELS.update({
     "Open": "Yeni",
     "Undelivered": "Teslim edilemedi",
     "Unpacked": "Paket bozuldu",
+    "DELIVERED": "Teslim edildi",
 })
 
 _STATUS_COLORS.update({
     "Open": "blue",
     "Undelivered": "red",
     "Unpacked": "amber",
+    "DELIVERED": "green",
 })
 
 

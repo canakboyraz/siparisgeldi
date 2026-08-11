@@ -70,7 +70,7 @@ class Integration(db.Model):
 
     id         = db.Column(db.Integer, primary_key=True)
     user_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    platform   = db.Column(db.String(30), nullable=False)   # trendyolgo | migros | getir | trendyol_marketplace | hepsiburada
+    platform   = db.Column(db.String(30), nullable=False)   # trendyolgo | migros | getir | trendyol_marketplace | hepsiburada | yemeksepeti
     is_active  = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -102,6 +102,14 @@ class Integration(db.Model):
     _hb_service_key = db.Column("hb_service_key", db.String(512))
     hb_environment = db.Column(db.String(20), default="live")  # test | live
     hb_auto_packaging = db.Column(db.Boolean, default=False)
+
+    # Yemeksepeti (webhook + Partner API)
+    ys_chain_id = db.Column(db.String(100), index=True)
+    ys_store_id = db.Column(db.String(100), index=True)
+    ys_vendor_id = db.Column(db.String(100), index=True)
+    ys_environment = db.Column(db.String(20), default="live")
+    _ys_client_id = db.Column("ys_client_id", db.String(512))
+    _ys_client_secret = db.Column("ys_client_secret", db.String(512))
 
     # Bildirim tercihleri
     notify_new_order      = db.Column(db.Boolean, default=True)
@@ -183,6 +191,22 @@ class Integration(db.Model):
     @hb_service_key.setter
     def hb_service_key(self, value):
         self._hb_service_key = security.encrypt(value)
+
+    @property
+    def ys_client_id(self):
+        return security.decrypt(self._ys_client_id)
+
+    @ys_client_id.setter
+    def ys_client_id(self, value):
+        self._ys_client_id = security.encrypt(value)
+
+    @property
+    def ys_client_secret(self):
+        return security.decrypt(self._ys_client_secret)
+
+    @ys_client_secret.setter
+    def ys_client_secret(self, value):
+        self._ys_client_secret = security.encrypt(value)
 
     def __repr__(self):
         return f"<Integration user={self.user_id} platform={self.platform}>"

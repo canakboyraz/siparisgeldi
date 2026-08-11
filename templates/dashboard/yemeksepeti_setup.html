@@ -1,0 +1,123 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Yemeksepeti · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>Yemeksepeti bağlantısı</h1></div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Mağaza ve API bilgileri</div>
+    <p class="muted" style="margin-top:0">
+      Yemeksepeti webhook payload'ındaki <code>client.store_id</code> değeriyle
+      hesabındaki restoran eşleştirilir.
+    </p>
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label>Store ID</label>
+        <input type="text" name="store_id" required value="{{ intg.ys_store_id if intg else '' }}" placeholder="Yemeksepeti store_id">
+      </div>
+      <div class="field">
+        <label>Chain ID</label>
+        <input type="text" name="chain_id" value="{{ intg.ys_chain_id if intg else '' }}" placeholder="Yemeksepeti chain_id">
+      </div>
+      <div class="field">
+        <label>Vendor ID <span class="muted">(boşsa Store ID kullanılır)</span></label>
+        <input type="text" name="vendor_id" value="{{ intg.ys_vendor_id if intg else '' }}" placeholder="vendor_id veya external_partner_config_id">
+      </div>
+      <div class="field">
+        <label>Ortam</label>
+        {% set env = (intg.ys_environment if intg else 'live') or 'live' %}
+        <select name="environment">
+          <option value="sandbox" {{ 'selected' if env == 'sandbox' }}>Sandbox</option>
+          <option value="live" {{ 'selected' if env == 'live' }}>Canlı</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>OAuth Client ID <span class="muted">{{ '(kayıtlı)' if ys_oauth_ready else '' }}</span></label>
+        <input type="password" name="client_id" placeholder="{{ 'Değiştirmek için yeni değer gir' if ys_oauth_ready else 'Yemeksepeti client_id' }}">
+      </div>
+      <div class="field">
+        <label>OAuth Client Secret <span class="muted">{{ '(kayıtlı)' if ys_oauth_ready else '' }}</span></label>
+        <input type="password" name="client_secret" placeholder="{{ 'Değiştirmek için yeni değer gir' if ys_oauth_ready else 'Yemeksepeti client_secret' }}">
+      </div>
+      <button class="btn btn-primary btn-lg" type="submit">Kaydet</button>
+    </form>
+    {% if intg %}
+    <form method="post" action="{{ url_for('dashboard.test_yemeksepeti_connection') }}" style="margin-top:.75rem">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-ghost" type="submit">Bağlantıyı doğrula</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Webhook bilgileri</div>
+    <p class="muted" style="margin-top:0">
+      Sipariş durumu değişiklikleri aynı webhook adresine POST olarak gönderilir.
+    </p>
+    <p class="hint" style="margin-bottom:.3rem">Sipariş webhook'u</p>
+    <div class="code">{{ ys_webhook_url }}</div>
+    <div class="check-list" style="margin-top:1rem">
+      <div class="check-row">
+        <div><strong>Webhook doğrulama anahtarı</strong><br><span class="muted">Railway değişkeni: YEMEKSEPETI_WEBHOOK_TOKEN</span></div>
+        {% if ys_token_ready %}<span class="badge green">hazır</span>{% else %}<span class="badge amber">bekliyor</span>{% endif %}
+      </div>
+      {% if intg %}
+      <div class="check-row">
+        <div><strong>Store ID</strong><br><span class="muted">{{ intg.ys_store_id }}</span></div>
+        <span class="badge green">kayıtlı</span>
+      </div>
+      <div class="check-row">
+        <div><strong>Partner API ortamı</strong><br><span class="muted">{{ ys_sandbox_base if intg.ys_environment == 'sandbox' else ys_live_base }}</span></div>
+        {% if ys_oauth_ready %}<span class="badge green">OAuth hazır</span>{% else %}<span class="badge amber">OAuth bekliyor</span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    <p class="hint" style="margin-top:1rem">
+      Yeni sipariş, hazır, sevk edildi, teslim edildi ve iptal durumları bildirilir.
+      OAuth bilgileri geldiğinde sipariş aksiyonları ve restoran aç/kapa işlemleri aynı altyapıyla çalışır.
+    </p>
+  </div>
+</div>
+
+{% if intg %}
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Bildirim tercihleri</div>
+  <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>Yeni sipariş</span></div>
+    <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>Hazır/sevk durumu</span></div>
+    <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>İptal</span></div>
+    <button class="btn btn-ghost" style="margin-top:1rem" type="submit">Tercihleri kaydet</button>
+  </form>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Restoran durumu</div>
+  <p class="muted">OAuth bilgileri geldikten sonra restoranın Yemeksepeti üzerindeki açık/kapalı durumunu buradan yönetebilirsin.</p>
+  <div class="inline" style="align-items:flex-end; flex-wrap:wrap">
+    <form method="post" action="{{ url_for('dashboard.update_yemeksepeti_vendor_status') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="status" value="OPEN">
+      <button class="btn btn-primary" type="submit" {% if not ys_oauth_ready %}disabled{% endif %}>Restoranı aç</button>
+    </form>
+    <form method="post" action="{{ url_for('dashboard.update_yemeksepeti_vendor_status') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="status" value="CLOSED_TODAY">
+      <input type="hidden" name="closed_reason" value="TOO_BUSY_KITCHEN">
+      <button class="btn btn-ghost" type="submit" {% if not ys_oauth_ready %}disabled{% endif %}>Bugün kapat</button>
+    </form>
+    <form method="post" action="{{ url_for('dashboard.update_yemeksepeti_vendor_status') }}" class="inline">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="status" value="CLOSED_UNTIL">
+      <input type="hidden" name="closed_reason" value="TOO_BUSY_KITCHEN">
+      <input type="datetime-local" name="closed_until" required {% if not ys_oauth_ready %}disabled{% endif %}>
+      <button class="btn btn-ghost" type="submit" {% if not ys_oauth_ready %}disabled{% endif %}>Saate kadar kapat</button>
+    </form>
+  </div>
+  {% if not ys_oauth_ready %}
+  <p class="hint" style="margin-bottom:0">Bu işlemler OAuth bilgileri kaydedilince aktifleşir.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

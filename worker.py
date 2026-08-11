@@ -16,7 +16,7 @@ from flask import current_app
 
 from extensions import db
 from models import Integration, Order, User, AppState
-from integrations import getir, hepsiburada as hb, trendyol_marketplace as tmp, trendyolgo as tgo
+from integrations import getir, hepsiburada as hb, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications import telegram
 from notifications.dispatcher import send_to_user
 from utils import status_label
@@ -462,6 +462,12 @@ def _aggregate_products(orders, max_items: int = 15) -> str:
                     continue
                 name = hb.line_name(ln)
                 counts[name] = counts.get(name, 0) + hb.line_quantity(ln)
+        elif o.platform == ys.PLATFORM:
+            for item in ys.items(data):
+                if not isinstance(item, dict):
+                    continue
+                name = ys.item_name(item)
+                counts[name] = counts.get(name, 0) + ys.item_quantity(item)
         else:  # trendyolgo
             for ln in (data.get("lines") or []):
                 name = ln.get("name", "?")
@@ -534,6 +540,7 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
         "getir": "Getir Yemek",
         tmp.PLATFORM: "Trendyol Pazaryeri",
         hb.PLATFORM: "Hepsiburada",
+        ys.PLATFORM: "Yemeksepeti",
     }.get(intg.platform, intg.platform)
 
     emoji = {"Günlük": "📊", "Haftalık": "📅", "Aylık": "🗓️"}.get(kind, "📊")

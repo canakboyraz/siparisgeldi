@@ -281,6 +281,9 @@ def integrations():
             Integration.tmp_integration_ref.ilike(like),
             Integration.hb_merchant_id.ilike(like),
             Integration.hb_username.ilike(like),
+            Integration.ys_chain_id.ilike(like),
+            Integration.ys_store_id.ilike(like),
+            Integration.ys_vendor_id.ilike(like),
         ))
     if platform:
         query = query.filter(Integration.platform == platform)

@@ -4,7 +4,7 @@
   <aside class="sidebar">
     <div class="brand"><span class="dot"></span> SiparişGeldi</div>
     <nav>
-      {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.migros_setup', 'dashboard.getir_setup'] %}
+      {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.migros_setup', 'dashboard.getir_setup', 'dashboard.yemeksepeti_setup'] %}
       {% set ecommerce_endpoints = ['dashboard.trendyol_marketplace_setup', 'dashboard.hepsiburada_setup'] %}
       {% set contact_endpoints = ['dashboard.connect_telegram', 'dashboard.reset_telegram', 'dashboard.connect_whatsapp'] %}
 
@@ -19,6 +19,7 @@
           <a href="{{ url_for('dashboard.trendyolgo_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyolgo_setup' }}">Trendyol Go</a>
           <a href="{{ url_for('dashboard.migros_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.migros_setup' }}">Migros Yemek</a>
           <a href="{{ url_for('dashboard.getir_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.getir_setup' }}">Getir Yemek</a>
+          <a href="{{ url_for('dashboard.yemeksepeti_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.yemeksepeti_setup' }}">Yemeksepeti</a>
         </div>
       </details>
 

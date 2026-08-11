@@ -44,6 +44,38 @@
 </div>
 {% endif %}
 
+{% if yemeksepeti_actions %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <div class="card-title">Yemeksepeti sipariş işlemleri</div>
+      <div class="muted">İşlem sonucu Yemeksepeti webhook'u ile tekrar doğrulanır.</div>
+    </div>
+    <div class="inline">
+      {% for action in yemeksepeti_actions %}
+      <form method="post" action="{{ url_for('dashboard.update_yemeksepeti_order', order_id=order.id) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="{{ action.action }}">
+        {% if action.action == 'cancel' %}
+        <select name="cancel_reason" aria-label="İptal nedeni">
+          <option value="TOO_BUSY">Çok yoğun</option>
+          <option value="ITEM_UNAVAILABLE">Ürün yok</option>
+          <option value="CLOSED">Restoran kapalı</option>
+        </select>
+        {% endif %}
+        <button class="btn {{ 'btn-danger' if action.action == 'cancel' else 'btn-primary' }}" type="submit" {% if action.disabled %}disabled title="{{ action.disabled_reason }}"{% endif %}>
+          {{ action.label }}
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+  {% for action in yemeksepeti_actions if action.disabled %}
+  <p class="hint" style="margin-bottom:0">{{ action.disabled_reason }}</p>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="grid-2 detail-grid">
   <div class="card">
     <div class="card-title">Sipariş bilgileri</div>
