@@ -285,7 +285,7 @@ def _process_tmp(intg):
             db.session.commit()
 
 
-def _process_tgo(intg):
+def _process_tgo_legacy(intg):
     orders = tgo.get_orders(intg.tgo_supplier_id, intg.tgo_api_key, intg.tgo_api_secret)
     user = db.session.get(User, intg.user_id)
 
@@ -619,6 +619,265 @@ def send_monthly_reports(app):
 
 
 # ── Scheduler kurulumu ──────────────────────────────────────────────────────
+
+def _process_tgo(intg):
+    since = datetime.utcnow() - timedelta(days=1)
+    orders = _get_tgo_orders_for_available_services(intg, since)
+    user = db.session.get(User, intg.user_id)
+
+    for order_data in orders:
+        _upsert_tgo_order(intg, user, order_data)
+
+    _process_tgo_claims(intg, user)
+
+
+def _get_tgo_orders_for_available_services(intg, since: datetime) -> list:
+    orders = []
+    seen = set()
+    last_error = None
+
+    for service in (tgo.SERVICE_MEAL, tgo.SERVICE_GROCERY):
+        try:
+            service_orders = tgo.get_orders(
+                intg.tgo_supplier_id,
+                intg.tgo_api_key,
+                intg.tgo_api_secret,
+                statuses=tgo.ORDER_POLL_STATUSES,
+                since=since,
+                service=service,
+            )
+        except requests.exceptions.HTTPError as exc:
+            if getattr(exc.response, "status_code", 0) in (400, 403, 404):
+                continue
+            last_error = exc
+            continue
+        except requests.exceptions.RequestException as exc:
+            last_error = exc
+            continue
+
+        for order in service_orders:
+            external_id = str(order.get("id") or "").strip()
+            key = external_id or f"{order.get('orderNumber')}-{order.get('packageStatus')}"
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            orders.append(order)
+
+    if not orders and last_error:
+        raise last_error
+    return orders
+
+
+def _upsert_tgo_order(intg, user, order_data: dict):
+    external_id = str(order_data.get("id") or "").strip()
+    if not external_id:
+        return
+
+    current_status = str(order_data.get("packageStatus") or "").strip()
+    order_number = str(order_data.get("orderNumber") or "").strip()
+    total_price = _tgo_total_price(order_data)
+    amount = _format_tgo_amount(total_price)
+
+    existing = Order.query.filter_by(
+        user_id=intg.user_id,
+        platform="trendyolgo",
+        external_id=external_id,
+    ).first()
+
+    if not existing:
+        order = Order(
+            user_id=intg.user_id,
+            platform="trendyolgo",
+            external_id=external_id,
+            order_number=order_number,
+            status=current_status,
+            total_price=total_price,
+            payment_type=(order_data.get("payment") or {}).get("paymentType", ""),
+            app_source=(order_data.get("userInformation") or {}).get("appName", ""),
+            customer_note=order_data.get("customerNote", ""),
+            raw_json=json.dumps(order_data, ensure_ascii=False),
+        )
+        order.mark_status_notified("INITIAL")
+        db.session.add(order)
+        db.session.commit()
+
+        if current_status in tgo.CANCEL_STATUSES:
+            _notify_tgo_problem(intg, user, order_data, "Siparis iptal", amount)
+        elif current_status in tgo.REFUND_STATUSES:
+            _notify_tgo_problem(intg, user, order_data, "Siparis iade", amount)
+        elif intg.notify_new_order:
+            send_to_user(
+                user,
+                tgo.format_new_order_message(order_data),
+                wa=["Yeni siparis - Trendyol Go", order_number, tgo.summarize_items(order_data), amount],
+            )
+        return
+
+    status_changed = existing.status != current_status
+    if status_changed:
+        existing.status = current_status
+        existing.total_price = total_price
+        existing.payment_type = (order_data.get("payment") or {}).get("paymentType", "")
+        existing.customer_note = order_data.get("customerNote", "")
+        existing.raw_json = json.dumps(order_data, ensure_ascii=False)
+
+    if _should_alert_unaccepted_tgo(existing, current_status, intg):
+        existing.mark_status_notified(TGO_UNACCEPTED_ALERT_STATUS)
+        db.session.commit()
+        send_to_user(
+            user,
+            _format_unaccepted_tgo_message(order_data),
+            wa=["Acil: siparis kabul edilmedi", order_number, tgo.summarize_items(order_data), amount],
+        )
+        return
+
+    if not status_changed or current_status not in tgo.STATUS_NOTIFY or existing.is_status_notified(current_status):
+        db.session.commit()
+        return
+
+    if current_status in tgo.CANCEL_STATUSES:
+        existing.mark_status_notified(current_status)
+        db.session.commit()
+        _notify_tgo_problem(intg, user, order_data, "Siparis iptal", amount)
+        return
+
+    if current_status in tgo.REFUND_STATUSES:
+        existing.mark_status_notified(current_status)
+        db.session.commit()
+        _notify_tgo_problem(intg, user, order_data, "Siparis iade", amount)
+        return
+
+    if intg.notify_status_change:
+        existing.mark_status_notified(current_status)
+        db.session.commit()
+        send_to_user(
+            user,
+            tgo.format_status_message(order_data, current_status),
+            wa=[f"{status_label(current_status)} - Trendyol Go", order_number, tgo.summarize_items(order_data), amount],
+        )
+    else:
+        db.session.commit()
+
+
+def _notify_tgo_problem(intg, user, order_data: dict, title: str, amount: str):
+    if not intg.notify_cancel:
+        return
+    order_number = str(order_data.get("orderNumber") or "").strip()
+    current_status = str(order_data.get("packageStatus") or "").strip()
+    send_to_user(
+        user,
+        tgo.format_status_message(order_data, current_status),
+        wa=[f"{title} - Trendyol Go", order_number, tgo.summarize_items(order_data), amount],
+    )
+
+
+def _format_tgo_amount(value) -> str:
+    try:
+        amount = float(value or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    return f"{amount:.2f} TL"
+
+
+def _tgo_total_price(order_data: dict) -> float:
+    try:
+        return float(order_data.get("totalPrice") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _process_tgo_claims(intg, user):
+    try:
+        claims = tgo.get_claims(
+            intg.tgo_supplier_id,
+            intg.tgo_api_key,
+            intg.tgo_api_secret,
+            since=datetime.utcnow() - timedelta(days=1),
+        )
+    except requests.exceptions.HTTPError as exc:
+        if getattr(exc.response, "status_code", 0) in (400, 403, 404):
+            return
+        raise
+    except requests.exceptions.RequestException:
+        return
+
+    for claim in claims:
+        claim_id = tgo.claim_external_id(claim)
+        if not claim_id:
+            continue
+
+        claim_status = tgo.claim_status(claim)
+        report_status = "Cancelled" if claim_status in {"Cancelled", "Rejected"} else "Refunded"
+        external_id = f"claim:{claim_id}"
+        claim_order_number = tgo.claim_order_number(claim)
+        existing = Order.query.filter_by(
+            user_id=intg.user_id,
+            platform="trendyolgo",
+            external_id=external_id,
+        ).first()
+        related = _find_tgo_order_by_number(intg.user_id, claim_order_number)
+        related_raw = _raw_json_dict(related.raw_json) if related else None
+        amount = tgo.claim_total_price(claim, original_order=related_raw, fallback=(related.total_price if related else 0))
+
+        if existing:
+            existing.status = report_status
+            existing.total_price = existing.total_price or amount
+            existing.customer_note = tgo.claim_customer_note(claim)
+            existing.raw_json = json.dumps(claim, ensure_ascii=False)
+            should_notify = not existing.is_status_notified(report_status)
+            existing.mark_status_notified(report_status)
+            db.session.commit()
+            if should_notify and intg.notify_cancel and report_status == "Refunded":
+                _notify_tgo_claim(user, claim, existing.total_price)
+            continue
+
+        order = Order(
+            user_id=intg.user_id,
+            platform="trendyolgo",
+            external_id=external_id,
+            order_number=claim_order_number or claim_id,
+            status=report_status,
+            total_price=amount,
+            payment_type="Iade",
+            app_source=(related.app_source if related else ""),
+            customer_note=tgo.claim_customer_note(claim),
+            raw_json=json.dumps(claim, ensure_ascii=False),
+        )
+        order.mark_status_notified(report_status)
+        db.session.add(order)
+        db.session.commit()
+        if intg.notify_cancel and report_status == "Refunded":
+            _notify_tgo_claim(user, claim, amount)
+
+
+def _find_tgo_order_by_number(user_id: int, order_number: str):
+    if not order_number:
+        return None
+    return (
+        Order.query.filter_by(user_id=user_id, platform="trendyolgo", order_number=str(order_number))
+        .filter(~Order.external_id.like("claim:%"))
+        .order_by(Order.created_at.desc())
+        .first()
+    )
+
+
+def _raw_json_dict(value: str) -> dict:
+    try:
+        parsed = json.loads(value or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _notify_tgo_claim(user, claim: dict, amount: float):
+    send_to_user(
+        user,
+        tgo.format_claim_message(claim),
+        wa=["Siparis iade - Trendyol Go", tgo.claim_order_number(claim) or tgo.claim_external_id(claim),
+            tgo.claim_items_summary(claim), f"{amount:.2f} TL"],
+    )
+
 
 def start_scheduler(app):
     if scheduler.running:
