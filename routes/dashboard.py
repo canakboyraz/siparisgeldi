@@ -1710,6 +1710,7 @@ def _migros_detail_context(order: Order, raw: dict) -> dict:
     return {
         "raw": raw,
         "items": _migros_detail_items(raw),
+        "totals": _migros_detail_totals(raw),
         "customer": customer.get("fullName") or "-",
         "customer_phone": customer.get("phoneNumber") or "",
         "order_created_at": _migros_order_created_at(raw),
@@ -1751,12 +1752,57 @@ def _migros_detail_options(options: list) -> list:
         label = f"Ã‡Ä±karÄ±lacak: {name}" if excluded else (f"{header}: {name}" if header and header != name else name)
         rows.append({
             "label": _display_detail_text(label),
+            "name": name,
+            "header": header,
             "quantity": option.get("quantity") or 1,
             "price": option.get("primaryDiscountedPriceText") or option.get("primaryPriceText") or _migros_penny_text(option.get("primaryDiscountedPrice") or option.get("primaryPrice")),
             "excluded": excluded,
             "children": _migros_detail_options(option.get("subOptions") or []),
         })
     return rows
+
+
+def _migros_detail_totals(raw: dict) -> dict:
+    prices = raw.get("prices") or {}
+    total_text = _migros_price_text(prices.get("total"))
+    discounted_text = (
+        _migros_price_text(prices.get("discounted"))
+        or _migros_price_text(prices.get("migrosDiscounted"))
+        or _migros_price_text(prices.get("restaurantDiscounted"))
+    )
+    total_amount = _migros_price_amount(prices.get("total"))
+    discounted_amount = (
+        _migros_price_amount(prices.get("discounted"))
+        or _migros_price_amount(prices.get("migrosDiscounted"))
+        or _migros_price_amount(prices.get("restaurantDiscounted"))
+    )
+    discount_text = ""
+    if total_amount is not None and discounted_amount is not None:
+        discount_text = _migros_lira_text(max(0, total_amount - discounted_amount))
+    return {
+        "total": total_text,
+        "discount": discount_text,
+        "discounted": discounted_text or total_text,
+    }
+
+
+def _migros_price_text(node) -> str:
+    if not isinstance(node, dict):
+        return ""
+    return node.get("text") or _migros_penny_text(node.get("amountAsPenny"))
+
+
+def _migros_price_amount(node):
+    if not isinstance(node, dict) or node.get("amountAsPenny") is None:
+        return None
+    try:
+        return int(node.get("amountAsPenny") or 0) / 100
+    except (TypeError, ValueError):
+        return None
+
+
+def _migros_lira_text(value: float) -> str:
+    return f"{value:,.2f} TL".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def _migros_penny_text(value) -> str:

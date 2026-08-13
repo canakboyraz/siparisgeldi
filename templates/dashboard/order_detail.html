@@ -150,40 +150,68 @@
 <div class="card">
   <div class="card-title">Ürünler</div>
   {% if detail["items"] %}
-  <div class="item-list">
+  <div class="order-lines">
+    <div class="order-lines-head">
+      <div>Ürün</div>
+      <div>Miktar</div>
+      <div>Tutar</div>
+    </div>
     {% for item in detail["items"] %}
-    <div class="detail-item">
-      <div class="item-main">
-        <strong>{{ item.name }}</strong>
-        <span class="badge gray">x{{ item.quantity }}</span>
-        {% if item.price %}<span class="badge green">{{ item.price }}</span>{% endif %}
-      </div>
-      {% if item.options %}
-      <ul>
-        {% for opt in item.options recursive %}
-        <li>
-          {{ opt.label }}
-          <span class="muted">x{{ opt.quantity }}</span>
-          {% if opt.price %}<span class="muted">- {{ opt.price }}</span>{% endif %}
-          {% if opt.children %}
-          <ul>{{ loop(opt.children) }}</ul>
+    <div class="order-line is-product">
+      <div class="line-product"><strong>{{ item.name }}</strong></div>
+      <div class="line-qty">{{ item.quantity }}</div>
+      <div class="line-price">{{ item.price or "" }}</div>
+    </div>
+    {% if item.options %}
+      {% for opt in item.options recursive %}
+      <div class="order-line is-option depth-{{ loop.depth0 }}">
+        <div class="line-product">
+          {% if opt.excluded %}
+          <span class="line-prefix">-</span> Çıkarılan Malzemeler : {{ opt.name }}
+          {% elif opt.header and opt.header != opt.name %}
+          <span class="line-prefix">-</span> {{ opt.header }} : {{ opt.name }}
+          {% else %}
+          <span class="line-prefix">-</span> {{ opt.name }}
           {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
+        </div>
+        <div class="line-qty">{{ opt.quantity }}</div>
+        <div class="line-price">{{ opt.price or "" }}</div>
+      </div>
+      {% if opt.children %}
+        {{ loop(opt.children) }}
       {% endif %}
-      {% if item.details %}
-      <ul>
-        {% for part in item.details %}
-        <li>{{ part }}</li>
-        {% endfor %}
-      </ul>
+      {% endfor %}
+    {% endif %}
+    {% if item.details %}
+      {% for part in item.details %}
+      <div class="order-line is-option depth-0">
+        <div class="line-product"><span class="line-prefix">-</span> {{ part }}</div>
+        <div class="line-qty"></div>
+        <div class="line-price"></div>
+      </div>
+      {% endfor %}
+    {% endif %}
+    {% if item.note %}
+    <div class="order-line is-note">
+      <div class="line-product">Ürün notu: {{ item.note }}</div>
+      <div></div>
+      <div></div>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% if detail.totals %}
+    <div class="order-totals">
+      {% if detail.totals.total %}
+      <div><span>Tutar:</span><strong>{{ detail.totals.total }}</strong></div>
       {% endif %}
-      {% if item.note %}
-      <div class="item-note">Ürün notu: {{ item.note }}</div>
+      {% if detail.totals.discount %}
+      <div><span>İndirim:</span><strong>{{ detail.totals.discount }}</strong></div>
+      {% endif %}
+      {% if detail.totals.discounted %}
+      <div class="discounted"><span>İndirimli Tutar:</span><strong>{{ detail.totals.discounted }}</strong></div>
       {% endif %}
     </div>
-    {% endfor %}
+    {% endif %}
   </div>
   {% else %}
   <div class="empty">Ürün detayı bulunamadı.</div>
