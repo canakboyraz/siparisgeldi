@@ -90,18 +90,54 @@ def get_orders(supplier_id: str, api_key: str, api_secret: str,
     last_error = None
     for params in attempts:
         try:
-            r = requests.get(url, headers=_headers(supplier_id, api_key, api_secret),
-                             params=params,
-                             timeout=15)
-            r.raise_for_status()
-            return r.json().get("content", [])
+            return _get_order_page(url, supplier_id, api_key, api_secret, params)
         except requests.exceptions.HTTPError as exc:
             last_error = exc
             if exc.response is None or exc.response.status_code not in (400, 404):
                 raise
+    orders = _get_orders_status_by_status(url, supplier_id, api_key, api_secret, statuses, since)
+    if orders:
+        return orders
+    try:
+        return _get_order_page(url, supplier_id, api_key, api_secret, _package_params(None, None))
+    except requests.exceptions.HTTPError as exc:
+        last_error = exc
+        if exc.response is None or exc.response.status_code not in (400, 404):
+            raise
     if last_error:
         raise last_error
     return []
+
+
+def _get_order_page(url: str, supplier_id: str, api_key: str, api_secret: str, params) -> list:
+    r = requests.get(url, headers=_headers(supplier_id, api_key, api_secret),
+                     params=params,
+                     timeout=15)
+    r.raise_for_status()
+    return r.json().get("content", [])
+
+
+def _get_orders_status_by_status(url: str, supplier_id: str, api_key: str, api_secret: str,
+                                 statuses, since: datetime = None) -> list:
+    orders = []
+    seen = set()
+    for status in _status_values(statuses):
+        page = []
+        for params in (_package_params(status, since), _package_params(status, None)):
+            try:
+                page = _get_order_page(url, supplier_id, api_key, api_secret, params)
+                break
+            except requests.exceptions.HTTPError as exc:
+                if exc.response is None or exc.response.status_code not in (400, 404):
+                    raise
+        for order in page:
+            key = str(order.get("id") or order.get("packageId") or order.get("orderNumber") or "")
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            orders.append(order)
+    return orders
 
 
 def get_claims(supplier_id: str, api_key: str, api_secret: str, since: datetime = None,
