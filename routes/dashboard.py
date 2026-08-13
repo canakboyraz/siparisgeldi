@@ -1730,13 +1730,14 @@ def _migros_detail_items(raw: dict) -> list:
     for item in raw.get("items") or []:
         if not isinstance(item, dict):
             continue
+        options = _migros_detail_options(item.get("options") or [])
         items.append({
             "name": item.get("name") or "?",
             "quantity": item.get("amount") or 1,
             "price": item.get("priceText") or _migros_penny_text(item.get("price")),
             "note": item.get("note") or "",
-            "details": [_display_detail_text(part) for part in migros._item_detail_parts(item)],
-            "options": _migros_detail_options(item.get("options") or []),
+            "details": [] if options else [_display_detail_text(part) for part in migros._item_detail_parts(item)],
+            "options": options,
         })
     return items
 
