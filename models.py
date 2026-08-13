@@ -86,6 +86,7 @@ class Integration(db.Model):
     _migros_secret_key = db.Column("migros_secret_key", db.String(512))  # kullanılmıyor (geriye dönük)
     migros_store_id    = db.Column(db.String(50), index=True)   # webhook eşleştirme anahtarı
     migros_group_id    = db.Column(db.String(50))               # zincir/marka id
+    migros_warehouse_id = db.Column(db.String(50))
     webhook_token      = db.Column(db.String(64), unique=True)
 
     getir_restaurant_id = db.Column(db.String(50), index=True)

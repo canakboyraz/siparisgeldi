@@ -20,6 +20,7 @@ def _ensure_schema():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_whatsapp BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_multi_platform BOOLEAN DEFAULT FALSE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_warehouse_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS getir_restaurant_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS getir_restaurant_name VARCHAR(120)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS getir_restaurant_secret_key VARCHAR(512)",
@@ -61,6 +62,8 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE users ADD COLUMN feature_multi_platform BOOLEAN DEFAULT FALSE")
             if "migros_group_id" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN migros_group_id VARCHAR(50)")
+            if "migros_warehouse_id" not in intg_cols:
+                stmts.append("ALTER TABLE integrations ADD COLUMN migros_warehouse_id VARCHAR(50)")
             if "getir_restaurant_id" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN getir_restaurant_id VARCHAR(50)")
             if "getir_restaurant_name" not in intg_cols:

@@ -103,10 +103,42 @@ def update_order_status(order_id, new_status: str, store_id, api_key: str, secre
                         cancel_reason_id=None, base_url: str = DEFAULT_BASE) -> dict:
     """Siparişin durumunu Migros'ta günceller (onay/ret/hazırlandı vb.).
     Notifier MVP'de kullanılmaz; ileride 'siparişi onayla' butonu için hazırdır."""
-    body = {"OrderId": order_id, "OrderStatus": new_status, "StoreId": store_id}
+    body = {"orderId": order_id, "orderStatus": new_status, "storeId": store_id}
     if new_status == ORDER_STATUS_REJECTED and cancel_reason_id is not None:
-        body["CancelReasonId"] = cancel_reason_id
+        body["cancelReasonId"] = cancel_reason_id
     return api_post("/Order/v2/UpdateOrderStatus", body, api_key, secret_key, base_url)
+
+
+def get_cancel_reasons(api_key: str, base_url: str = DEFAULT_BASE) -> list:
+    """Migros iptal/red sebebi listesini dÃ¶ndÃ¼rÃ¼r."""
+    data = api_get("/Mapping/v2/GetCancelReasons", api_key, base_url)
+    if isinstance(data, dict):
+        reasons = data.get("data") or data.get("Data") or []
+        return reasons if isinstance(reasons, list) else []
+    return data if isinstance(data, list) else []
+
+
+def cancel_order(order_id, store_id, user_id, cancel_reason_id, api_key: str, secret_key: str,
+                 base_url: str = DEFAULT_BASE, notify_user: bool = True) -> dict:
+    """OnaylanmÄ±ÅŸ Migros sipariÅŸini iptal eder."""
+    body = {
+        "orderId": order_id,
+        "storeId": store_id,
+        "notifyUser": bool(notify_user),
+        "cancelReasonId": cancel_reason_id,
+        "userId": user_id,
+    }
+    return api_post("/Order/v2/CancelOrder", body, api_key, secret_key, base_url)
+
+
+def set_store_status(store_id, api_key: str, secret_key: str, base_url: str = DEFAULT_BASE,
+                     active: bool = True, warehouse_id=None) -> dict:
+    """RestoranÄ± Migros'ta satÄ±ÅŸa aÃ§ar veya kapatÄ±r."""
+    body = {"storeId": store_id}
+    if warehouse_id:
+        body["warehouseId"] = warehouse_id
+    endpoint = "/Store/ActivateStore" if active else "/Store/DeActivateStore"
+    return api_post(endpoint, body, api_key, secret_key, base_url)
 
 
 # ── TERS AKIŞ: Webhook ayrıştırma ve mesaj formatlama ────────────────────────

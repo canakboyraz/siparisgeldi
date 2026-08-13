@@ -506,6 +506,7 @@ def migros_setup():
         api_key  = request.form.get("api_key", "").strip()
         store_id = request.form.get("store_id", "").strip()
         group_id = request.form.get("group_id", "").strip()
+        warehouse_id = request.form.get("warehouse_id", "").strip()
 
         if not _can_enable_platform(intg):
             flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
@@ -532,6 +533,7 @@ def migros_setup():
         intg.migros_api_key  = api_key
         intg.migros_store_id = store_id
         intg.migros_group_id = group_id
+        intg.migros_warehouse_id = warehouse_id
         intg.is_active       = True
         db.session.commit()
 
@@ -545,6 +547,39 @@ def migros_setup():
         return redirect(url_for("dashboard.migros_setup"))
 
     return render_template("dashboard/migros_setup.html", intg=intg, **_migros_setup_context(intg))
+
+
+@dashboard_bp.route("/migros/store-status", methods=["POST"])
+@login_required
+def update_migros_store_status():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="migros", is_active=True).first_or_404()
+    action = request.form.get("action", "").strip()
+    active = action == "activate"
+    if action not in {"activate", "deactivate"}:
+        flash("GeÃ§ersiz Migros restoran iÅŸlemi.", "warning")
+        return redirect(url_for("dashboard.migros_setup"))
+    secret = current_app.config.get("MIGROS_SECRET_KEY", "")
+    if not secret:
+        flash("MIGROS_SECRET_KEY Railway tarafÄ±nda tanÄ±mlÄ± deÄŸil.", "danger")
+        return redirect(url_for("dashboard.migros_setup"))
+    try:
+        migros.set_store_status(
+            intg.migros_store_id,
+            intg.migros_api_key,
+            secret,
+            current_app.config.get("MIGROS_API_BASE"),
+            active=active,
+            warehouse_id=intg.migros_warehouse_id,
+        )
+        intg.last_sync_at = datetime.utcnow()
+        intg.last_error = None
+        db.session.commit()
+        flash("Migros restoran satÄ±ÅŸa aÃ§Ä±ldÄ±." if active else "Migros restoran satÄ±ÅŸa kapatÄ±ldÄ±.", "success")
+    except Exception as e:
+        intg.last_error = f"Migros restoran iÅŸlemi: {e}"[:300]
+        db.session.commit()
+        flash(f"Migros restoran iÅŸlemi gÃ¶nderilemedi: {e}", "danger")
+    return redirect(url_for("dashboard.migros_setup"))
 
 
 def _find_migros_store_conflict(store_id: str, current_integration_id: int = None) -> Integration:
@@ -840,12 +875,16 @@ def subscription():
 def order_detail(order_id):
     order = Order.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
     detail = _order_detail_context(order)
+    migros_actions = _migros_order_actions(order, detail)
+    migros_intg = Integration.query.filter_by(user_id=current_user.id, platform="migros", is_active=True).first() if order.platform == "migros" else None
     getir_actions = _getir_order_actions(order, detail)
     yemeksepeti_actions = _yemeksepeti_order_actions(order, detail)
     return render_template(
         "dashboard/order_detail.html",
         order=order,
         detail=detail,
+        migros_actions=migros_actions,
+        migros_cancel_reasons=_migros_cancel_reasons(migros_intg) if migros_actions else [],
         getir_actions=getir_actions,
         yemeksepeti_actions=yemeksepeti_actions,
     )
@@ -889,6 +928,75 @@ def update_getir_order_status(order_id):
         intg.last_error = str(e)[:300]
         db.session.commit()
         flash(f"Getir işlemi başarısız: {e}", "danger")
+    return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+
+@dashboard_bp.route("/siparis/<int:order_id>/migros-aksiyon", methods=["POST"])
+@login_required
+def update_migros_order(order_id):
+    order = Order.query.filter_by(id=order_id, user_id=current_user.id, platform="migros").first_or_404()
+    action = request.form.get("action", "").strip()
+    detail = _order_detail_context(order)
+    actions = {item["action"]: item for item in _migros_order_actions(order, detail)}
+    selected = actions.get(action)
+    if not selected:
+        flash("Bu Migros sipariÅŸi iÃ§in iÅŸlem kullanÄ±lamaz.", "warning")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="migros", is_active=True).first()
+    if not intg or not intg.migros_api_key or not intg.migros_store_id:
+        flash("Migros API Key ve Store ID bilgileri eksik.", "danger")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+    secret = current_app.config.get("MIGROS_SECRET_KEY", "")
+    if not secret:
+        flash("MIGROS_SECRET_KEY Railway tarafÄ±nda tanÄ±mlÄ± deÄŸil.", "danger")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+    raw = detail.get("raw") or {}
+    base_url = current_app.config.get("MIGROS_API_BASE")
+    cancel_reason_id = request.form.get("cancel_reason_id", "").strip()
+    if action in {"reject", "cancel"} and not cancel_reason_id:
+        flash("Migros red/iptal iÅŸlemi iÃ§in iptal sebebi seÃ§ilmelidir.", "warning")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+    try:
+        if action == "cancel":
+            user_id = _migros_user_id(raw)
+            if not user_id:
+                flash("Migros iptal iÅŸlemi iÃ§in sipariÅŸ payload'unda User ID bulunamadÄ±.", "danger")
+                return redirect(url_for("dashboard.order_detail", order_id=order.id))
+            migros.cancel_order(
+                order.external_id,
+                intg.migros_store_id,
+                user_id,
+                cancel_reason_id,
+                intg.migros_api_key,
+                secret,
+                base_url,
+            )
+            next_status = "Cancelled"
+        else:
+            next_status = selected["next_status"]
+            migros.update_order_status(
+                order.external_id,
+                next_status,
+                intg.migros_store_id,
+                intg.migros_api_key,
+                secret,
+                cancel_reason_id=cancel_reason_id if action == "reject" else None,
+                base_url=base_url,
+            )
+        order.status = next_status
+        raw["status"] = next_status
+        order.raw_json = json.dumps(raw, ensure_ascii=False)
+        intg.last_sync_at = datetime.utcnow()
+        intg.last_error = None
+        db.session.commit()
+        flash(f"Migros iÅŸlemi gÃ¶nderildi: {selected['label']}", "success")
+    except Exception as e:
+        intg.last_error = f"Migros sipariÅŸ iÅŸlemi: {e}"[:300]
+        db.session.commit()
+        flash(f"Migros iÅŸlemi gÃ¶nderilemedi: {e}", "danger")
     return redirect(url_for("dashboard.order_detail", order_id=order.id))
 
 
@@ -1187,6 +1295,42 @@ def _yemeksepeti_order_actions(order: Order, detail: dict = None) -> list:
             item["disabled"] = True
             item["disabled_reason"] = disabled_reason
     return actions
+
+
+def _migros_order_actions(order: Order, detail: dict = None) -> list:
+    if order.platform != "migros" or order.status in ACTIVE_EXCLUDED_STATUSES:
+        return []
+    status = order.status or ""
+    actions = []
+    if status in {"NEW_PENDING", "Created", "Pending", "New", ""}:
+        actions.append({"action": "approve", "label": "Onayla", "next_status": migros.ORDER_STATUS_APPROVED})
+        actions.append({"action": "reject", "label": "Reddet", "next_status": migros.ORDER_STATUS_REJECTED, "needs_reason": True})
+    elif status in {"Approved", "Prepared"}:
+        if status == "Approved":
+            actions.append({"action": "prepared", "label": "HazÄ±rlandÄ± yap", "next_status": migros.ORDER_STATUS_PREPARED})
+        if status == "Prepared":
+            actions.append({"action": "delivery", "label": "Yola Ã§Ä±ktÄ± yap", "next_status": migros.ORDER_STATUS_DELIVERY})
+        actions.append({"action": "cancel", "label": "Ä°ptal et", "next_status": "Cancelled", "needs_reason": True})
+    elif status == "Delivery":
+        actions.append({"action": "completed", "label": "TamamlandÄ± yap", "next_status": migros.ORDER_STATUS_COMPLETED})
+        actions.append({"action": "cancel", "label": "Ä°ptal et", "next_status": "Cancelled", "needs_reason": True})
+    return actions
+
+
+def _migros_cancel_reasons(intg: Integration = None) -> list:
+    if not intg or not intg._migros_api_key:
+        return []
+    try:
+        reasons = migros.get_cancel_reasons(intg.migros_api_key, current_app.config.get("MIGROS_API_BASE"))
+    except Exception:
+        return []
+    cleaned = []
+    for reason in reasons:
+        reason_id = reason.get("reasonId") or reason.get("ReasonId") or reason.get("id")
+        description = reason.get("description") or reason.get("Description") or reason.get("name") or reason.get("Name")
+        if reason_id and description and "teknik" not in str(description).lower():
+            cleaned.append({"reasonId": str(reason_id), "description": str(description)})
+    return cleaned
 
 
 def _order_group(status: str) -> str:
@@ -1567,6 +1711,8 @@ def _migros_detail_context(order: Order, raw: dict) -> dict:
         "raw": raw,
         "items": _migros_detail_items(raw),
         "customer": customer.get("fullName") or "-",
+        "customer_phone": customer.get("phoneNumber") or "",
+        "order_created_at": _migros_order_created_at(raw),
         "store": (raw.get("store") or {}).get("name") or "-",
         "source": "Migros Yemek",
         "delivery": provider_map.get(raw.get("deliveryProvider"), raw.get("deliveryProvider") or "-"),
@@ -1586,10 +1732,54 @@ def _migros_detail_items(raw: dict) -> list:
         items.append({
             "name": item.get("name") or "?",
             "quantity": item.get("amount") or 1,
+            "price": item.get("priceText") or _migros_penny_text(item.get("price")),
             "note": item.get("note") or "",
             "details": [_display_detail_text(part) for part in migros._item_detail_parts(item)],
+            "options": _migros_detail_options(item.get("options") or []),
         })
     return items
+
+
+def _migros_detail_options(options: list) -> list:
+    rows = []
+    for option in options or []:
+        if not isinstance(option, dict):
+            continue
+        name = option.get("itemNames") or option.get("headerName") or "-"
+        header = option.get("headerName") or ""
+        excluded = bool(option.get("excluded"))
+        label = f"Ã‡Ä±karÄ±lacak: {name}" if excluded else (f"{header}: {name}" if header and header != name else name)
+        rows.append({
+            "label": _display_detail_text(label),
+            "quantity": option.get("quantity") or 1,
+            "price": option.get("primaryDiscountedPriceText") or option.get("primaryPriceText") or _migros_penny_text(option.get("primaryDiscountedPrice") or option.get("primaryPrice")),
+            "excluded": excluded,
+            "children": _migros_detail_options(option.get("subOptions") or []),
+        })
+    return rows
+
+
+def _migros_penny_text(value) -> str:
+    try:
+        amount = int(value or 0) / 100
+    except (TypeError, ValueError):
+        return ""
+    return f"{amount:.2f} TL"
+
+
+def _migros_order_created_at(raw: dict) -> str:
+    created_ms = ((raw.get("log") or {}).get("createdAsMs"))
+    if not created_ms:
+        return ""
+    try:
+        dt = datetime.fromtimestamp(int(created_ms) / 1000, tz=pytz.utc).astimezone(TURKEY_TZ)
+        return dt.strftime("%d.%m.%Y %H:%M")
+    except (TypeError, ValueError, OSError):
+        return ""
+
+
+def _migros_user_id(raw: dict):
+    return (raw.get("customer") or {}).get("id") or raw.get("userId") or raw.get("UserId")
 
 
 def _display_detail_text(value: str) -> str:

@@ -69,6 +69,21 @@
 
     {% if intg %}
     <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
+    <div class="card-title" style="font-size:.95rem">Restoran satis durumu</div>
+    <div class="inline" style="margin-top:.7rem">
+      <form method="post" action="{{ url_for('dashboard.update_migros_store_status') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="activate">
+        <button class="btn btn-primary" type="submit">Satisa ac</button>
+      </form>
+      <form method="post" action="{{ url_for('dashboard.update_migros_store_status') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="deactivate">
+        <button class="btn btn-danger" type="submit">Satisa kapat</button>
+      </form>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
     <div class="card-title" style="font-size:.95rem">Bildirim tercihleri</div>
     <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
