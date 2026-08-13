@@ -65,9 +65,12 @@ def _status_values(statuses) -> list:
 
 def _package_params(statuses, since: datetime = None, repeated_status: bool = False):
     now = datetime.utcnow()
-    params = [("page", 0), ("size", 200), ("sortDirection", "DESC")]
+    params = [("page", 0), ("size", 50)]
     if since:
-        params.extend([("startDate", _timestamp_ms(since)), ("endDate", _timestamp_ms(now))])
+        params.extend([
+            ("packageModificationStartDate", _timestamp_ms(since)),
+            ("packageModificationEndDate", _timestamp_ms(now)),
+        ])
     values = _status_values(statuses)
     if repeated_status:
         params.extend(("status", status) for status in values)
