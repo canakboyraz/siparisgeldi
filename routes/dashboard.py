@@ -13,6 +13,8 @@ from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace 
 
 dashboard_bp = Blueprint("dashboard", __name__)
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
+TGO_FOOD_PLATFORM = "trendyolgo"
+TGO_MARKET_PLATFORM = "trendyolgo_market"
 
 PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New", "Scheduled", "Awaiting", "RECEIVED"}
 PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared", "ScheduledApproved", "READY_FOR_PICKUP"}
@@ -176,7 +178,18 @@ def test_report():
 @dashboard_bp.route("/trendyolgo", methods=["GET", "POST"])
 @login_required
 def trendyolgo_setup():
-    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo").first()
+    return _trendyolgo_setup(TGO_FOOD_PLATFORM, "dashboard.trendyolgo_setup", "dashboard/trendyolgo_setup.html")
+
+
+@dashboard_bp.route("/trendyolgo-market", methods=["GET", "POST"])
+@login_required
+def trendyolgo_market_setup():
+    return _trendyolgo_setup(TGO_MARKET_PLATFORM, "dashboard.trendyolgo_market_setup", "dashboard/trendyolgo_market_setup.html")
+
+
+def _trendyolgo_setup(platform: str, endpoint: str, template: str):
+    intg = Integration.query.filter_by(user_id=current_user.id, platform=platform).first()
+    service = _tgo_service_for_platform(platform)
 
     if request.method == "POST":
         supplier_id = request.form.get("supplier_id", "").strip()
@@ -186,19 +199,19 @@ def trendyolgo_setup():
 
         if not _can_enable_platform(intg):
             flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
-            return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+            return render_template(template, intg=intg)
 
         if not supplier_id or not api_key or not api_secret:
             flash("Tüm alanlar zorunludur.", "danger")
-            return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+            return render_template(template, intg=intg)
 
-        ok, msg, _ = tgo.test_connection(supplier_id, api_key, api_secret)
+        ok, msg, _ = tgo.test_connection(supplier_id, api_key, api_secret, service=service)
         if not ok:
             flash(f"API bağlantısı başarısız: {msg}", "danger")
-            return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+            return render_template(template, intg=intg)
 
         if not intg:
-            intg = Integration(user_id=current_user.id, platform="trendyolgo")
+            intg = Integration(user_id=current_user.id, platform=platform)
             db.session.add(intg)
 
         intg.tgo_supplier_id = supplier_id
@@ -211,23 +224,24 @@ def trendyolgo_setup():
         flash(f"✅ TrendyolGo bağlandı! {msg}", "success")
         if not current_user.telegram_connected:
             flash("Bildirim alabilmek için Telegram'ı da bağlayın.", "warning")
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for(endpoint))
 
-    return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+    return render_template(template, intg=intg)
 
 
 @dashboard_bp.route("/trendyolgo/store-status", methods=["POST"])
 @login_required
 def update_trendyolgo_store_status():
-    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo", is_active=True).first_or_404()
+    platform = _tgo_platform_from_form()
+    intg = Integration.query.filter_by(user_id=current_user.id, platform=platform, is_active=True).first_or_404()
     action = request.form.get("action", "").strip()
     status = "OPEN" if action == "open" else "CLOSED" if action == "close" else ""
     if not status:
         flash("Gecersiz Trendyol Go restoran islemi.", "warning")
-        return redirect(url_for("dashboard.trendyolgo_setup"))
+        return redirect(_tgo_setup_url(platform))
     if not intg.tgo_supplier_id or not intg.tgo_store_id or not intg.tgo_api_key or not intg.tgo_api_secret:
         flash("Trendyol Go Supplier ID, Store ID ve API bilgileri eksik.", "danger")
-        return redirect(url_for("dashboard.trendyolgo_setup"))
+        return redirect(_tgo_setup_url(platform))
     try:
         tgo.set_store_working_status(
             intg.tgo_supplier_id,
@@ -235,6 +249,7 @@ def update_trendyolgo_store_status():
             intg.tgo_api_key,
             intg.tgo_api_secret,
             status,
+            service=_tgo_service_for_platform(platform),
         )
         intg.last_sync_at = datetime.utcnow()
         intg.last_error = None
@@ -244,29 +259,43 @@ def update_trendyolgo_store_status():
         intg.last_error = f"Trendyol Go restoran islemi: {e}"[:300]
         db.session.commit()
         flash(f"Trendyol Go restoran islemi gonderilemedi: {e}", "danger")
-    return redirect(url_for("dashboard.trendyolgo_setup"))
+    return redirect(_tgo_setup_url(platform))
 
 
 @dashboard_bp.route("/trendyolgo/check-now", methods=["POST"])
 @login_required
 def check_trendyolgo_now():
-    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo", is_active=True).first_or_404()
+    platform = _tgo_platform_from_form()
+    intg = Integration.query.filter_by(user_id=current_user.id, platform=platform, is_active=True).first_or_404()
     if not intg.tgo_supplier_id or not intg.tgo_api_key or not intg.tgo_api_secret:
         flash("Trendyol Go API bilgileri eksik.", "danger")
-        return redirect(url_for("dashboard.trendyolgo_setup"))
+        return redirect(_tgo_setup_url(platform))
     try:
         from worker import _process_tgo
-        _process_tgo(intg)
+        processed = _process_tgo(intg) or 0
         intg.last_sync_at = datetime.utcnow()
         intg.last_error = None
         db.session.commit()
-        flash("Trendyol Go siparis kontrolu calisti. Yeni siparis varsa panele ve bildirimlere islenir.", "success")
+        flash(f"Trendyol Go siparis kontrolu calisti. {processed} siparis bulundu/islendi.", "success")
     except Exception as e:
         db.session.rollback()
         intg.last_error = f"Trendyol Go manuel kontrol: {e}"[:300]
         db.session.commit()
         flash(f"Trendyol Go kontrolu basarisiz: {e}", "danger")
-    return redirect(url_for("dashboard.trendyolgo_setup"))
+    return redirect(_tgo_setup_url(platform))
+
+
+def _tgo_platform_from_form() -> str:
+    return TGO_MARKET_PLATFORM if request.form.get("platform") == TGO_MARKET_PLATFORM else TGO_FOOD_PLATFORM
+
+
+def _tgo_service_for_platform(platform: str) -> str:
+    return tgo.SERVICE_GROCERY if platform == TGO_MARKET_PLATFORM else tgo.SERVICE_MEAL
+
+
+def _tgo_setup_url(platform: str) -> str:
+    endpoint = "dashboard.trendyolgo_market_setup" if platform == TGO_MARKET_PLATFORM else "dashboard.trendyolgo_setup"
+    return url_for(endpoint)
 
 
 @dashboard_bp.route("/trendyol-pazaryeri", methods=["GET", "POST"])
@@ -991,7 +1020,11 @@ def update_getir_order_status(order_id):
 @dashboard_bp.route("/siparis/<int:order_id>/trendyolgo-aksiyon", methods=["POST"])
 @login_required
 def update_trendyolgo_order(order_id):
-    order = Order.query.filter_by(id=order_id, user_id=current_user.id, platform="trendyolgo").first_or_404()
+    order = (
+        Order.query.filter_by(id=order_id, user_id=current_user.id)
+        .filter(Order.platform.in_([TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM]))
+        .first_or_404()
+    )
     action = request.form.get("action", "").strip()
     detail = _order_detail_context(order)
     selected = {item["action"]: item for item in _tgo_order_actions(order, detail)}.get(action)
@@ -999,7 +1032,7 @@ def update_trendyolgo_order(order_id):
         flash("Bu Trendyol Go siparisi icin islem kullanilamaz.", "warning")
         return redirect(url_for("dashboard.order_detail", order_id=order.id))
 
-    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo", is_active=True).first()
+    intg = Integration.query.filter_by(user_id=current_user.id, platform=order.platform, is_active=True).first()
     if not intg or not intg.tgo_supplier_id or not intg.tgo_api_key or not intg.tgo_api_secret:
         flash("Trendyol Go API bilgileri eksik.", "danger")
         return redirect(url_for("dashboard.order_detail", order_id=order.id))
@@ -1012,6 +1045,7 @@ def update_trendyolgo_order(order_id):
             order.external_id,
             selected["api_action"],
             total_price=order.total_price,
+            service=_tgo_service_for_platform(order.platform),
         )
         raw = detail.get("raw") or {}
         order.status = selected["next_status"]
@@ -1357,7 +1391,7 @@ def _getir_order_actions(order: Order, detail: dict = None) -> list:
 
 
 def _tgo_order_actions(order: Order, detail: dict = None) -> list:
-    if order.platform != "trendyolgo" or str(order.external_id or "").startswith("claim:"):
+    if order.platform not in {TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM} or str(order.external_id or "").startswith("claim:"):
         return []
     status = order.status or ""
     raw = (detail or {}).get("raw") or _parse_raw_json(order.raw_json)
@@ -1376,6 +1410,20 @@ def _tgo_order_actions(order: Order, detail: dict = None) -> list:
             "api_action": "invoice",
             "label": "Hazirlandi yap",
             "next_status": "Invoiced",
+        })
+    elif package_status == "Invoiced" and order.platform == TGO_FOOD_PLATFORM:
+        actions.append({
+            "action": "ship",
+            "api_action": "ship",
+            "label": "Yola cikti yap",
+            "next_status": "Shipped",
+        })
+    elif package_status == "Shipped" and order.platform == TGO_FOOD_PLATFORM:
+        actions.append({
+            "action": "deliver",
+            "api_action": "deliver",
+            "label": "Teslim edildi yap",
+            "next_status": "Delivered",
         })
     return actions
 
@@ -1631,7 +1679,7 @@ def _order_detail_context(order: Order) -> dict:
         return _hb_detail_context(order, raw)
     if order.platform == ys.PLATFORM:
         return _ys_detail_context(order, raw)
-    if order.platform == "trendyolgo":
+    if order.platform in {TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM}:
         return _tgo_detail_context(order, raw)
     return {
         "raw": raw,

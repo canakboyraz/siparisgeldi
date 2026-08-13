@@ -25,6 +25,8 @@ TURKEY_TZ = pytz.timezone("Europe/Istanbul")
 scheduler = BackgroundScheduler(timezone=TURKEY_TZ)
 
 TGO_UNACCEPTED_ALERT_STATUS = "UNACCEPTED_2MIN"
+TGO_FOOD_PLATFORM = "trendyolgo"
+TGO_MARKET_PLATFORM = "trendyolgo_market"
 
 CANCELLED_ORDER_STATUSES = {
     "Cancelled",
@@ -58,7 +60,10 @@ def _hb_api_base(environment: str) -> str:
 
 def poll_trendyolgo(app):
     with app.app_context():
-        integrations = Integration.query.filter_by(platform="trendyolgo", is_active=True).all()
+        integrations = Integration.query.filter(
+            Integration.platform.in_([TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM]),
+            Integration.is_active.is_(True),
+        ).all()
         for intg in integrations:
             if not intg.tgo_supplier_id or not intg._tgo_api_key:
                 continue
@@ -535,7 +540,8 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
     refunded_total = sum(o.total_price for o in refunded)
     products  = _aggregate_products(active)
     label = {
-        "trendyolgo": "Trendyol Go",
+        TGO_FOOD_PLATFORM: "Trendyol Go",
+        TGO_MARKET_PLATFORM: "Trendyol Go Market",
         "migros": "Migros Yemek",
         "getir": "Getir Yemek",
         tmp.PLATFORM: "Trendyol Pazaryeri",
@@ -622,51 +628,36 @@ def send_monthly_reports(app):
 
 def _process_tgo(intg):
     since = datetime.utcnow() - timedelta(days=1)
-    orders = _get_tgo_orders_for_available_services(intg, since)
+    service = _tgo_service_for_platform(intg.platform)
+    orders = _get_tgo_orders_for_service(intg, since, service)
     user = db.session.get(User, intg.user_id)
+    processed = 0
 
     for order_data in orders:
         _upsert_tgo_order(intg, user, order_data)
+        processed += 1
 
-    _process_tgo_claims(intg, user)
+    _process_tgo_claims(intg, user, service)
+    return processed
 
 
-def _get_tgo_orders_for_available_services(intg, since: datetime) -> list:
-    orders = []
-    seen = set()
-    last_error = None
+def _tgo_service_for_platform(platform: str) -> str:
+    return tgo.SERVICE_GROCERY if platform == TGO_MARKET_PLATFORM else tgo.SERVICE_MEAL
 
-    for service in (tgo.SERVICE_MEAL, tgo.SERVICE_GROCERY):
-        try:
-            service_orders = tgo.get_orders(
-                intg.tgo_supplier_id,
-                intg.tgo_api_key,
-                intg.tgo_api_secret,
-                statuses=tgo.ORDER_POLL_STATUSES,
-                since=since,
-                service=service,
-            )
-        except requests.exceptions.HTTPError as exc:
-            if getattr(exc.response, "status_code", 0) in (400, 403, 404):
-                continue
-            last_error = exc
-            continue
-        except requests.exceptions.RequestException as exc:
-            last_error = exc
-            continue
 
-        for order in service_orders:
-            external_id = str(order.get("id") or "").strip()
-            key = external_id or f"{order.get('orderNumber')}-{order.get('packageStatus')}"
-            if key and key in seen:
-                continue
-            if key:
-                seen.add(key)
-            orders.append(order)
+def _tgo_platform_label(platform: str) -> str:
+    return "Trendyol Go Market" if platform == TGO_MARKET_PLATFORM else "Trendyol Go"
 
-    if not orders and last_error:
-        raise last_error
-    return orders
+
+def _get_tgo_orders_for_service(intg, since: datetime, service: str) -> list:
+    return tgo.get_orders(
+        intg.tgo_supplier_id,
+        intg.tgo_api_key,
+        intg.tgo_api_secret,
+        statuses=tgo.ORDER_POLL_STATUSES,
+        since=since,
+        service=service,
+    )
 
 
 def _upsert_tgo_order(intg, user, order_data: dict):
@@ -681,14 +672,14 @@ def _upsert_tgo_order(intg, user, order_data: dict):
 
     existing = Order.query.filter_by(
         user_id=intg.user_id,
-        platform="trendyolgo",
+        platform=intg.platform,
         external_id=external_id,
     ).first()
 
     if not existing:
         order = Order(
             user_id=intg.user_id,
-            platform="trendyolgo",
+            platform=intg.platform,
             external_id=external_id,
             order_number=order_number,
             status=current_status,
@@ -710,7 +701,7 @@ def _upsert_tgo_order(intg, user, order_data: dict):
             send_to_user(
                 user,
                 tgo.format_new_order_message(order_data),
-                wa=["Yeni siparis - Trendyol Go", order_number, tgo.summarize_items(order_data), amount],
+                wa=[f"Yeni siparis - {_tgo_platform_label(intg.platform)}", order_number, tgo.summarize_items(order_data), amount],
             )
         return
 
@@ -754,7 +745,7 @@ def _upsert_tgo_order(intg, user, order_data: dict):
         send_to_user(
             user,
             tgo.format_status_message(order_data, current_status),
-            wa=[f"{status_label(current_status)} - Trendyol Go", order_number, tgo.summarize_items(order_data), amount],
+            wa=[f"{status_label(current_status)} - {_tgo_platform_label(intg.platform)}", order_number, tgo.summarize_items(order_data), amount],
         )
     else:
         db.session.commit()
@@ -768,7 +759,7 @@ def _notify_tgo_problem(intg, user, order_data: dict, title: str, amount: str):
     send_to_user(
         user,
         tgo.format_status_message(order_data, current_status),
-        wa=[f"{title} - Trendyol Go", order_number, tgo.summarize_items(order_data), amount],
+        wa=[f"{title} - {_tgo_platform_label(intg.platform)}", order_number, tgo.summarize_items(order_data), amount],
     )
 
 
@@ -787,13 +778,14 @@ def _tgo_total_price(order_data: dict) -> float:
         return 0.0
 
 
-def _process_tgo_claims(intg, user):
+def _process_tgo_claims(intg, user, service: str):
     try:
         claims = tgo.get_claims(
             intg.tgo_supplier_id,
             intg.tgo_api_key,
             intg.tgo_api_secret,
             since=datetime.utcnow() - timedelta(days=1),
+            service=service,
         )
     except requests.exceptions.HTTPError as exc:
         if getattr(exc.response, "status_code", 0) in (400, 403, 404):
@@ -813,10 +805,10 @@ def _process_tgo_claims(intg, user):
         claim_order_number = tgo.claim_order_number(claim)
         existing = Order.query.filter_by(
             user_id=intg.user_id,
-            platform="trendyolgo",
+            platform=intg.platform,
             external_id=external_id,
         ).first()
-        related = _find_tgo_order_by_number(intg.user_id, claim_order_number)
+        related = _find_tgo_order_by_number(intg.user_id, intg.platform, claim_order_number)
         related_raw = _raw_json_dict(related.raw_json) if related else None
         amount = tgo.claim_total_price(claim, original_order=related_raw, fallback=(related.total_price if related else 0))
 
@@ -829,12 +821,12 @@ def _process_tgo_claims(intg, user):
             existing.mark_status_notified(report_status)
             db.session.commit()
             if should_notify and intg.notify_cancel and report_status == "Refunded":
-                _notify_tgo_claim(user, claim, existing.total_price)
+                _notify_tgo_claim(user, claim, existing.total_price, intg.platform)
             continue
 
         order = Order(
             user_id=intg.user_id,
-            platform="trendyolgo",
+            platform=intg.platform,
             external_id=external_id,
             order_number=claim_order_number or claim_id,
             status=report_status,
@@ -848,14 +840,14 @@ def _process_tgo_claims(intg, user):
         db.session.add(order)
         db.session.commit()
         if intg.notify_cancel and report_status == "Refunded":
-            _notify_tgo_claim(user, claim, amount)
+            _notify_tgo_claim(user, claim, amount, intg.platform)
 
 
-def _find_tgo_order_by_number(user_id: int, order_number: str):
+def _find_tgo_order_by_number(user_id: int, platform: str, order_number: str):
     if not order_number:
         return None
     return (
-        Order.query.filter_by(user_id=user_id, platform="trendyolgo", order_number=str(order_number))
+        Order.query.filter_by(user_id=user_id, platform=platform, order_number=str(order_number))
         .filter(~Order.external_id.like("claim:%"))
         .order_by(Order.created_at.desc())
         .first()
@@ -870,11 +862,11 @@ def _raw_json_dict(value: str) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _notify_tgo_claim(user, claim: dict, amount: float):
+def _notify_tgo_claim(user, claim: dict, amount: float, platform: str = TGO_FOOD_PLATFORM):
     send_to_user(
         user,
         tgo.format_claim_message(claim),
-        wa=["Siparis iade - Trendyol Go", tgo.claim_order_number(claim) or tgo.claim_external_id(claim),
+        wa=[f"Siparis iade - {_tgo_platform_label(platform)}", tgo.claim_order_number(claim) or tgo.claim_external_id(claim),
             tgo.claim_items_summary(claim), f"{amount:.2f} TL"],
     )
 

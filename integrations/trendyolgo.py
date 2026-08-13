@@ -105,7 +105,7 @@ def get_orders(supplier_id: str, api_key: str, api_secret: str,
 
 
 def get_claims(supplier_id: str, api_key: str, api_secret: str, since: datetime = None,
-               service: str = SERVICE_GROCERY) -> list:
+               service: str = SERVICE_MEAL) -> list:
     """Trendyol Go Market iade kayıtlarını çeker."""
     service = _service(service)
     url = f"{PROD_BASE}/integrator/claim/{service}/suppliers/{supplier_id}/claims"
@@ -157,22 +157,37 @@ def _request(method: str, endpoint: str, supplier_id: str, api_key: str, api_sec
 def update_package_status(supplier_id: str, api_key: str, api_secret: str, package_id,
                           action: str, total_price=None, service: str = SERVICE_MEAL):
     service = _service(service)
-    endpoints = {
-        "pick": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/{package_id}/picked",
-        "invoice": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/{package_id}/invoiced",
-    }
-    endpoint = endpoints.get(action)
+    body = None
+    if service == SERVICE_MEAL:
+        endpoints = {
+            "pick": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/picked",
+            "invoice": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/invoiced",
+            "ship": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/{package_id}/manual-shipped",
+            "deliver": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/{package_id}/manual-delivered",
+        }
+        endpoint = endpoints.get(action)
+        if action == "pick":
+            body = {"packageId": str(package_id), "preparationTime": 30}
+        elif action == "invoice":
+            body = {"packageId": str(package_id), "actualDate": _timestamp_ms(datetime.utcnow())}
+        elif action in {"ship", "deliver"}:
+            body = {"actualDate": _timestamp_ms(datetime.utcnow())}
+    else:
+        endpoints = {
+            "pick": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/{package_id}/picked",
+            "invoice": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/{package_id}/invoiced",
+        }
+        endpoint = endpoints.get(action)
+        if action == "invoice":
+            amount = _as_float(total_price)
+            body = {
+                "invoiceAmount": amount,
+                "bagCount": None,
+                "receiptLink": None,
+                "invoiceTaxAmount": 0.0,
+            }
     if not endpoint:
         raise ValueError("Gecersiz Trendyol Go siparis aksiyonu")
-    body = None
-    if action == "invoice":
-        amount = _as_float(total_price)
-        body = {
-            "invoiceAmount": amount,
-            "bagCount": None,
-            "receiptLink": None,
-            "invoiceTaxAmount": 0.0,
-        }
     return _request("PUT", endpoint, supplier_id, api_key, api_secret, body)
 
 
@@ -182,8 +197,11 @@ def set_store_working_status(supplier_id: str, store_id: str, api_key: str, api_
     status = str(working_status or "").strip().upper()
     if status not in {"OPEN", "CLOSED"}:
         raise ValueError("Gecersiz Trendyol Go restoran durumu")
-    endpoint = f"/integrator/store/{service}/suppliers/{supplier_id}/stores/{store_id}/working-status"
-    return _request("PUT", endpoint, supplier_id, api_key, api_secret, {"workingStatus": status})
+    if service == SERVICE_GROCERY:
+        endpoint = f"/integrator/store/{service}/suppliers/{supplier_id}/stores/{store_id}/working-status"
+        return _request("PUT", endpoint, supplier_id, api_key, api_secret, {"workingStatus": status})
+    endpoint = f"/integrator/store/{service}/suppliers/{supplier_id}/stores/{store_id}/status"
+    return _request("PUT", endpoint, supplier_id, api_key, api_secret, {"status": status})
 
 
 # ── Mesaj formatlama ────────────────────────────────────────────────────────

@@ -66,6 +66,7 @@ _STATUS_COLORS = {
 
 _PLATFORM_LABELS = {
     "trendyolgo": "Trendyol Go",
+    "trendyolgo_market": "Trendyol Go Market",
     "migros":     "Migros Yemek",
     "trendyol_marketplace": "Trendyol Pazaryeri",
 }
