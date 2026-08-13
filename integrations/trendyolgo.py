@@ -17,7 +17,7 @@ NEW_ORDER_STATUSES = {"Created", "Picking"}
 STATUS_NOTIFY = {"Picking", "Invoiced", "Shipped", "Delivered", "Cancelled", "UnSupplied", "Returned"}
 CANCEL_STATUSES = {"Cancelled", "UnSupplied"}
 REFUND_STATUSES = {"Returned", "Refunded", "Refund", "Accepted", "WaitingInAction", "Unresolved"}
-ORDER_POLL_STATUSES = "Created,Picking,Invoiced,Shipped,Delivered,Cancelled,UnSupplied,Returned,UnPacked"
+ORDER_POLL_STATUSES = "Created,Picking,Invoiced,Shipped,Delivered,Cancelled,UnSupplied"
 CLAIM_STATUSES = ("Created", "WaitingInAction", "Accepted", "Rejected", "Cancelled", "Unresolved")
 
 
