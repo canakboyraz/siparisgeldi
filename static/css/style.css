@@ -238,6 +238,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .item-note{margin-top:.7rem;background:var(--gray-soft);border-radius:8px;padding:.55rem .7rem;color:var(--gray);font-weight:600}
 .raw-details summary{cursor:pointer;font-weight:800;color:var(--muted)}
 .raw-details pre{white-space:pre-wrap;word-break:break-word;background:var(--gray-soft);border-radius:10px;padding:1rem;max-height:420px;overflow:auto}
+.receipt-print-head{display:none}
 
 @media(max-width:860px){
   .layout{grid-template-columns:1fr}
@@ -395,4 +396,42 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .stats{grid-template-columns:1fr}
   .filters .actions{grid-template-columns:1fr}
   .sidebar a{font-size:.74rem;padding:.42rem .52rem}
+}
+
+@media print{
+  @page{size:80mm auto;margin:4mm}
+  html,body{width:80mm;max-width:80mm;overflow:visible;background:#fff;color:#000}
+  body{font-size:11px;line-height:1.28}
+  .sidebar,.page-head,.stats,.flashes,.no-print,.mobile-nav-popover{display:none!important}
+  .layout{display:block;min-height:0;width:auto}
+  .main{display:block;padding:0;overflow:visible;width:100%;max-width:100%}
+  .receipt-print-head{display:block;text-align:center;margin:0 0 8px;padding-bottom:6px;border-bottom:1px dashed #000;font-size:11px}
+  .receipt-print-head .receipt-brand{font-size:15px;font-weight:800;letter-spacing:0;margin-bottom:2px}
+  .grid-2,.detail-grid{display:block;margin:0}
+  .card{border:0;border-radius:0;box-shadow:none;padding:0;margin:0 0 8px;background:#fff;break-inside:avoid;overflow:visible}
+  .card + .card{margin-top:0}
+  .card-title{font-size:12px;margin:0 0 4px;padding-bottom:3px;border-bottom:1px solid #000}
+  .detail-list{gap:0}
+  .detail-list div{display:grid;grid-template-columns:25mm 1fr;gap:2mm;padding:2px 0;border-bottom:1px dashed #bbb}
+  .detail-list strong{text-align:left;max-width:none;font-weight:700}
+  .detail-list span,.detail-block span{font-size:10px;color:#000;font-weight:700}
+  .detail-block{margin-top:5px}
+  .detail-block p{margin:1px 0 0}
+  .notice-box{border:1px dashed #000;border-radius:0;background:#fff;color:#000;padding:4px;margin-top:5px}
+  .flag-list{gap:3px;margin-top:5px}
+  .badge{border:1px solid #000;background:#fff!important;color:#000!important;border-radius:0;padding:1px 3px;font-size:9px}
+  .order-lines{margin-top:3px;border-top:0}
+  .order-lines-head,.order-line{grid-template-columns:minmax(0,1fr) 11mm 19mm;gap:2mm;font-size:10px}
+  .order-lines-head{padding:3px 0;color:#000;border-bottom:1px solid #000}
+  .order-line{padding:3px 0;border-bottom:1px dashed #bbb}
+  .order-line.is-option{padding:1px 0;border-bottom:0}
+  .order-line.is-note{display:block;margin:3px 0;padding:3px;border:1px dashed #000;border-radius:0;background:#fff;color:#000}
+  .line-product{word-break:break-word}
+  .line-qty,.line-price{text-align:right;white-space:normal}
+  .order-line.depth-1 .line-product{padding-left:3mm}
+  .order-line.depth-2 .line-product{padding-left:6mm}
+  .order-line.depth-3 .line-product{padding-left:9mm}
+  .order-line.depth-4 .line-product{padding-left:12mm}
+  .order-totals{margin-top:5px;padding-top:5px;border-top:1px solid #000;font-size:11px}
+  .order-totals .discounted{color:#000}
 }
