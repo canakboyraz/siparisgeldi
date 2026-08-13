@@ -137,7 +137,7 @@ def set_store_status(store_id, api_key: str, secret_key: str, base_url: str = DE
     body = {"storeId": store_id}
     if warehouse_id:
         body["warehouseId"] = warehouse_id
-    endpoint = "/Store/ActivateStore" if active else "/Store/DeActivateStore"
+    endpoint = "/Store/ActivateStore" if active else "/Store/DeactivateStore"
     return api_post(endpoint, body, api_key, secret_key, base_url)
 
 
