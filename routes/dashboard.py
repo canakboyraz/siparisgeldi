@@ -247,6 +247,28 @@ def update_trendyolgo_store_status():
     return redirect(url_for("dashboard.trendyolgo_setup"))
 
 
+@dashboard_bp.route("/trendyolgo/check-now", methods=["POST"])
+@login_required
+def check_trendyolgo_now():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo", is_active=True).first_or_404()
+    if not intg.tgo_supplier_id or not intg.tgo_api_key or not intg.tgo_api_secret:
+        flash("Trendyol Go API bilgileri eksik.", "danger")
+        return redirect(url_for("dashboard.trendyolgo_setup"))
+    try:
+        from worker import _process_tgo
+        _process_tgo(intg)
+        intg.last_sync_at = datetime.utcnow()
+        intg.last_error = None
+        db.session.commit()
+        flash("Trendyol Go siparis kontrolu calisti. Yeni siparis varsa panele ve bildirimlere islenir.", "success")
+    except Exception as e:
+        db.session.rollback()
+        intg.last_error = f"Trendyol Go manuel kontrol: {e}"[:300]
+        db.session.commit()
+        flash(f"Trendyol Go kontrolu basarisiz: {e}", "danger")
+    return redirect(url_for("dashboard.trendyolgo_setup"))
+
+
 @dashboard_bp.route("/trendyol-pazaryeri", methods=["GET", "POST"])
 @login_required
 def trendyol_marketplace_setup():
