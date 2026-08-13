@@ -77,6 +77,7 @@ class Integration(db.Model):
 
     # TrendyolGo (secret'lar şifreli saklanır — _ ile başlayan kolonlar)
     tgo_supplier_id = db.Column(db.String(50))
+    tgo_store_id    = db.Column(db.String(50))
     _tgo_api_key    = db.Column("tgo_api_key", db.String(512))
     _tgo_api_secret = db.Column("tgo_api_secret", db.String(512))
 

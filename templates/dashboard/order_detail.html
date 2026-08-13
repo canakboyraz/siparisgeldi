@@ -57,6 +57,26 @@
 </div>
 {% endif %}
 
+{% if trendyolgo_actions %}
+<div class="card no-print">
+  <div class="section-head">
+    <div>
+      <div class="card-title">Trendyol Go siparis islemleri</div>
+      <div class="muted">Siparis kabul ve hazirlandi bildirimi Trendyol Go API'ye gonderilir.</div>
+    </div>
+    <div class="inline">
+      {% for action in trendyolgo_actions %}
+      <form method="post" action="{{ url_for('dashboard.update_trendyolgo_order', order_id=order.id) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="{{ action.action }}">
+        <button class="btn btn-primary" type="submit">{{ action.label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% if getir_actions %}
 <div class="card no-print">
   <div class="section-head">

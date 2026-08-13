@@ -180,6 +180,7 @@ def trendyolgo_setup():
 
     if request.method == "POST":
         supplier_id = request.form.get("supplier_id", "").strip()
+        store_id    = request.form.get("store_id", "").strip()
         api_key     = request.form.get("api_key", "").strip()
         api_secret  = request.form.get("api_secret", "").strip()
 
@@ -201,6 +202,7 @@ def trendyolgo_setup():
             db.session.add(intg)
 
         intg.tgo_supplier_id = supplier_id
+        intg.tgo_store_id    = store_id
         intg.tgo_api_key     = api_key
         intg.tgo_api_secret  = api_secret
         intg.is_active       = True
@@ -212,6 +214,37 @@ def trendyolgo_setup():
         return redirect(url_for("dashboard.index"))
 
     return render_template("dashboard/trendyolgo_setup.html", intg=intg)
+
+
+@dashboard_bp.route("/trendyolgo/store-status", methods=["POST"])
+@login_required
+def update_trendyolgo_store_status():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo", is_active=True).first_or_404()
+    action = request.form.get("action", "").strip()
+    status = "OPEN" if action == "open" else "CLOSED" if action == "close" else ""
+    if not status:
+        flash("Gecersiz Trendyol Go restoran islemi.", "warning")
+        return redirect(url_for("dashboard.trendyolgo_setup"))
+    if not intg.tgo_supplier_id or not intg.tgo_store_id or not intg.tgo_api_key or not intg.tgo_api_secret:
+        flash("Trendyol Go Supplier ID, Store ID ve API bilgileri eksik.", "danger")
+        return redirect(url_for("dashboard.trendyolgo_setup"))
+    try:
+        tgo.set_store_working_status(
+            intg.tgo_supplier_id,
+            intg.tgo_store_id,
+            intg.tgo_api_key,
+            intg.tgo_api_secret,
+            status,
+        )
+        intg.last_sync_at = datetime.utcnow()
+        intg.last_error = None
+        db.session.commit()
+        flash("Trendyol Go restoran satisa acildi." if status == "OPEN" else "Trendyol Go restoran satisa kapatildi.", "success")
+    except Exception as e:
+        intg.last_error = f"Trendyol Go restoran islemi: {e}"[:300]
+        db.session.commit()
+        flash(f"Trendyol Go restoran islemi gonderilemedi: {e}", "danger")
+    return redirect(url_for("dashboard.trendyolgo_setup"))
 
 
 @dashboard_bp.route("/trendyol-pazaryeri", methods=["GET", "POST"])
@@ -879,6 +912,7 @@ def order_detail(order_id):
     migros_intg = Integration.query.filter_by(user_id=current_user.id, platform="migros", is_active=True).first() if order.platform == "migros" else None
     getir_actions = _getir_order_actions(order, detail)
     yemeksepeti_actions = _yemeksepeti_order_actions(order, detail)
+    trendyolgo_actions = _tgo_order_actions(order, detail)
     return render_template(
         "dashboard/order_detail.html",
         order=order,
@@ -887,6 +921,7 @@ def order_detail(order_id):
         migros_cancel_reasons=_migros_cancel_reasons(migros_intg) if migros_actions else [],
         getir_actions=getir_actions,
         yemeksepeti_actions=yemeksepeti_actions,
+        trendyolgo_actions=trendyolgo_actions,
     )
 
 
@@ -928,6 +963,47 @@ def update_getir_order_status(order_id):
         intg.last_error = str(e)[:300]
         db.session.commit()
         flash(f"Getir işlemi başarısız: {e}", "danger")
+    return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+
+@dashboard_bp.route("/siparis/<int:order_id>/trendyolgo-aksiyon", methods=["POST"])
+@login_required
+def update_trendyolgo_order(order_id):
+    order = Order.query.filter_by(id=order_id, user_id=current_user.id, platform="trendyolgo").first_or_404()
+    action = request.form.get("action", "").strip()
+    detail = _order_detail_context(order)
+    selected = {item["action"]: item for item in _tgo_order_actions(order, detail)}.get(action)
+    if not selected:
+        flash("Bu Trendyol Go siparisi icin islem kullanilamaz.", "warning")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo", is_active=True).first()
+    if not intg or not intg.tgo_supplier_id or not intg.tgo_api_key or not intg.tgo_api_secret:
+        flash("Trendyol Go API bilgileri eksik.", "danger")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+    try:
+        tgo.update_package_status(
+            intg.tgo_supplier_id,
+            intg.tgo_api_key,
+            intg.tgo_api_secret,
+            order.external_id,
+            selected["api_action"],
+            total_price=order.total_price,
+        )
+        raw = detail.get("raw") or {}
+        order.status = selected["next_status"]
+        raw["packageStatus"] = selected["next_status"]
+        raw["status"] = selected["next_status"]
+        order.raw_json = json.dumps(raw, ensure_ascii=False)
+        intg.last_sync_at = datetime.utcnow()
+        intg.last_error = None
+        db.session.commit()
+        flash(f"Trendyol Go islemi gonderildi: {selected['label']}", "success")
+    except Exception as e:
+        intg.last_error = f"Trendyol Go siparis islemi: {e}"[:300]
+        db.session.commit()
+        flash(f"Trendyol Go islemi gonderilemedi: {e}", "danger")
     return redirect(url_for("dashboard.order_detail", order_id=order.id))
 
 
@@ -1258,6 +1334,30 @@ def _getir_order_actions(order: Order, detail: dict = None) -> list:
     return actions
 
 
+def _tgo_order_actions(order: Order, detail: dict = None) -> list:
+    if order.platform != "trendyolgo" or str(order.external_id or "").startswith("claim:"):
+        return []
+    status = order.status or ""
+    raw = (detail or {}).get("raw") or _parse_raw_json(order.raw_json)
+    package_status = raw.get("packageStatus") or raw.get("status") or status
+    actions = []
+    if package_status in {"Created", "NEW_PENDING", "Pending", "New", ""}:
+        actions.append({
+            "action": "pick",
+            "api_action": "pick",
+            "label": "Siparisi onayla",
+            "next_status": "Picking",
+        })
+    elif package_status == "Picking":
+        actions.append({
+            "action": "invoice",
+            "api_action": "invoice",
+            "label": "Hazirlandi yap",
+            "next_status": "Invoiced",
+        })
+    return actions
+
+
 def _yemeksepeti_order_actions(order: Order, detail: dict = None) -> list:
     if order.platform != ys.PLATFORM or order.status in ACTIVE_EXCLUDED_STATUSES:
         return []
@@ -1548,6 +1648,7 @@ def _tgo_detail_context(order: Order, raw: dict) -> dict:
     return {
         "raw": raw,
         "items": _tgo_detail_items(raw),
+        "totals": _generic_detail_totals(order.total_price),
         "customer": _first_text(raw, "customerName", "customerFullName", "fullName") or "-",
         "store": _first_text(raw, "storeName", "restaurantName", "sellerName") or "-",
         "source": app_raw or order.app_source or "-",
@@ -1569,10 +1670,32 @@ def _tgo_detail_items(raw: dict) -> list:
         items.append({
             "name": line.get("name") or line.get("productName") or "?",
             "quantity": tgo._line_quantity(line),
+            "price": _tgo_line_price_text(line),
             "note": "",
             "details": details,
         })
     return items
+
+
+def _tgo_line_price_text(line: dict) -> str:
+    for key in ("totalPrice", "price", "amount", "discountedPrice", "sellingPrice"):
+        value = line.get(key)
+        if value not in (None, ""):
+            try:
+                return f"{float(value or 0):.2f} TL"
+            except (TypeError, ValueError):
+                return str(value)
+    return ""
+
+
+def _generic_detail_totals(total_price) -> dict:
+    try:
+        total = float(total_price or 0)
+    except (TypeError, ValueError):
+        total = 0
+    if not total:
+        return {}
+    return {"total": f"{total:.2f} TL", "discount": "", "discounted": f"{total:.2f} TL"}
 
 
 def _getir_detail_context(order: Order, raw: dict) -> dict:

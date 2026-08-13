@@ -138,6 +138,54 @@ def get_claims(supplier_id: str, api_key: str, api_secret: str, since: datetime 
     return claims
 
 
+def _request(method: str, endpoint: str, supplier_id: str, api_key: str, api_secret: str,
+             json_body: dict = None):
+    url = f"{PROD_BASE}{endpoint}"
+    kwargs = {"headers": _headers(supplier_id, api_key, api_secret), "timeout": 15}
+    if json_body is not None:
+        kwargs["json"] = json_body
+    response = requests.request(method, url, **kwargs)
+    response.raise_for_status()
+    if not response.content:
+        return {}
+    try:
+        return response.json()
+    except ValueError:
+        return {}
+
+
+def update_package_status(supplier_id: str, api_key: str, api_secret: str, package_id,
+                          action: str, total_price=None, service: str = SERVICE_MEAL):
+    service = _service(service)
+    endpoints = {
+        "pick": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/{package_id}/picked",
+        "invoice": f"/integrator/order/{service}/suppliers/{supplier_id}/packages/{package_id}/invoiced",
+    }
+    endpoint = endpoints.get(action)
+    if not endpoint:
+        raise ValueError("Gecersiz Trendyol Go siparis aksiyonu")
+    body = None
+    if action == "invoice":
+        amount = _as_float(total_price)
+        body = {
+            "invoiceAmount": amount,
+            "bagCount": None,
+            "receiptLink": None,
+            "invoiceTaxAmount": 0.0,
+        }
+    return _request("PUT", endpoint, supplier_id, api_key, api_secret, body)
+
+
+def set_store_working_status(supplier_id: str, store_id: str, api_key: str, api_secret: str,
+                             working_status: str, service: str = SERVICE_MEAL):
+    service = _service(service)
+    status = str(working_status or "").strip().upper()
+    if status not in {"OPEN", "CLOSED"}:
+        raise ValueError("Gecersiz Trendyol Go restoran durumu")
+    endpoint = f"/integrator/store/{service}/suppliers/{supplier_id}/stores/{store_id}/working-status"
+    return _request("PUT", endpoint, supplier_id, api_key, api_secret, {"workingStatus": status})
+
+
 # ── Mesaj formatlama ────────────────────────────────────────────────────────
 
 def summarize_items(order: dict, max_items: int = 4) -> str:

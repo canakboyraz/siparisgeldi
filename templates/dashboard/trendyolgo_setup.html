@@ -16,6 +16,11 @@
         <input type="text" name="supplier_id" required value="{{ intg.tgo_supplier_id or '' }}" placeholder="123456">
       </div>
       <div class="field">
+        <label>Store ID (Sube ID)</label>
+        <input type="text" name="store_id" value="{{ intg.tgo_store_id or '' if intg else '' }}" placeholder="Restoran/Sube ID">
+        <p class="hint">Restorani satisa acma/kapatma islemleri icin gereklidir.</p>
+      </div>
+      <div class="field">
         <label>API Key</label>
         <input type="text" name="api_key" required value="{{ intg.tgo_api_key if intg else '' }}" placeholder="xxxxxxxx">
       </div>
@@ -30,6 +35,19 @@
   {% if intg %}
   <div class="card">
     <div class="card-title">Bildirim tercihleri</div>
+    <div class="card-title" style="font-size:.95rem;margin-top:.4rem">Restoran satis durumu</div>
+    <div class="inline" style="margin:.7rem 0 1rem">
+      <form method="post" action="{{ url_for('dashboard.update_trendyolgo_store_status') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="open">
+        <button class="btn btn-primary" type="submit" {% if not intg.tgo_store_id %}disabled title="Store ID girilmemis"{% endif %}>Satisa ac</button>
+      </form>
+      <form method="post" action="{{ url_for('dashboard.update_trendyolgo_store_status') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="close">
+        <button class="btn btn-danger" type="submit" {% if not intg.tgo_store_id %}disabled title="Store ID girilmemis"{% endif %}>Satisa kapat</button>
+      </form>
+    </div>
     <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>🆕 Yeni sipariş bildirimi</span></div>
