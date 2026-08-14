@@ -22,11 +22,11 @@
       </div>
       <div class="field">
         <label>API Key</label>
-        <input type="text" name="api_key" required value="{{ intg.tgo_api_key if intg else '' }}" placeholder="xxxxxxxx">
+        <input type="text" name="api_key" {{ 'required' if not (intg and intg._tgo_api_key) }} placeholder="{{ 'Kayitli, degistirmek icin yeni deger gir' if intg and intg._tgo_api_key else 'API Key' }}">
       </div>
       <div class="field">
         <label>API Secret</label>
-        <input type="password" name="api_secret" required value="{{ intg.tgo_api_secret if intg else '' }}" placeholder="••••••••">
+        <input type="password" name="api_secret" {{ 'required' if not (intg and intg._tgo_api_secret) }} placeholder="{{ 'Kayitli, degistirmek icin yeni deger gir' if intg and intg._tgo_api_secret else 'API Secret' }}">
       </div>
       <button class="btn btn-primary btn-lg" type="submit">Bağlantıyı test et &amp; kaydet</button>
     </form>

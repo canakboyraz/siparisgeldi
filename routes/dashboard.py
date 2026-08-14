@@ -196,16 +196,23 @@ def _trendyolgo_setup(platform: str, endpoint: str, template: str):
         store_id    = request.form.get("store_id", "").strip()
         api_key     = request.form.get("api_key", "").strip()
         api_secret  = request.form.get("api_secret", "").strip()
+        has_saved_credentials = bool(intg and intg._tgo_api_key and intg._tgo_api_secret)
 
         if not _can_enable_platform(intg):
             flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
             return render_template(template, intg=intg)
 
-        if not supplier_id or not api_key or not api_secret:
+        if not supplier_id or (not has_saved_credentials and (not api_key or not api_secret)):
             flash("Tüm alanlar zorunludur.", "danger")
             return render_template(template, intg=intg)
 
-        ok, msg, _ = tgo.test_connection(supplier_id, api_key, api_secret, service=service)
+        test_api_key = api_key or (intg.tgo_api_key if intg else None)
+        test_api_secret = api_secret or (intg.tgo_api_secret if intg else None)
+        if not test_api_key or not test_api_secret:
+            flash("API anahtarları kayıtlı değil, lütfen giriniz.", "danger")
+            return render_template(template, intg=intg)
+
+        ok, msg, _ = tgo.test_connection(supplier_id, test_api_key, test_api_secret, service=service)
         if not ok:
             flash(f"API bağlantısı başarısız: {msg}", "danger")
             return render_template(template, intg=intg)
@@ -216,8 +223,10 @@ def _trendyolgo_setup(platform: str, endpoint: str, template: str):
 
         intg.tgo_supplier_id = supplier_id
         intg.tgo_store_id    = store_id
-        intg.tgo_api_key     = api_key
-        intg.tgo_api_secret  = api_secret
+        if api_key:
+            intg.tgo_api_key     = api_key
+        if api_secret:
+            intg.tgo_api_secret  = api_secret
         intg.is_active       = True
         db.session.commit()
 
@@ -591,12 +600,13 @@ def migros_setup():
         store_id = request.form.get("store_id", "").strip()
         group_id = request.form.get("group_id", "").strip()
         warehouse_id = request.form.get("warehouse_id", "").strip()
+        has_saved_api_key = bool(intg and intg._migros_api_key)
 
         if not _can_enable_platform(intg):
             flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
             return render_template("dashboard/migros_setup.html", intg=intg, **_migros_setup_context(intg))
 
-        if not api_key or not store_id:
+        if (not has_saved_api_key and not api_key) or not store_id:
             flash("Restoran API Key ve Store (Restoran) ID zorunludur.", "danger")
             return render_template("dashboard/migros_setup.html", intg=intg, **_migros_setup_context(intg))
 
@@ -608,13 +618,18 @@ def migros_setup():
         # Bağlantıyı doğrula (GetStoreGroups — şifreleme gerektirmez, sadece api key)
         secret = current_app.config.get("MIGROS_SECRET_KEY", "")
         migros_api_base = current_app.config.get("MIGROS_API_BASE")
-        ok, msg, _ = migros.test_connection(api_key, secret, migros_api_base)
+        test_api_key = api_key or (intg.migros_api_key if intg else None)
+        if not test_api_key:
+            flash("API key kayıtlarda yok. Lütfen giriniz.", "danger")
+            return render_template("dashboard/migros_setup.html", intg=intg, **_migros_setup_context(intg))
+        ok, msg, _ = migros.test_connection(test_api_key, secret, migros_api_base)
 
         if not intg:
             intg = Integration(user_id=current_user.id, platform="migros")
             db.session.add(intg)
 
-        intg.migros_api_key  = api_key
+        if api_key:
+            intg.migros_api_key  = api_key
         intg.migros_store_id = store_id
         intg.migros_group_id = group_id
         intg.migros_warehouse_id = warehouse_id

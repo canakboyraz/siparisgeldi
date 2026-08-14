@@ -14,7 +14,7 @@
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label>Restoran API Key</label>
-        <input type="text" name="api_key" required value="{{ intg.migros_api_key if intg else '' }}" placeholder="XApiKey değeri">
+        <input type="text" name="api_key" {{ 'required' if not (intg and intg._migros_api_key) }} placeholder="{{ 'Kayitli, degistirmek icin yeni deger gir' if intg and intg._migros_api_key else 'XApiKey degeri' }}">
       </div>
       <div class="field">
         <label>Store (Restoran) ID</label>
