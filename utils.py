@@ -30,6 +30,7 @@ _STATUS_LABELS = {
     "READY_FOR_PICKUP": "Teslim almaya hazır",
     "DISPATCHED": "Sevk edildi",
     "CANCELED": "İptal",
+    "CANCELLED": "İptal",
 }
 
 _STATUS_COLORS = {
@@ -62,6 +63,7 @@ _STATUS_COLORS = {
     "READY_FOR_PICKUP": "amber",
     "DISPATCHED": "violet",
     "CANCELED": "red",
+    "CANCELLED": "red",
 }
 
 _PLATFORM_LABELS = {

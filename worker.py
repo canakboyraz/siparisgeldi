@@ -31,6 +31,8 @@ TGO_MARKET_PLATFORM = "trendyolgo_market"
 CANCELLED_ORDER_STATUSES = {
     "Cancelled",
     "Canceled",
+    "CANCELED",
+    "CANCELLED",
     "UnSupplied",
     "Rejected",
     "REJECTED",

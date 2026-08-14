@@ -216,9 +216,24 @@ def yemeksepeti_order():
         return _ok("ignored")
 
     store_id = ys.store_id(payload)
-    intg = Integration.query.filter_by(
-        platform=ys.PLATFORM, ys_store_id=store_id, is_active=True
-    ).first()
+    match_keys = ys.webhook_match_keys(payload)
+    intg = None
+    if store_id:
+        intg = Integration.query.filter_by(
+            platform=ys.PLATFORM, ys_store_id=store_id, is_active=True
+        ).first()
+    if not intg and match_keys:
+        integrations = Integration.query.filter_by(
+            platform=ys.PLATFORM, is_active=True
+        ).all()
+        intg = next(
+            (
+                candidate
+                for candidate in integrations
+                if {candidate.ys_store_id, candidate.ys_vendor_id} & match_keys
+            ),
+            None,
+        )
     if not intg:
         print(f"[YEMEKSEPETI] eşleşen restoran yok (store={store_id})")
         return _ok("no matching store")

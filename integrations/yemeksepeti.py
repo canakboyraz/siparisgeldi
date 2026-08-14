@@ -12,7 +12,7 @@ SANDBOX_BASE = "https://sandbox.partner.deliveryhero.io"
 STATUS_RECEIVED = "RECEIVED"
 STATUS_READY = "READY_FOR_PICKUP"
 STATUS_DISPATCHED = "DISPATCHED"
-STATUS_CANCELLED = "CANCELED"
+STATUS_CANCELLED = "CANCELLED"
 STATUS_DELIVERED = "DELIVERED"
 STATUS_NOTIFY = {STATUS_RECEIVED, STATUS_READY, STATUS_DISPATCHED, STATUS_CANCELLED, STATUS_DELIVERED}
 
@@ -30,6 +30,18 @@ def client(payload: dict) -> dict:
 
 def store_id(payload: dict) -> str:
     return _text(client(payload).get("store_id") or payload.get("store_id"))
+
+
+def webhook_match_keys(payload: dict) -> set:
+    """Return all store identifiers that may be present in a webhook."""
+    data = client(payload)
+    values = {
+        data.get("store_id"),
+        data.get("external_partner_config_id"),
+        payload.get("store_id"),
+        payload.get("external_partner_config_id"),
+    }
+    return {_text(value) for value in values if _text(value)}
 
 
 def chain_id(payload: dict) -> str:
@@ -76,21 +88,98 @@ def item_name(item: dict) -> str:
     return _text(item.get("name") or item.get("sku") or item.get("_id") or "Ürün")
 
 
+def item_price(item: dict) -> float:
+    pricing = item.get("pricing") or {}
+    value = pricing.get("total_price")
+    if value is None:
+        value = (pricing.get("unit_price") or 0) * item_quantity(item)
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def item_price_text(item: dict) -> str:
+    return f"{item_price(item):.2f} TL"
+
+
+def _money_text(value) -> str:
+    if value in (None, ""):
+        return ""
+    try:
+        return f"{float(value):.2f} TL"
+    except (TypeError, ValueError):
+        return _text(value)
+
+
+def _option_rows(value, parent_header: str = "") -> list:
+    if not isinstance(value, list):
+        return []
+    rows = []
+    for option in value:
+        if not isinstance(option, dict):
+            continue
+        name = _text(
+            option.get("name")
+            or option.get("title")
+            or option.get("label")
+            or option.get("item_name")
+            or option.get("itemNames")
+        )
+        header = _text(
+            option.get("header")
+            or option.get("headerName")
+            or option.get("category")
+            or option.get("group")
+            or parent_header
+        )
+        quantity = option.get("quantity") or option.get("amount") or 1
+        price = option.get("price")
+        if price is None:
+            price = option.get("total_price")
+        if price is None:
+            price = option.get("unit_price")
+        children = []
+        for key in ("options", "modifiers", "choices", "children", "subOptions", "items"):
+            children.extend(_option_rows(option.get(key), header))
+        if name:
+            rows.append({
+                "name": name,
+                "header": header,
+                "quantity": quantity,
+                "price": _money_text(price),
+                "excluded": bool(option.get("excluded") or option.get("removed") or option.get("is_removed")),
+                "children": children,
+            })
+        else:
+            rows.extend(children)
+    return rows
+
+
+def item_options(item: dict) -> list:
+    rows = []
+    for key in ("options", "modifiers", "choices", "selected_options", "additions"):
+        rows.extend(_option_rows(item.get(key)))
+    return rows
+
+
 def item_details(item: dict) -> list:
     details = []
-    sku = _text(item.get("sku"))
-    if sku:
-        details.append(f"SKU: {sku}")
-    barcode = item.get("barcode") or []
-    if isinstance(barcode, list):
-        barcode = barcode[0] if barcode else ""
-    if _text(barcode):
-        details.append(f"Barkod: {_text(barcode)}")
     if _text(item.get("instructions")):
         details.append(f"Not: {_text(item['instructions'])}")
-    pricing = item.get("pricing") or {}
-    if pricing.get("pricing_type"):
-        details.append(f"Fiyat tipi: {_text(pricing['pricing_type'])}")
+    for promotion in item.get("promotion") or []:
+        if not isinstance(promotion, dict):
+            continue
+        name = _text(promotion.get("name"))
+        if name:
+            details.append(f"Promosyon: {name}")
+    item_status = _text(item.get("status")).upper()
+    if item_status in {"NOT_FOUND", "REPLACED"}:
+        details.append(
+            "Ürün durumu: bulunamadı"
+            if item_status == "NOT_FOUND"
+            else "Ürün durumu: değiştirildi"
+        )
     return details
 
 
@@ -209,7 +298,6 @@ def format_order_created(payload: dict) -> str:
         "🍔 <b>YENİ SİPARİŞ — Yemeksepeti</b>\n"
         f"{'━' * 28}\n"
         f"📋 <b>Sipariş No:</b> #{html.escape(p['order_number'] or '-')}\n"
-        f"🔑 <b>Order ID:</b> {html.escape(p['external_id'] or '-')}\n"
         f"👤 <b>Müşteri:</b> {html.escape(customer_name(payload))}\n"
         f"{'━' * 28}\n"
         f"🛍️ <b>Ürünler:</b>\n{item_text}\n"

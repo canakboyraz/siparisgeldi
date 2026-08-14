@@ -19,7 +19,7 @@ TGO_MARKET_PLATFORM = "trendyolgo_market"
 PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New", "Scheduled", "Awaiting", "RECEIVED"}
 PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared", "ScheduledApproved", "READY_FOR_PICKUP"}
 DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery", "AtCollectionPoint", "DISPATCHED"}
-CANCELLED_STATUSES = {"Cancelled", "Canceled", "CANCELED", "UnSupplied", "Rejected", "REJECTED", "AdminCancelled", "AutoCancelled"}
+CANCELLED_STATUSES = {"Cancelled", "Canceled", "CANCELED", "CANCELLED", "UnSupplied", "Rejected", "REJECTED", "AdminCancelled", "AutoCancelled"}
 REFUNDED_STATUSES = {"Refunded", "Refund", "Returned", "Return", "PartiallyRefunded", "PartialRefunded", "RETURNED", "REFUNDED"}
 PROBLEM_STATUSES = CANCELLED_STATUSES | REFUNDED_STATUSES
 DONE_STATUSES = {"Delivered", "DELIVERED", "Completed"}
@@ -1875,19 +1875,26 @@ def _hb_detail_items(raw: dict) -> list:
 
 def _ys_detail_context(order: Order, raw: dict) -> dict:
     customer = ys.customer_name(raw)
+    customer_data = raw.get("customer") or {}
+    items = []
+    for item in ys.items(raw):
+        if not isinstance(item, dict):
+            continue
+        items.append({
+            "name": ys.item_name(item),
+            "quantity": ys.item_quantity(item),
+            "price": ys.item_price_text(item),
+            "note": "",
+            "details": ys.item_details(item),
+            "options": ys.item_options(item),
+        })
     return {
         "raw": raw,
-        "items": [
-            {
-                "name": ys.item_name(item),
-                "quantity": ys.item_quantity(item),
-                "note": "",
-                "details": ys.item_details(item),
-            }
-            for item in ys.items(raw)
-            if isinstance(item, dict)
-        ],
+        "items": items,
+        "totals": _generic_detail_totals(order.total_price),
         "customer": customer,
+        "customer_phone": customer_data.get("phone_number") or "",
+        "order_created_at": _ys_order_created_at(raw),
         "store": ys.client(raw).get("name") or "-",
         "source": "Yemeksepeti",
         "delivery": ys.delivery_label(raw),
@@ -1897,6 +1904,17 @@ def _ys_detail_context(order: Order, raw: dict) -> dict:
         "flags": [],
         "order_note": order.customer_note or "",
     }
+
+
+def _ys_order_created_at(raw: dict) -> str:
+    sys_data = raw.get("sys") or {}
+    value = str(sys_data.get("created_at") or "").strip()
+    if not value:
+        return ""
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%d.%m.%Y %H:%M")
+    except ValueError:
+        return value
 
 
 def _migros_detail_context(order: Order, raw: dict) -> dict:
