@@ -957,6 +957,35 @@ def reports():
     )
 
 
+@dashboard_bp.route("/istatistikler")
+@login_required
+def analytics():
+    period = request.args.get("period", "30").strip() or "30"
+    platform = request.args.get("platform", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+
+    start_date, end_date, period_label = _analytics_date_range(period, date_from, date_to)
+    query = Order.query.filter_by(user_id=current_user.id)
+    if platform:
+        query = query.filter_by(platform=platform)
+    query = _apply_report_date_filter(query, start_date, end_date)
+    orders = query.order_by(Order.created_at.desc()).all()
+    summary = _build_analytics_summary(orders, start_date, end_date)
+
+    return render_template(
+        "dashboard/analytics.html",
+        summary=summary,
+        filters={
+            "period": period,
+            "platform": platform,
+            "date_from": start_date.isoformat(),
+            "date_to": end_date.isoformat(),
+        },
+        period_label=period_label,
+    )
+
+
 @dashboard_bp.route("/abonelik")
 @login_required
 def subscription():
@@ -1624,6 +1653,127 @@ def _report_date_range(period: str, date_from: str, date_to: str):
         start = today.replace(day=1)
         return start, today, start.strftime("%m.%Y")
     return today, today, today.strftime("%d.%m.%Y")
+
+
+def _analytics_date_range(period: str, date_from: str, date_to: str):
+    today = datetime.now(TURKEY_TZ).date()
+    if period == "custom":
+        start = _parse_date_value(date_from) or (today - timedelta(days=29))
+        end = _parse_date_value(date_to) or today
+        if end < start:
+            start, end = end, start
+        return start, end, f"{start.strftime('%d.%m.%Y')} - {end.strftime('%d.%m.%Y')}"
+
+    days = {"7": 7, "30": 30, "90": 90, "365": 365}.get(period, 30)
+    start = today - timedelta(days=days - 1)
+    labels = {7: "Son 7 gün", 30: "Son 30 gün", 90: "Son 90 gün", 365: "Son 1 yıl"}
+    return start, today, labels[days]
+
+
+def _order_local_datetime(order: Order):
+    value = order.created_at
+    if not value:
+        return None
+    if value.tzinfo is None:
+        value = pytz.utc.localize(value)
+    return value.astimezone(TURKEY_TZ)
+
+
+def _build_analytics_summary(orders: list, start_date, end_date) -> dict:
+    cancelled = [order for order in orders if _is_cancelled_order(order)]
+    refunded = [order for order in orders if _is_refunded_order(order)]
+    valid = [order for order in orders if order not in cancelled and order not in refunded]
+    day_names = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+    day_counts = [0] * 7
+    day_totals = [0.0] * 7
+    day_platforms = [dict() for _ in range(7)]
+    hour_counts = [0] * 24
+    hour_totals = [0.0] * 24
+    platform_data = {}
+
+    occurrences = [0] * 7
+    cursor = start_date
+    while cursor <= end_date:
+        occurrences[cursor.weekday()] += 1
+        cursor += timedelta(days=1)
+
+    for order in valid:
+        local_dt = _order_local_datetime(order)
+        if not local_dt:
+            continue
+        weekday = local_dt.weekday()
+        hour = local_dt.hour
+        amount = float(order.total_price or 0)
+        platform_key = order.platform or "unknown"
+        day_counts[weekday] += 1
+        day_totals[weekday] += amount
+        hour_counts[hour] += 1
+        hour_totals[hour] += amount
+        day_platforms[weekday][platform_key] = day_platforms[weekday].get(platform_key, 0) + 1
+        bucket = platform_data.setdefault(platform_key, {"count": 0, "total": 0.0})
+        bucket["count"] += 1
+        bucket["total"] += amount
+
+    total_days = max(1, (end_date - start_date).days + 1)
+    average_order_value = _sum_orders(valid) / len(valid) if valid else 0
+    max_day_count = max(day_counts) if day_counts else 0
+    max_hour_count = max(hour_counts) if hour_counts else 0
+    weekday_rows = []
+    for index, name in enumerate(day_names):
+        top_platform = max(day_platforms[index], key=day_platforms[index].get) if day_platforms[index] else ""
+        weekday_rows.append({
+            "name": name,
+            "count": day_counts[index],
+            "total": day_totals[index],
+            "occurrences": occurrences[index],
+            "average": day_counts[index] / occurrences[index] if occurrences[index] else 0,
+            "top_platform": top_platform,
+            "top_platform_count": day_platforms[index].get(top_platform, 0),
+            "top_platform_average": day_platforms[index].get(top_platform, 0) / occurrences[index] if occurrences[index] else 0,
+            "bar": (day_counts[index] / max_day_count * 100) if max_day_count else 0,
+        })
+
+    hour_rows = []
+    for hour in range(24):
+        hour_rows.append({
+            "hour": hour,
+            "label": f"{hour:02d}:00 - {(hour + 1) % 24:02d}:00",
+            "count": hour_counts[hour],
+            "total": hour_totals[hour],
+            "average": hour_counts[hour] / total_days,
+            "bar": (hour_counts[hour] / max_hour_count * 100) if max_hour_count else 0,
+        })
+
+    platform_rows = [
+        {
+            "platform": key,
+            "count": value["count"],
+            "total": value["total"],
+            "average": value["total"] / value["count"] if value["count"] else 0,
+            "share": value["count"] / len(valid) * 100 if valid else 0,
+        }
+        for key, value in sorted(platform_data.items(), key=lambda item: item[1]["count"], reverse=True)
+    ]
+    best_day = max(weekday_rows, key=lambda row: row["average"], default=None) if max_day_count else None
+    best_hour = max(hour_rows, key=lambda row: row["count"], default=None) if max_hour_count else None
+    busiest_days = sorted(weekday_rows, key=lambda row: row["average"], reverse=True)
+
+    return {
+        "gross_count": len(orders),
+        "valid_count": len(valid),
+        "valid_total": _sum_orders(valid),
+        "cancelled_count": len(cancelled),
+        "refunded_count": len(refunded),
+        "average_order_value": average_order_value,
+        "average_per_day": len(valid) / total_days if total_days else 0,
+        "best_day": best_day,
+        "best_hour": best_hour,
+        "weekday_rows": weekday_rows,
+        "hour_rows": hour_rows,
+        "platform_rows": platform_rows,
+        "busiest_days": busiest_days[:3],
+        "total_days": total_days,
+    }
 
 
 def _apply_report_date_filter(query, start_date, end_date):

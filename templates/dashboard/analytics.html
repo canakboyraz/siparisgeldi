@@ -1,0 +1,132 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}İstatistikler · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div>
+    <h1>Sipariş İstatistikleri</h1>
+    <div class="muted">{{ period_label }} · Türkiye saatine göre</div>
+  </div>
+  <a class="btn btn-ghost" href="{{ url_for('dashboard.reports') }}">Raporlara git</a>
+</div>
+
+<div class="card">
+  <form method="get" class="filters analytics-filters">
+    <div class="field">
+      <label>Dönem</label>
+      <select name="period">
+        <option value="7" {{ 'selected' if filters.period == '7' }}>Son 7 gün</option>
+        <option value="30" {{ 'selected' if filters.period == '30' }}>Son 30 gün</option>
+        <option value="90" {{ 'selected' if filters.period == '90' }}>Son 90 gün</option>
+        <option value="365" {{ 'selected' if filters.period == '365' }}>Son 1 yıl</option>
+        <option value="custom" {{ 'selected' if filters.period == 'custom' }}>Tarih aralığı</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Platform</label>
+      <select name="platform">
+        <option value="">Tüm platformlar</option>
+        <option value="trendyolgo" {{ 'selected' if filters.platform == 'trendyolgo' }}>Trendyol Go</option>
+        <option value="trendyolgo_market" {{ 'selected' if filters.platform == 'trendyolgo_market' }}>Trendyol Go Market</option>
+        <option value="trendyol_marketplace" {{ 'selected' if filters.platform == 'trendyol_marketplace' }}>Trendyol Pazaryeri</option>
+        <option value="hepsiburada" {{ 'selected' if filters.platform == 'hepsiburada' }}>Hepsiburada</option>
+        <option value="migros" {{ 'selected' if filters.platform == 'migros' }}>Migros Yemek</option>
+        <option value="getir" {{ 'selected' if filters.platform == 'getir' }}>Getir Yemek</option>
+        <option value="yemeksepeti" {{ 'selected' if filters.platform == 'yemeksepeti' }}>Yemeksepeti</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Başlangıç</label>
+      <input type="date" name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div class="field">
+      <label>Bitiş</label>
+      <input type="date" name="date_to" value="{{ filters.date_to }}">
+    </div>
+    <div class="field actions">
+      <button class="btn btn-primary" type="submit">Analiz et</button>
+      <a class="btn btn-ghost" href="{{ url_for('dashboard.analytics') }}">Sıfırla</a>
+    </div>
+  </form>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="v">{{ summary.valid_count }}</div><div class="l">Geçerli sipariş</div></div>
+  <div class="stat"><div class="v">{{ '%.1f'|format(summary.average_per_day) }}</div><div class="l">Günlük ortalama</div></div>
+  <div class="stat"><div class="v">{{ '%.2f'|format(summary.average_order_value) }} ₺</div><div class="l">Ortalama sepet</div></div>
+  <div class="stat"><div class="v">{{ summary.best_day.name if summary.best_day else '—' }}</div><div class="l">En yoğun gün</div></div>
+  <div class="stat"><div class="v">{{ summary.best_hour.label if summary.best_hour else '—' }}</div><div class="l">En yoğun saat</div></div>
+  <div class="stat"><div class="v">{{ '%.2f'|format(summary.valid_total) }} ₺</div><div class="l">Geçerli satış</div></div>
+</div>
+
+<div class="analytics-insight">
+  <strong>Özet:</strong>
+  {% if summary.best_day and summary.best_hour %}
+    {{ summary.best_day.name }} günleri ortalama {{ '%.1f'|format(summary.best_day.average) }} sipariş,
+    en yoğun saat ise {{ summary.best_hour.label }} aralığı.
+  {% else %}
+    Seçilen aralıkta karşılaştırma yapacak yeterli sipariş bulunamadı.
+  {% endif %}
+  <span class="muted">İptal: {{ summary.cancelled_count }} · İade: {{ summary.refunded_count }}</span>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Günlere göre yoğunluk</div>
+    <div class="muted analytics-caption">Ortalama, seçilen tarih aralığındaki aynı haftanın günlerine göre hesaplanır.</div>
+    <div class="analytics-list">
+      {% for row in summary.weekday_rows %}
+      <div class="analytics-row">
+        <div class="analytics-row-head">
+          <strong>{{ row.name }}</strong>
+          <span>{{ '%.1f'|format(row.average) }} sipariş/gün</span>
+        </div>
+        <div class="analytics-bar"><span style="width:{{ row.bar }}%"></span></div>
+        <div class="analytics-row-meta">
+          <span>{{ row.count }} sipariş · {{ '%.2f'|format(row.total) }} ₺</span>
+          {% if row.top_platform %}<span>{{ platform_label(row.top_platform) }} · ort. {{ '%.1f'|format(row.top_platform_average) }}</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Platform dağılımı</div>
+    <div class="muted analytics-caption">Geçerli siparişler üzerinden.</div>
+    {% if summary.platform_rows %}
+    <div class="analytics-list">
+      {% for row in summary.platform_rows %}
+      <div class="analytics-row">
+        <div class="analytics-row-head">
+          <strong>{{ platform_label(row.platform) }}</strong>
+          <span>{{ row.count }} sipariş</span>
+        </div>
+        <div class="analytics-bar green"><span style="width:{{ row.share }}%"></span></div>
+        <div class="analytics-row-meta">
+          <span>{{ '%.1f'|format(row.share) }}% · {{ '%.2f'|format(row.total) }} ₺</span>
+          <span>Ort. {{ '%.2f'|format(row.average) }} ₺</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">Seçilen aralıkta sipariş bulunamadı.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Saatlere göre yoğunluk</div>
+  <div class="muted analytics-caption">Siparişlerin oluşturulduğu Türkiye saati.</div>
+  <div class="hour-chart">
+    {% for row in summary.hour_rows %}
+    <div class="hour-row">
+      <span class="hour-label">{{ '%02d'|format(row.hour) }}</span>
+      <div class="analytics-bar"><span style="width:{{ row.bar }}%"></span></div>
+      <strong>{{ row.count }}</strong>
+      <span class="muted">{{ '%.1f'|format(row.average) }}/gün</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
