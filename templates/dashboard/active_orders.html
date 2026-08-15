@@ -96,11 +96,13 @@
     <thead>
       <tr>
         <th>Sipariş</th>
+        <th>Ürünler</th>
         <th>Platform</th>
         <th>Durum</th>
         <th>Tutar</th>
         <th>Not</th>
         <th>Tarih</th>
+        <th>İşlem</th>
       </tr>
     </thead>
     <tbody>
@@ -111,11 +113,25 @@
           <a class="table-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}"><strong>#{{ o.order_number or o.external_id }}</strong></a>
           {% if row.is_unaccepted_warning %}<br><span class="badge red">Kabul gecikti</span>{% endif %}
         </td>
+        <td data-label="Ürünler" class="items-cell">{{ row.items_summary or '—' }}</td>
         <td data-label="Platform">{{ platform_label(o.platform) }}</td>
         <td data-label="Durum"><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
         <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
         <td class="note-cell">{{ o.customer_note or '—' }}</td>
         <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
+        <td data-label="İşlem" class="action-cell">
+          {% if row.quick_action %}
+          <form method="post" action="{{ url_for(row.quick_action.endpoint, order_id=o.id) }}" onsubmit="this.querySelector('button').disabled=true;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="{{ row.quick_action.action }}">
+            <input type="hidden" name="return_to" value="active_orders">
+            <input type="hidden" name="return_path" value="{{ request.full_path }}">
+            <button class="btn btn-primary btn-sm" type="submit">{{ row.quick_action.label }}</button>
+          </form>
+          {% else %}
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">Detay</a>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>

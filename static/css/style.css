@@ -189,6 +189,9 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .row-alert{background:#fff7f6}
 .row-alert td:first-child{border-left:3px solid var(--red)}
 .note-cell{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.items-cell{max-width:280px;white-space:normal;line-height:1.35}
+.action-cell{min-width:112px;white-space:nowrap}
+.action-cell form{margin:0}
 .table-link{color:var(--brand);font-weight:800}
 .table-link:hover{text-decoration:underline}
 .total-box{display:flex;align-items:center;gap:.6rem;background:var(--green-soft);color:var(--green);
@@ -368,11 +371,13 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .mobile-orders-table td:nth-child(4)::before{content:"Tutar"}
   .mobile-orders-table td:nth-child(5)::before{content:"Tarih"}
   .mobile-active-table td:nth-child(1)::before{content:"Siparis"}
-  .mobile-active-table td:nth-child(2)::before{content:"Platform"}
-  .mobile-active-table td:nth-child(3)::before{content:"Durum"}
-  .mobile-active-table td:nth-child(4)::before{content:"Tutar"}
-  .mobile-active-table td:nth-child(5)::before{content:"Not"}
-  .mobile-active-table td:nth-child(6)::before{content:"Tarih"}
+  .mobile-active-table td:nth-child(2)::before{content:"Urunler"}
+  .mobile-active-table td:nth-child(3)::before{content:"Platform"}
+  .mobile-active-table td:nth-child(4)::before{content:"Durum"}
+  .mobile-active-table td:nth-child(5)::before{content:"Tutar"}
+  .mobile-active-table td:nth-child(6)::before{content:"Not"}
+  .mobile-active-table td:nth-child(7)::before{content:"Tarih"}
+  .mobile-active-table td:nth-child(8)::before{content:"Islem"}
   .card table.mobile-orders-table td:empty::after,
   .card table.mobile-active-table td:empty::after{content:"-";color:var(--muted)}
   .note-cell{max-width:none;text-align:right;white-space:normal;overflow:visible;text-overflow:clip}

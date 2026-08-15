@@ -991,6 +991,16 @@ def order_detail(order_id):
     )
 
 
+def _order_action_redirect(order: Order):
+    if request.form.get("return_to") == "active_orders":
+        return_path = request.form.get("return_path", "")
+        active_path = url_for("dashboard.active_orders")
+        if return_path.startswith(active_path):
+            return redirect(return_path)
+        return redirect(active_path)
+    return redirect(url_for("dashboard.order_detail", order_id=order.id))
+
+
 @dashboard_bp.route("/siparis/<int:order_id>/getir-durum", methods=["POST"])
 @login_required
 def update_getir_order_status(order_id):
@@ -1001,18 +1011,18 @@ def update_getir_order_status(order_id):
     selected = actions.get(action)
     if not selected:
         flash("Bu sipariş durumu için Getir işlemi kullanılamaz.", "warning")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
     if selected.get("disabled"):
         flash(selected.get("disabled_reason") or "Bu islem icin biraz beklemek gerekiyor.", "warning")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     intg = Integration.query.filter_by(user_id=current_user.id, platform="getir", is_active=True).first()
     if not intg or not intg.getir_restaurant_secret_key:
         flash("Getir bağlantısı eksik. Önce Restaurant Secret Key kaydedilmeli.", "danger")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
     if not current_app.config.get("GETIR_APP_SECRET_KEY"):
         flash("GETIR_APP_SECRET_KEY Railway tarafında tanımlı değil.", "danger")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     try:
         getir.update_order_status(
@@ -1029,7 +1039,7 @@ def update_getir_order_status(order_id):
         intg.last_error = str(e)[:300]
         db.session.commit()
         flash(f"Getir işlemi başarısız: {e}", "danger")
-    return redirect(url_for("dashboard.order_detail", order_id=order.id))
+    return _order_action_redirect(order)
 
 
 @dashboard_bp.route("/siparis/<int:order_id>/trendyolgo-aksiyon", methods=["POST"])
@@ -1045,12 +1055,12 @@ def update_trendyolgo_order(order_id):
     selected = {item["action"]: item for item in _tgo_order_actions(order, detail)}.get(action)
     if not selected:
         flash("Bu Trendyol Go siparisi icin islem kullanilamaz.", "warning")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     intg = Integration.query.filter_by(user_id=current_user.id, platform=order.platform, is_active=True).first()
     if not intg or not intg.tgo_supplier_id or not intg.tgo_api_key or not intg.tgo_api_secret:
         flash("Trendyol Go API bilgileri eksik.", "danger")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     try:
         tgo.update_package_status(
@@ -1075,7 +1085,7 @@ def update_trendyolgo_order(order_id):
         intg.last_error = f"Trendyol Go siparis islemi: {e}"[:300]
         db.session.commit()
         flash(f"Trendyol Go islemi gonderilemedi: {e}", "danger")
-    return redirect(url_for("dashboard.order_detail", order_id=order.id))
+    return _order_action_redirect(order)
 
 
 @dashboard_bp.route("/siparis/<int:order_id>/migros-aksiyon", methods=["POST"])
@@ -1088,30 +1098,30 @@ def update_migros_order(order_id):
     selected = actions.get(action)
     if not selected:
         flash("Bu Migros sipariÅŸi iÃ§in iÅŸlem kullanÄ±lamaz.", "warning")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     intg = Integration.query.filter_by(user_id=current_user.id, platform="migros", is_active=True).first()
     if not intg or not intg.migros_api_key or not intg.migros_store_id:
         flash("Migros API Key ve Store ID bilgileri eksik.", "danger")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
     secret = current_app.config.get("MIGROS_SECRET_KEY", "")
     if not secret:
         flash("MIGROS_SECRET_KEY Railway tarafÄ±nda tanÄ±mlÄ± deÄŸil.", "danger")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     raw = detail.get("raw") or {}
     base_url = current_app.config.get("MIGROS_API_BASE")
     cancel_reason_id = request.form.get("cancel_reason_id", "").strip()
     if action in {"reject", "cancel"} and not cancel_reason_id:
         flash("Migros red/iptal iÅŸlemi iÃ§in iptal sebebi seÃ§ilmelidir.", "warning")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     try:
         if action == "cancel":
             user_id = _migros_user_id(raw)
             if not user_id:
                 flash("Migros iptal iÅŸlemi iÃ§in sipariÅŸ payload'unda User ID bulunamadÄ±.", "danger")
-                return redirect(url_for("dashboard.order_detail", order_id=order.id))
+                return _order_action_redirect(order)
             migros.cancel_order(
                 order.external_id,
                 intg.migros_store_id,
@@ -1144,7 +1154,7 @@ def update_migros_order(order_id):
         intg.last_error = f"Migros sipariÅŸ iÅŸlemi: {e}"[:300]
         db.session.commit()
         flash(f"Migros iÅŸlemi gÃ¶nderilemedi: {e}", "danger")
-    return redirect(url_for("dashboard.order_detail", order_id=order.id))
+    return _order_action_redirect(order)
 
 
 @dashboard_bp.route("/siparis/<int:order_id>/yemeksepeti-aksiyon", methods=["POST"])
@@ -1157,20 +1167,20 @@ def update_yemeksepeti_order(order_id):
     selected = {item["action"]: item for item in _yemeksepeti_order_actions(order)}.get(action)
     if not selected:
         flash("Bu Yemeksepeti siparişi için işlem kullanılamaz.", "warning")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
     if selected.get("disabled"):
         flash(selected.get("disabled_reason") or "Bu işlem şu anda kullanılamıyor.", "warning")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     intg = Integration.query.filter_by(
         user_id=current_user.id, platform=ys.PLATFORM, is_active=True
     ).first()
     if not intg or not intg.ys_chain_id or not (intg.ys_vendor_id or intg.ys_store_id):
         flash("Yemeksepeti Chain ID ve Vendor/Store ID bilgileri eksik.", "danger")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
     if not intg.ys_client_id or not intg.ys_client_secret:
         flash("Yemeksepeti OAuth bilgileri henüz kaydedilmemiş.", "danger")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     raw = _parse_raw_json(order.raw_json)
     if action == "fulfill":
@@ -1184,7 +1194,7 @@ def update_yemeksepeti_order(order_id):
         body = ys.build_order_update_payload(raw, next_status, reason)
     else:
         flash("Geçersiz Yemeksepeti işlemi.", "warning")
-        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+        return _order_action_redirect(order)
 
     try:
         ys.update_order(
@@ -1206,7 +1216,7 @@ def update_yemeksepeti_order(order_id):
         intg.last_error = f"Yemeksepeti sipariş işlemi: {e}"[:300]
         db.session.commit()
         flash("Yemeksepeti sipariş işlemi gönderilemedi. Bağlantı ve yetkileri kontrol et.", "danger")
-    return redirect(url_for("dashboard.order_detail", order_id=order.id))
+    return _order_action_redirect(order)
 
 
 @dashboard_bp.route("/aktif-siparisler")
@@ -1228,7 +1238,7 @@ def active_orders():
 
     filtered_total = query.with_entities(func.coalesce(func.sum(Order.total_price), 0)).scalar() or 0
     orders_paged = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=30, error_out=False)
-    rows = [_active_order_row(order, now) for order in orders_paged.items]
+    rows = [_active_order_row(order, now, include_quick_action=True) for order in orders_paged.items]
 
     all_user_orders = base_query.with_entities(Order.status, Order.created_at).all()
     counts = _active_order_counts(all_user_orders, now)
@@ -1336,15 +1346,78 @@ def _status_group_options() -> list:
     ]
 
 
-def _active_order_row(order: Order, now: datetime) -> dict:
+def _active_order_row(order: Order, now: datetime, include_quick_action: bool = False) -> dict:
     age_seconds = int((now - order.created_at).total_seconds()) if order.created_at else 0
     is_pending = order.status in PENDING_STATUSES
-    return {
+    row = {
         "order": order,
         "age_minutes": max(0, age_seconds // 60),
         "is_unaccepted_warning": is_pending and age_seconds >= UNACCEPTED_WARNING_SECONDS,
         "group": _order_group(order.status),
     }
+    if include_quick_action:
+        raw = _parse_raw_json(order.raw_json)
+        row["items_summary"] = _active_order_items_summary(order, raw)
+        row["quick_action"] = _quick_accept_action(order, raw)
+    return row
+
+
+def _active_order_items_summary(order: Order, raw: dict) -> str:
+    try:
+        if order.platform == "migros":
+            return migros.summarize_items_for_display(raw, max_items=3)
+        if order.platform == "getir":
+            return getir.summarize_items(raw, max_items=3)
+        if order.platform in {TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM}:
+            return tgo.summarize_items(raw, max_items=3)
+        if order.platform == tmp.PLATFORM:
+            return tmp.summarize_items(raw, max_items=3)
+        if order.platform == hb.PLATFORM:
+            return hb.summarize_items(raw, max_items=3)
+        if order.platform == ys.PLATFORM:
+            return ys.summarize_items(raw, max_items=3)
+    except Exception:
+        pass
+    return "-"
+
+
+def _quick_accept_action(order: Order, raw: dict) -> dict:
+    if order.status in ACTIVE_EXCLUDED_STATUSES:
+        return None
+
+    if order.platform == "migros" and order.status in {"NEW_PENDING", "Created", "Pending", "New", ""}:
+        return {
+            "endpoint": "dashboard.update_migros_order",
+            "action": "approve",
+            "label": "Kabul et",
+        }
+
+    if order.platform == "getir":
+        action = "verify_scheduled" if order.status == "Scheduled" else "verify"
+        if order.status in {"Scheduled", "Created", "NEW_PENDING", "Pending", "New"}:
+            return {
+                "endpoint": "dashboard.update_getir_order_status",
+                "action": action,
+                "label": "Kabul et",
+            }
+
+    if order.platform in {TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM}:
+        package_status = raw.get("packageStatus") or raw.get("status") or order.status
+        if package_status in {"Created", "NEW_PENDING", "Pending", "New", ""}:
+            return {
+                "endpoint": "dashboard.update_trendyolgo_order",
+                "action": "pick",
+                "label": "Kabul et",
+            }
+
+    if order.platform == ys.PLATFORM and order.status == ys.STATUS_RECEIVED:
+        return {
+            "endpoint": "dashboard.update_yemeksepeti_order",
+            "action": "fulfill",
+            "label": "Hazırla / kabul et",
+        }
+
+    return None
 
 
 def _active_order_counts(orders: list, now: datetime) -> dict:
