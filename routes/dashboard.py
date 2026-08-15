@@ -974,16 +974,29 @@ def analytics():
     orders = query.order_by(Order.created_at.desc()).all()
     summary = _build_analytics_summary(orders, start_date, end_date)
     previous_start, previous_end = _previous_calendar_week(end_date)
+    current_week_start = end_date - timedelta(days=end_date.weekday())
+    current_week_query = Order.query.filter_by(user_id=current_user.id)
+    if platform:
+        current_week_query = current_week_query.filter_by(platform=platform)
+    current_week_query = _apply_report_date_filter(current_week_query, current_week_start, end_date)
+    current_week = _build_previous_week_summary(
+        current_week_query.all(),
+        current_week_start,
+        week_end=end_date,
+    )
     previous_query = Order.query.filter_by(user_id=current_user.id)
     if platform:
         previous_query = previous_query.filter_by(platform=platform)
     previous_query = _apply_report_date_filter(previous_query, previous_start, previous_end)
     previous_week = _build_previous_week_summary(previous_query.all(), previous_start)
+    week_comparison = _build_week_comparison(current_week, previous_week)
 
     return render_template(
         "dashboard/analytics.html",
         summary=summary,
+        current_week=current_week,
         previous_week=previous_week,
+        week_comparison=week_comparison,
         filters={
             "period": period,
             "platform": platform,
@@ -1693,15 +1706,27 @@ def _order_local_datetime(order: Order):
     return value.astimezone(TURKEY_TZ)
 
 
-def _build_previous_week_summary(orders: list, week_start) -> dict:
+def _analytics_day_label(day) -> str:
+    months = [
+        "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+        "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+    ]
+    days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+    return f"{day.day} {months[day.month]} {days[day.weekday()]}"
+
+
+def _build_previous_week_summary(orders: list, week_start, week_end=None) -> dict:
     day_names = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
     rows = []
+    week_end = week_end or (week_start + timedelta(days=6))
     valid_orders = [
         order for order in orders
         if not _is_cancelled_order(order) and not _is_refunded_order(order)
     ]
-    for offset, day_name in enumerate(day_names):
+    day_count = max(0, (week_end - week_start).days + 1)
+    for offset in range(day_count):
         day = week_start + timedelta(days=offset)
+        day_name = day_names[day.weekday()]
         day_orders = []
         platform_counts = {}
         for order in valid_orders:
@@ -1717,6 +1742,7 @@ def _build_previous_week_summary(orders: list, week_start) -> dict:
         rows.append({
             "date": day.strftime("%d.%m.%Y"),
             "day": day_name,
+            "label": _analytics_day_label(day),
             "count": len(day_orders),
             "total": _sum_orders(day_orders),
             "platforms": platform_text or "—",
@@ -1728,6 +1754,17 @@ def _build_previous_week_summary(orders: list, week_start) -> dict:
         "count": len(valid_orders),
         "total": _sum_orders(valid_orders),
     }
+
+
+def _build_week_comparison(current_week: dict, previous_week: dict) -> list:
+    rows = []
+    for index, previous_row in enumerate(previous_week["rows"]):
+        current_row = current_week["rows"][index] if index < len(current_week["rows"]) else None
+        rows.append({
+            "current": current_row,
+            "previous": previous_row,
+        })
+    return rows
 
 
 def _build_analytics_summary(orders: list, start_date, end_date) -> dict:

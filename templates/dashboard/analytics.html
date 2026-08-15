@@ -72,25 +72,39 @@
 <div class="card">
   <div class="section-head">
     <div>
-      <div class="card-title">Önceki hafta</div>
-      <div class="muted">{{ previous_week.start }} - {{ previous_week.end }} · Geçerli siparişler</div>
+      <div class="card-title">Bu hafta / geçen hafta karşılaştırması</div>
+      <div class="muted">Geçerli siparişler · günler Türkiye saatine göre</div>
     </div>
-    <div class="total-box">
-      <span>{{ previous_week.count }} sipariş</span>
-      <strong>{{ '%.2f'|format(previous_week.total) }} ₺</strong>
+    <div class="inline">
+      <div class="total-box">
+        <span>Bu hafta · {{ current_week.count }}</span>
+        <strong>{{ '%.2f'|format(current_week.total) }} ₺</strong>
+      </div>
+      <div class="total-box">
+        <span>Geçen hafta · {{ previous_week.count }}</span>
+        <strong>{{ '%.2f'|format(previous_week.total) }} ₺</strong>
+      </div>
     </div>
   </div>
   <table class="mobile-analytics-table">
     <thead>
-      <tr><th>Gün</th><th>Sipariş</th><th>Toplam</th><th>Platform dağılımı</th></tr>
+      <tr><th>Gün karşılaştırması</th><th>Bu hafta</th><th>Geçen hafta</th><th>Platform dağılımı</th></tr>
     </thead>
     <tbody>
-      {% for row in previous_week.rows %}
+      {% for row in week_comparison %}
       <tr>
-        <td data-label="Gün"><strong>{{ row.day }}</strong><br><span class="muted">{{ row.date }}</span></td>
-        <td data-label="Sipariş">{{ row.count }}</td>
-        <td data-label="Toplam">{{ '%.2f'|format(row.total) }} ₺</td>
-        <td data-label="Platform dağılımı">{{ row.platforms }}</td>
+        <td data-label="Gün karşılaştırması">
+          <strong>{{ row.current.label if row.current else 'Henüz gelmedi' }}</strong>
+          <br><span class="muted">- {{ row.previous.label }}</span>
+        </td>
+        <td data-label="Bu hafta">
+          {% if row.current %}{{ row.current.count }} · {{ '%.2f'|format(row.current.total) }} ₺{% else %}—{% endif %}
+        </td>
+        <td data-label="Geçen hafta">{{ row.previous.count }} · {{ '%.2f'|format(row.previous.total) }} ₺</td>
+        <td data-label="Platform dağılımı">
+          {% if row.current %}Bu: {{ row.current.platforms }}<br>{% endif %}
+          Geçen: {{ row.previous.platforms }}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
