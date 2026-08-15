@@ -214,6 +214,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .hour-label{font-variant-numeric:tabular-nums;font-weight:700;color:var(--muted)}
 .hour-row strong{text-align:right}
 .hour-row>.muted{text-align:right;font-size:.78rem}
+.mobile-analytics-table td:nth-child(2),.mobile-analytics-table td:nth-child(3){white-space:nowrap}
 .detail-grid{align-items:start;margin-bottom:1rem}
 .detail-list{display:grid;gap:.7rem}
 .detail-list div{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--line);padding-bottom:.65rem}
@@ -348,6 +349,23 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .analytics-row-meta{align-items:flex-start;flex-direction:column;gap:.1rem}
   .hour-row{grid-template-columns:32px minmax(0,1fr) 28px}
   .hour-row>.muted{display:none}
+  .card table.mobile-analytics-table{
+    display:block;width:100%;overflow:visible;white-space:normal
+  }
+  .card table.mobile-analytics-table thead{display:none}
+  .card table.mobile-analytics-table tbody{display:grid;gap:.7rem}
+  .card table.mobile-analytics-table tr{
+    display:block;border:1px solid var(--line);border-radius:10px;padding:.55rem .65rem
+  }
+  .card table.mobile-analytics-table td{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;
+    border-bottom:1px solid var(--line);padding:.45rem 0;font-size:.86rem;white-space:normal
+  }
+  .card table.mobile-analytics-table td:last-child{border-bottom:none}
+  .card table.mobile-analytics-table td::before{
+    content:attr(data-label);flex:0 0 38%;color:var(--muted);font-weight:800;font-size:.76rem;
+    text-transform:uppercase;letter-spacing:.03em
+  }
   .detail-list div{display:block}
   .detail-list strong{display:block;text-align:left;max-width:100%;margin-top:.15rem}
   .check-row{align-items:flex-start}

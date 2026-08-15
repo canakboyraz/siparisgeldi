@@ -69,6 +69,34 @@
   <span class="muted">İptal: {{ summary.cancelled_count }} · İade: {{ summary.refunded_count }}</span>
 </div>
 
+<div class="card">
+  <div class="section-head">
+    <div>
+      <div class="card-title">Önceki hafta</div>
+      <div class="muted">{{ previous_week.start }} - {{ previous_week.end }} · Geçerli siparişler</div>
+    </div>
+    <div class="total-box">
+      <span>{{ previous_week.count }} sipariş</span>
+      <strong>{{ '%.2f'|format(previous_week.total) }} ₺</strong>
+    </div>
+  </div>
+  <table class="mobile-analytics-table">
+    <thead>
+      <tr><th>Gün</th><th>Sipariş</th><th>Toplam</th><th>Platform dağılımı</th></tr>
+    </thead>
+    <tbody>
+      {% for row in previous_week.rows %}
+      <tr>
+        <td data-label="Gün"><strong>{{ row.day }}</strong><br><span class="muted">{{ row.date }}</span></td>
+        <td data-label="Sipariş">{{ row.count }}</td>
+        <td data-label="Toplam">{{ '%.2f'|format(row.total) }} ₺</td>
+        <td data-label="Platform dağılımı">{{ row.platforms }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
 <div class="grid-2">
   <div class="card">
     <div class="card-title">Günlere göre yoğunluk</div>

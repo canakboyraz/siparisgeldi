@@ -10,6 +10,7 @@ import pytz
 from extensions import db
 from models import Integration, Order
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
+from utils import platform_label
 
 dashboard_bp = Blueprint("dashboard", __name__)
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
@@ -972,10 +973,17 @@ def analytics():
     query = _apply_report_date_filter(query, start_date, end_date)
     orders = query.order_by(Order.created_at.desc()).all()
     summary = _build_analytics_summary(orders, start_date, end_date)
+    previous_start, previous_end = _previous_calendar_week(end_date)
+    previous_query = Order.query.filter_by(user_id=current_user.id)
+    if platform:
+        previous_query = previous_query.filter_by(platform=platform)
+    previous_query = _apply_report_date_filter(previous_query, previous_start, previous_end)
+    previous_week = _build_previous_week_summary(previous_query.all(), previous_start)
 
     return render_template(
         "dashboard/analytics.html",
         summary=summary,
+        previous_week=previous_week,
         filters={
             "period": period,
             "platform": platform,
@@ -1670,6 +1678,12 @@ def _analytics_date_range(period: str, date_from: str, date_to: str):
     return start, today, labels[days]
 
 
+def _previous_calendar_week(end_date):
+    current_week_start = end_date - timedelta(days=end_date.weekday())
+    previous_start = current_week_start - timedelta(days=7)
+    return previous_start, current_week_start - timedelta(days=1)
+
+
 def _order_local_datetime(order: Order):
     value = order.created_at
     if not value:
@@ -1677,6 +1691,43 @@ def _order_local_datetime(order: Order):
     if value.tzinfo is None:
         value = pytz.utc.localize(value)
     return value.astimezone(TURKEY_TZ)
+
+
+def _build_previous_week_summary(orders: list, week_start) -> dict:
+    day_names = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+    rows = []
+    valid_orders = [
+        order for order in orders
+        if not _is_cancelled_order(order) and not _is_refunded_order(order)
+    ]
+    for offset, day_name in enumerate(day_names):
+        day = week_start + timedelta(days=offset)
+        day_orders = []
+        platform_counts = {}
+        for order in valid_orders:
+            local_dt = _order_local_datetime(order)
+            if not local_dt or local_dt.date() != day:
+                continue
+            day_orders.append(order)
+            platform_counts[order.platform] = platform_counts.get(order.platform, 0) + 1
+        platform_text = " · ".join(
+            f"{platform_label(key)} {count}"
+            for key, count in sorted(platform_counts.items(), key=lambda item: item[1], reverse=True)
+        )
+        rows.append({
+            "date": day.strftime("%d.%m.%Y"),
+            "day": day_name,
+            "count": len(day_orders),
+            "total": _sum_orders(day_orders),
+            "platforms": platform_text or "—",
+        })
+    return {
+        "start": week_start.strftime("%d.%m.%Y"),
+        "end": (week_start + timedelta(days=6)).strftime("%d.%m.%Y"),
+        "rows": rows,
+        "count": len(valid_orders),
+        "total": _sum_orders(valid_orders),
+    }
 
 
 def _build_analytics_summary(orders: list, start_date, end_date) -> dict:
