@@ -33,6 +33,8 @@ class User(UserMixin, db.Model):
     # WhatsApp (Meta Cloud API) ve kanal tercihi
     whatsapp_number     = db.Column(db.String(30))
     notification_channel = db.Column(db.String(20), default="telegram")  # telegram | whatsapp | both
+    order_popup_sound_enabled = db.Column(db.Boolean, default=False)
+    order_popup_sound = db.Column(db.String(20), default="classic")
 
     integrations = db.relationship("Integration", backref="user", lazy=True, cascade="all, delete-orphan")
     orders       = db.relationship("Order", backref="user", lazy=True, cascade="all, delete-orphan")

@@ -26,6 +26,12 @@ PROBLEM_STATUSES = CANCELLED_STATUSES | REFUNDED_STATUSES
 DONE_STATUSES = {"Delivered", "DELIVERED", "Completed"}
 ACTIVE_EXCLUDED_STATUSES = PROBLEM_STATUSES | DONE_STATUSES
 UNACCEPTED_WARNING_SECONDS = 120
+ORDER_POPUP_SOUND_OPTIONS = [
+    ("classic", "Klasik üçlü"),
+    ("double", "Çift uyarı"),
+    ("short", "Kısa uyarı"),
+    ("bell", "Zil tonu"),
+]
 
 
 def _is_pro_user(user=None) -> bool:
@@ -2469,6 +2475,7 @@ def _tgo_address(raw: dict) -> str:
 @dashboard_bp.route("/profil", methods=["GET", "POST"])
 @login_required
 def profile():
+    sound_options = ORDER_POPUP_SOUND_OPTIONS
     if request.method == "POST":
         name       = request.form.get("name", "").strip()
         current_pw = request.form.get("current_password", "")
@@ -2487,23 +2494,28 @@ def profile():
             current_user.notification_channel = channel
         wa_number = request.form.get("whatsapp_number", "").strip()
         current_user.whatsapp_number = wa_number or None
+        popup_sound = request.form.get("order_popup_sound", "classic").strip()
+        if popup_sound not in {value for value, _ in sound_options}:
+            popup_sound = "classic"
+        current_user.order_popup_sound_enabled = "order_popup_sound_enabled" in request.form
+        current_user.order_popup_sound = popup_sound
 
         if current_pw or new_pw:
             if not current_user.check_password(current_pw):
                 flash("Mevcut şifre hatalı.", "danger")
-                return render_template("dashboard/profile.html")
+                return render_template("dashboard/profile.html", sound_options=sound_options)
             if new_pw != confirm_pw:
                 flash("Yeni şifreler eşleşmiyor.", "danger")
-                return render_template("dashboard/profile.html")
+                return render_template("dashboard/profile.html", sound_options=sound_options)
             if len(new_pw) < 6:
                 flash("Şifre en az 6 karakter olmalı.", "danger")
-                return render_template("dashboard/profile.html")
+                return render_template("dashboard/profile.html", sound_options=sound_options)
             current_user.set_password(new_pw)
 
         db.session.commit()
         flash("Profil güncellendi.", "success")
 
-    return render_template("dashboard/profile.html")
+    return render_template("dashboard/profile.html", sound_options=sound_options)
 
 
 @dashboard_bp.route("/test-bildirim", methods=["POST"])

@@ -183,11 +183,14 @@
     var openButton = document.getElementById("order-alert-open");
     var soundButton = document.getElementById("order-sound-toggle");
     var audioContext = null;
-    var soundEnabled = false;
-
-    try {
-      soundEnabled = window.localStorage.getItem("siparisgeldi.orderSound") === "on";
-    } catch (error) {}
+    var soundEnabled = {{ 'true' if current_user.order_popup_sound_enabled else 'false' }};
+    var soundName = {{ (current_user.order_popup_sound or 'classic')|tojson }};
+    var soundPatterns = {
+      classic: [660, 880, 660],
+      double: [880, 660],
+      short: [880],
+      bell: [523, 659, 784]
+    };
 
     function updateSoundButton() {
       if (!soundButton) return;
@@ -203,11 +206,13 @@
       if (audioContext.state === "suspended") audioContext.resume();
 
       var now = audioContext.currentTime;
-      [0, 0.2, 0.4].forEach(function (offset, index) {
+      var tones = soundPatterns[soundName] || soundPatterns.classic;
+      tones.forEach(function (frequency, index) {
+        var offset = index * 0.2;
         var oscillator = audioContext.createOscillator();
         var gain = audioContext.createGain();
         oscillator.type = "sine";
-        oscillator.frequency.value = index === 1 ? 880 : 660;
+        oscillator.frequency.value = frequency;
         gain.gain.setValueAtTime(0.0001, now + offset);
         gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.16);
@@ -220,9 +225,6 @@
 
     function setSoundEnabled(value) {
       soundEnabled = value;
-      try {
-        window.localStorage.setItem("siparisgeldi.orderSound", soundEnabled ? "on" : "off");
-      } catch (error) {}
       updateSoundButton();
       if (soundEnabled) playAlertSound();
     }

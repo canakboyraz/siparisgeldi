@@ -17,6 +17,8 @@ def _ensure_schema():
         stmts = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(30)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_channel VARCHAR(20) DEFAULT 'telegram'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS order_popup_sound_enabled BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS order_popup_sound VARCHAR(20) DEFAULT 'classic'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_whatsapp BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_multi_platform BOOLEAN DEFAULT FALSE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tgo_store_id VARCHAR(50)",
@@ -57,6 +59,10 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE users ADD COLUMN whatsapp_number VARCHAR(30)")
             if "notification_channel" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN notification_channel VARCHAR(20) DEFAULT 'telegram'")
+            if "order_popup_sound_enabled" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN order_popup_sound_enabled BOOLEAN DEFAULT FALSE")
+            if "order_popup_sound" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN order_popup_sound VARCHAR(20) DEFAULT 'classic'")
             if "feature_whatsapp" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN feature_whatsapp BOOLEAN DEFAULT FALSE")
             if "feature_multi_platform" not in user_cols:

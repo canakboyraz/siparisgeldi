@@ -38,6 +38,27 @@
       <label>Yeni şifre (tekrar)</label>
       <input type="password" name="confirm_password" placeholder="••••••••">
     </div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
+    <div id="order-alert-settings">
+      <div class="card-title" style="font-size:.95rem">Sipariş popup sesi</div>
+      <label class="toggle-line">
+        <input type="checkbox" name="order_popup_sound_enabled" {{ 'checked' if current_user.order_popup_sound_enabled }}>
+        Yeni sipariş geldiğinde popup sesi çalsın
+      </label>
+      <div class="field">
+        <label for="order-popup-sound">Uyarı tonu</label>
+        <div class="inline sound-setting-row">
+          <select id="order-popup-sound" name="order_popup_sound">
+            {% for value, label in sound_options %}
+            <option value="{{ value }}" {{ 'selected' if (current_user.order_popup_sound or 'classic') == value }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-ghost" id="order-popup-sound-preview" type="button">Önizleme</button>
+        </div>
+        <p class="hint">Seçtiğin ton aktif siparişler ekranındaki yeni sipariş uyarısında kullanılır.</p>
+      </div>
+    </div>
+
     <button class="btn btn-primary btn-lg" type="submit">Kaydet</button>
   </form>
 </div>
@@ -51,4 +72,42 @@
     <button class="btn btn-ghost" type="submit">🔔 Test bildirimi gönder</button>
   </form>
 </div>
+<script>
+  (function () {
+    var select = document.getElementById("order-popup-sound");
+    var preview = document.getElementById("order-popup-sound-preview");
+    var audioContext = null;
+    var patterns = {
+      classic: [660, 880, 660],
+      double: [880, 660],
+      short: [880],
+      bell: [523, 659, 784]
+    };
+
+    function playPreview() {
+      var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!audioContext) audioContext = new AudioContextClass();
+      if (audioContext.state === "suspended") audioContext.resume();
+      var tones = patterns[select.value] || patterns.classic;
+      var now = audioContext.currentTime;
+      tones.forEach(function (frequency, index) {
+        var offset = index * 0.2;
+        var oscillator = audioContext.createOscillator();
+        var gain = audioContext.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency;
+        gain.gain.setValueAtTime(0.0001, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.16);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(now + offset);
+        oscillator.stop(now + offset + 0.18);
+      });
+    }
+
+    if (preview) preview.addEventListener("click", playPreview);
+  })();
+</script>
 {% endblock %}
