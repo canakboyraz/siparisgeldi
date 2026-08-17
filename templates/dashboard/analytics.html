@@ -69,6 +69,78 @@
   <span class="muted">İptal: {{ summary.cancelled_count }} · İade: {{ summary.refunded_count }}</span>
 </div>
 
+<div class="card analytics-visual-card">
+  <div class="section-head">
+    <div>
+      <div class="card-title">Grafik görünümü</div>
+      <div class="muted">Seçilen tarih ve platform filtresine göre sipariş yoğunluğu</div>
+    </div>
+    <span class="analytics-visual-total">{{ summary.valid_count }} geçerli sipariş</span>
+  </div>
+  <div class="analytics-visual-grid">
+    <section class="visual-chart-block">
+      <div class="visual-chart-head">
+        <strong>Günlere göre sipariş dağılımı</strong>
+        <span class="muted">Toplam sipariş</span>
+      </div>
+      <div class="weekday-chart" role="img" aria-label="Günlere göre sipariş dağılımı">
+        {% for row in summary.weekday_rows %}
+        <div class="weekday-column" title="{{ row.name }}: {{ row.count }} sipariş">
+          <div class="weekday-value">{{ row.count }}</div>
+          <div class="weekday-track">
+            <span class="weekday-fill" style="height:{{ row.bar }}%"></span>
+          </div>
+          <span class="weekday-label">{{ row.name[:3] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="visual-chart-block">
+      <div class="visual-chart-head">
+        <strong>Platform payı</strong>
+        <span class="muted">Sipariş oranı</span>
+      </div>
+      {% if summary.platform_rows %}
+      <div class="platform-chart">
+        {% for row in summary.platform_rows %}
+        <div class="platform-chart-row">
+          <div class="platform-chart-label">
+            <strong>{{ platform_label(row.platform) }}</strong>
+            <span>{{ row.count }}</span>
+          </div>
+          <div class="platform-chart-track">
+            <span style="width:{{ row.share }}%"></span>
+          </div>
+          <div class="platform-chart-meta">{{ '%.1f'|format(row.share) }}%</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty">Seçilen aralıkta sipariş bulunamadı.</div>
+      {% endif %}
+    </section>
+
+    <section class="visual-chart-block visual-chart-wide">
+      <div class="visual-chart-head">
+        <strong>Saatlik yoğunluk</strong>
+        <span class="muted">Türkiye saati</span>
+      </div>
+      <div class="hour-column-chart" role="img" aria-label="Saatlere göre sipariş yoğunluğu">
+        {% for row in summary.hour_rows %}
+        <div class="hour-column" title="{{ row.label }}: {{ row.count }} sipariş">
+          <div class="hour-column-value">{{ row.count if row.count else '' }}</div>
+          <div class="hour-column-track">
+            <span style="height:{{ row.bar }}%"></span>
+          </div>
+          <span class="hour-column-label">{{ '%02d'|format(row.hour) }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+
 <div class="card">
   <div class="section-head">
     <div>
