@@ -241,9 +241,9 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .visual-chart-head strong{font-size:.92rem}
 .visual-chart-head .muted{font-size:.78rem}
 .weekday-chart{height:190px;display:flex;align-items:flex-end;gap:.65rem;padding:.3rem 0 0;border-bottom:1px solid var(--line)}
-.weekday-column{display:grid;grid-template-rows:20px minmax(0,1fr) 24px;align-items:end;gap:.25rem;min-width:0;flex:1;height:100%;text-align:center}
-.weekday-value{font-size:.76rem;font-weight:800;color:var(--gray);font-variant-numeric:tabular-nums}
-.weekday-track{height:145px;display:flex;align-items:flex-end;justify-content:center}
+.weekday-column{display:grid;grid-template-rows:18px minmax(0,1fr) 20px;align-items:end;gap:.25rem;min-width:0;flex:1;height:100%;text-align:center}
+.weekday-value{font-size:.76rem;font-weight:800;line-height:1;color:var(--gray);font-variant-numeric:tabular-nums}
+.weekday-track{min-height:0;display:flex;align-items:flex-end;justify-content:center}
 .weekday-fill{display:block;width:min(34px,70%);min-height:3px;border-radius:8px 8px 2px 2px;background:linear-gradient(180deg,var(--brand),var(--brand-dark));transition:height .2s ease}
 .weekday-label{font-size:.75rem;color:var(--muted);font-weight:700;white-space:nowrap}
 .platform-chart{display:grid;gap:.95rem;padding:.25rem 0}
@@ -255,9 +255,9 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .platform-chart-track span{display:block;height:100%;min-width:2px;border-radius:inherit;background:linear-gradient(90deg,var(--green),#55bd87)}
 .platform-chart-meta{grid-column:2 / 3;grid-row:1 / span 2;text-align:right;font-size:.8rem;font-weight:800;color:var(--green);font-variant-numeric:tabular-nums}
 .hour-column-chart{height:190px;display:grid;grid-template-columns:repeat(24,minmax(0,1fr));align-items:end;gap:.28rem;padding:.3rem 0 0;border-bottom:1px solid var(--line)}
-.hour-column{display:grid;grid-template-rows:20px minmax(0,1fr) 24px;align-items:end;gap:.25rem;height:100%;min-width:0;text-align:center}
-.hour-column-value{font-size:.66rem;font-weight:800;color:var(--gray);font-variant-numeric:tabular-nums;overflow:hidden}
-.hour-column-track{height:145px;display:flex;align-items:flex-end;justify-content:center}
+.hour-column{display:grid;grid-template-rows:18px minmax(0,1fr) 20px;align-items:end;gap:.25rem;height:100%;min-width:0;text-align:center}
+.hour-column-value{font-size:.66rem;font-weight:800;line-height:1;color:var(--gray);font-variant-numeric:tabular-nums;overflow:hidden}
+.hour-column-track{min-height:0;display:flex;align-items:flex-end;justify-content:center}
 .hour-column-track span{display:block;width:100%;min-height:2px;border-radius:5px 5px 1px 1px;background:linear-gradient(180deg,var(--blue),#74a9e5);transition:height .2s ease}
 .hour-column-label{font-size:.64rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .hour-chart{display:grid;gap:.48rem;margin-top:.9rem}
@@ -403,7 +403,6 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .analytics-visual-grid{grid-template-columns:1fr}
   .analytics-visual-total{font-size:.75rem;padding:.25rem .5rem}
   .weekday-chart,.hour-column-chart{height:175px}
-  .weekday-track,.hour-column-track{height:130px}
   .weekday-column{gap:.18rem}
   .hour-column-label{font-size:.56rem}
   .hour-row{grid-template-columns:32px minmax(0,1fr) 28px}
