@@ -1758,11 +1758,37 @@ def _build_previous_week_summary(orders: list, week_start, week_end=None) -> dic
 
 def _build_week_comparison(current_week: dict, previous_week: dict) -> list:
     rows = []
+    counts = []
     for index, previous_row in enumerate(previous_week["rows"]):
         current_row = current_week["rows"][index] if index < len(current_week["rows"]) else None
+        counts.extend([
+            previous_row["count"],
+            current_row["count"] if current_row else 0,
+        ])
+    max_count = max(counts, default=0)
+    for index, previous_row in enumerate(previous_week["rows"]):
+        current_row = current_week["rows"][index] if index < len(current_week["rows"]) else None
+        current_count = current_row["count"] if current_row else 0
+        previous_count = previous_row["count"]
+        difference = current_count - previous_count
+        if difference > 0:
+            trend = "up"
+            trend_label = f"+{difference}"
+        elif difference < 0:
+            trend = "down"
+            trend_label = str(difference)
+        else:
+            trend = "same"
+            trend_label = "Değişmedi"
         rows.append({
             "current": current_row,
             "previous": previous_row,
+            "current_count": current_count,
+            "previous_count": previous_count,
+            "current_bar": current_count / max_count * 100 if max_count else 0,
+            "previous_bar": previous_count / max_count * 100 if max_count else 0,
+            "trend": trend,
+            "trend_label": trend_label,
         })
     return rows
 

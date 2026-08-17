@@ -86,6 +86,41 @@
       </div>
     </div>
   </div>
+  <div class="comparison-legend" aria-label="Haftalık karşılaştırma açıklaması">
+    <span><i class="comparison-dot current"></i>Bu hafta</span>
+    <span><i class="comparison-dot previous"></i>Geçen hafta</span>
+  </div>
+  <div class="comparison-chart">
+    {% for row in week_comparison %}
+    <div class="comparison-row">
+      <div class="comparison-label">
+        {% if row.current %}
+        <strong>{{ row.current.label }}</strong>
+        {% else %}
+        <strong>Henüz gelmedi</strong>
+        {% endif %}
+        <span>{{ row.previous.label }}</span>
+      </div>
+      <div class="comparison-bars">
+        <div class="comparison-line">
+          <span class="comparison-line-label">Bu</span>
+          <div class="comparison-track">
+            <span class="comparison-fill current" style="width:{{ row.current_bar }}%"></span>
+          </div>
+          <strong>{{ row.current_count }}</strong>
+        </div>
+        <div class="comparison-line">
+          <span class="comparison-line-label">Geçen</span>
+          <div class="comparison-track">
+            <span class="comparison-fill previous" style="width:{{ row.previous_bar }}%"></span>
+          </div>
+          <strong>{{ row.previous_count }}</strong>
+        </div>
+      </div>
+      <span class="comparison-trend {{ row.trend }}">{{ row.trend_label }}</span>
+    </div>
+    {% endfor %}
+  </div>
   <table class="mobile-analytics-table">
     <thead>
       <tr><th>Gün karşılaştırması</th><th>Bu hafta</th><th>Geçen hafta</th><th>Platform dağılımı</th></tr>
