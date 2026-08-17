@@ -60,9 +60,170 @@
     <div class="mobile-nav-popover-links" id="mobile-nav-popover-links"></div>
   </div>
   <main class="main">
+    {% if request.endpoint != 'dashboard.active_orders' %}
+    <div class="dashboard-alert-tools">
+      <button class="btn btn-ghost order-sound-toggle" id="global-order-sound-toggle" type="button" aria-pressed="false">Sesi a&#231;</button>
+      <a class="btn btn-ghost" href="{{ url_for('dashboard.profile') }}#order-alert-settings">Ses ayarlar&#305;</a>
+      <span class="muted" id="global-order-alert-status">Yeni sipari&#351; kontrol&#252; a&#231;&#305;k</span>
+    </div>
+    {% endif %}
     {% include "_flashes.html" %}
     {% block panel %}{% endblock %}
   </main>
+  {% if request.endpoint != 'dashboard.active_orders' %}
+  <div class="order-alert-backdrop" id="global-order-alert-backdrop" hidden>
+    <div class="order-alert" role="alertdialog" aria-modal="true" aria-labelledby="global-order-alert-title">
+      <button class="order-alert-close" id="global-order-alert-close" type="button" aria-label="Kapat">&#215;</button>
+      <div class="order-alert-kicker">Yeni sipari&#351;</div>
+      <h2 id="global-order-alert-title">Sipari&#351; geldi</h2>
+      <div class="order-alert-meta" id="global-order-alert-meta"></div>
+      <div class="order-alert-items" id="global-order-alert-items"></div>
+      <div class="order-alert-total" id="global-order-alert-total"></div>
+      <div class="order-alert-actions">
+        <a class="btn btn-primary" id="global-order-alert-open" href="#">Sipari&#351;i a&#231;</a>
+        <button class="btn btn-ghost" id="global-order-alert-dismiss" type="button">Kapat</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var pollUrl = "{{ url_for('dashboard.active_orders_check') }}";
+      var latestId = Number("{{ dashboard_latest_order_id or 0 }}") || 0;
+      var queue = [];
+      var polling = false;
+      var backdrop = document.getElementById("global-order-alert-backdrop");
+      var closeButton = document.getElementById("global-order-alert-close");
+      var dismissButton = document.getElementById("global-order-alert-dismiss");
+      var openButton = document.getElementById("global-order-alert-open");
+      var soundButton = document.getElementById("global-order-sound-toggle");
+      var statusText = document.getElementById("global-order-alert-status");
+      var audioContext = null;
+      var soundEnabled = {{ 'true' if current_user.order_popup_sound_enabled else 'false' }};
+      var soundName = {{ (current_user.order_popup_sound or 'classic')|tojson }};
+      var alertOrderId = null;
+      var alarmTimer = null;
+      var soundPatterns = {
+        classic: {tones: [660, 880, 660, 880], type: "sine", volume: 0.34, duration: 0.38},
+        double: {tones: [880, 660, 880], type: "triangle", volume: 0.38, duration: 0.42},
+        short: {tones: [880, 880], type: "square", volume: 0.28, duration: 0.3},
+        bell: {tones: [523, 659, 784], type: "sine", volume: 0.42, duration: 0.5}
+      };
+
+      function updateSoundButton() {
+        if (!soundButton) return;
+        soundButton.textContent = soundEnabled ? "Ses a\u00e7\u0131k" : "Sesi a\u00e7";
+        soundButton.setAttribute("aria-pressed", soundEnabled ? "true" : "false");
+      }
+
+      function playAlertSound() {
+        if (!soundEnabled) return;
+        var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!audioContext) audioContext = new AudioContextClass();
+        if (audioContext.state === "suspended") audioContext.resume();
+        var now = audioContext.currentTime;
+        var pattern = soundPatterns[soundName] || soundPatterns.classic;
+        pattern.tones.forEach(function (frequency, index) {
+          var offset = index * 0.2;
+          var oscillator = audioContext.createOscillator();
+          var gain = audioContext.createGain();
+          oscillator.type = pattern.type;
+          oscillator.frequency.value = frequency;
+          gain.gain.setValueAtTime(0.0001, now + offset);
+          gain.gain.exponentialRampToValueAtTime(pattern.volume, now + offset + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + pattern.duration - 0.04);
+          oscillator.connect(gain);
+          gain.connect(audioContext.destination);
+          oscillator.start(now + offset);
+          oscillator.stop(now + offset + pattern.duration);
+        });
+      }
+
+      function stopAlarm() {
+        if (alarmTimer) window.clearInterval(alarmTimer);
+        alarmTimer = null;
+        alertOrderId = null;
+      }
+
+      function startAlarm(orderId) {
+        stopAlarm();
+        alertOrderId = orderId;
+        playAlertSound();
+        alarmTimer = window.setInterval(playAlertSound, 2800);
+      }
+
+      function showNextAlert() {
+        if (!backdrop || !queue.length) return;
+        var order = queue.shift();
+        document.getElementById("global-order-alert-title").textContent = "#" + order.order_number;
+        document.getElementById("global-order-alert-meta").textContent =
+          order.platform + " \u00b7 " + order.status + (order.created_at ? " \u00b7 " + order.created_at : "");
+        document.getElementById("global-order-alert-items").textContent = order.items || "\u00dcr\u00fcn bilgisi al\u0131namad\u0131.";
+        document.getElementById("global-order-alert-total").textContent = order.total;
+        openButton.href = order.url;
+        backdrop.hidden = false;
+        startAlarm(order.id);
+      }
+
+      function closeAlert() {
+        if (!backdrop) return;
+        backdrop.hidden = true;
+        if (queue.length) window.setTimeout(showNextAlert, 180);
+      }
+
+      async function checkForNewOrders() {
+        if (polling) return;
+        polling = true;
+        try {
+          var query = "?since_id=" + encodeURIComponent(latestId);
+          if (alertOrderId) query += "&watch_id=" + encodeURIComponent(alertOrderId);
+          var response = await fetch(pollUrl + query, {
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: {"Accept": "application/json"}
+          });
+          if (!response.ok) {
+            if (statusText) statusText.textContent = "Sipari\u015f kontrol\u00fc ba\u015far\u0131s\u0131z";
+            return;
+          }
+          var data = await response.json();
+          latestId = Math.max(latestId, Number(data.latest_id) || 0);
+          if (statusText) statusText.textContent = "Son kontrol: " + new Date().toLocaleTimeString("tr-TR");
+          if (alertOrderId && data.watch_pending === false) stopAlarm();
+          if (Array.isArray(data.orders) && data.orders.length) {
+            queue = queue.concat(data.orders);
+            if (backdrop.hidden) showNextAlert();
+          }
+        } catch (error) {
+          if (statusText) statusText.textContent = "Sipari\u015f kontrol\u00fc beklemede";
+        } finally {
+          polling = false;
+        }
+      }
+
+      updateSoundButton();
+      if (soundButton) {
+        soundButton.addEventListener("click", function () {
+          soundEnabled = !soundEnabled;
+          updateSoundButton();
+          if (soundEnabled) playAlertSound();
+        });
+      }
+      if (closeButton) closeButton.addEventListener("click", closeAlert);
+      if (dismissButton) dismissButton.addEventListener("click", closeAlert);
+      if (backdrop) {
+        backdrop.addEventListener("click", function (event) {
+          if (event.target === backdrop) closeAlert();
+        });
+      }
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && backdrop && !backdrop.hidden) closeAlert();
+      });
+      window.setTimeout(checkForNewOrders, 5000);
+      window.setInterval(checkForNewOrders, 15000);
+    })();
+  </script>
+  {% endif %}
 </div>
 <script>
   (function () {

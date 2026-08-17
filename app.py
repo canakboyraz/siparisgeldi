@@ -192,6 +192,16 @@ def create_app(config_class=Config, start_scheduler=None):
 
     @app.context_processor
     def inject_helpers():
+        dashboard_latest_order_id = 0
+        if current_user.is_authenticated and request.blueprint == "dashboard":
+            from sqlalchemy import func
+            from models import Order
+            dashboard_latest_order_id = (
+                db.session.query(func.max(Order.id))
+                .filter_by(user_id=current_user.id)
+                .scalar()
+                or 0
+            )
         return {
             "now": datetime.utcnow,
             "status_label": utils.status_label,
@@ -212,6 +222,7 @@ def create_app(config_class=Config, start_scheduler=None):
                 "tax_number": app.config.get("COMPANY_TAX_NUMBER", ""),
             },
             "csrf_token": csrf_token,
+            "dashboard_latest_order_id": dashboard_latest_order_id,
         }
 
     # TablolarÄ± oluÅŸtur + hafif ÅŸema gÃ¼ncellemeleri (mevcut Postgres'e yeni kolon)

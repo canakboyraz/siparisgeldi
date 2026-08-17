@@ -148,6 +148,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .main{padding:2rem;overflow:auto;min-width:0}
 .page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.4rem;gap:1rem;flex-wrap:wrap}
 .page-head h1{font-size:1.6rem;margin:0}
+.dashboard-alert-tools{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;flex-wrap:wrap;margin-bottom:.65rem}
+.dashboard-alert-tools .muted{font-size:.78rem;margin-left:.25rem}
 .order-sound-bar{display:flex;justify-content:flex-end;margin-bottom:.45rem}
 .order-sound-toggle{font-size:.82rem;padding:.45rem .7rem}
 .sound-setting-row{align-items:center}
