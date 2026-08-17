@@ -1,6 +1,9 @@
 {% extends "dashboard/_layout.html" %}
 {% block title %}Aktif Siparişler · SiparişGeldi{% endblock %}
 {% block panel %}
+<div class="order-sound-bar">
+  <button class="btn btn-ghost order-sound-toggle" id="order-sound-toggle" type="button" aria-pressed="false">Sesi a&#231;</button>
+</div>
 <div class="page-head">
   <h1>Aktif Siparişler</h1>
   <a class="btn btn-ghost" href="{{ url_for('dashboard.orders') }}">Sipariş arşivi</a>
@@ -152,4 +155,139 @@
   <div class="empty">Bu filtreye uygun aktif sipariş yok.</div>
   {% endif %}
 </div>
+
+<div class="order-alert-backdrop" id="order-alert-backdrop" hidden>
+  <div class="order-alert" role="alertdialog" aria-modal="true" aria-labelledby="order-alert-title">
+    <button class="order-alert-close" id="order-alert-close" type="button" aria-label="Kapat">&#215;</button>
+    <div class="order-alert-kicker">Yeni sipari&#351;</div>
+    <h2 id="order-alert-title">Sipari&#351; geldi</h2>
+    <div class="order-alert-meta" id="order-alert-meta"></div>
+    <div class="order-alert-items" id="order-alert-items"></div>
+    <div class="order-alert-total" id="order-alert-total"></div>
+    <div class="order-alert-actions">
+      <a class="btn btn-primary" id="order-alert-open" href="#">Sipari&#351;i a&#231;</a>
+      <button class="btn btn-ghost" id="order-alert-dismiss" type="button">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var pollUrl = "{{ url_for('dashboard.active_orders_check') }}";
+    var latestId = Number("{{ latest_order_id or 0 }}") || 0;
+    var queue = [];
+    var polling = false;
+    var backdrop = document.getElementById("order-alert-backdrop");
+    var closeButton = document.getElementById("order-alert-close");
+    var dismissButton = document.getElementById("order-alert-dismiss");
+    var openButton = document.getElementById("order-alert-open");
+    var soundButton = document.getElementById("order-sound-toggle");
+    var audioContext = null;
+    var soundEnabled = false;
+
+    try {
+      soundEnabled = window.localStorage.getItem("siparisgeldi.orderSound") === "on";
+    } catch (error) {}
+
+    function updateSoundButton() {
+      if (!soundButton) return;
+      soundButton.textContent = soundEnabled ? "Ses a\u00e7\u0131k" : "Sesi a\u00e7";
+      soundButton.setAttribute("aria-pressed", soundEnabled ? "true" : "false");
+    }
+
+    function playAlertSound() {
+      if (!soundEnabled) return;
+      var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!audioContext) audioContext = new AudioContextClass();
+      if (audioContext.state === "suspended") audioContext.resume();
+
+      var now = audioContext.currentTime;
+      [0, 0.2, 0.4].forEach(function (offset, index) {
+        var oscillator = audioContext.createOscillator();
+        var gain = audioContext.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = index === 1 ? 880 : 660;
+        gain.gain.setValueAtTime(0.0001, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.16);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(now + offset);
+        oscillator.stop(now + offset + 0.18);
+      });
+    }
+
+    function setSoundEnabled(value) {
+      soundEnabled = value;
+      try {
+        window.localStorage.setItem("siparisgeldi.orderSound", soundEnabled ? "on" : "off");
+      } catch (error) {}
+      updateSoundButton();
+      if (soundEnabled) playAlertSound();
+    }
+
+    function showNextAlert() {
+      if (!backdrop || !queue.length) return;
+      var order = queue.shift();
+      document.getElementById("order-alert-title").textContent = "#" + order.order_number;
+      document.getElementById("order-alert-meta").textContent =
+        order.platform + " · " + order.status + (order.created_at ? " · " + order.created_at : "");
+      document.getElementById("order-alert-items").textContent = order.items || "\u00dcr\u00fcn bilgisi al\u0131namad\u0131.";
+      document.getElementById("order-alert-total").textContent = order.total;
+      openButton.href = order.url;
+      backdrop.hidden = false;
+      playAlertSound();
+    }
+
+    function closeAlert() {
+      if (!backdrop) return;
+      backdrop.hidden = true;
+      if (queue.length) window.setTimeout(showNextAlert, 180);
+    }
+
+    async function checkForNewOrders() {
+      if (polling) return;
+      polling = true;
+      try {
+        var response = await fetch(pollUrl + "?since_id=" + encodeURIComponent(latestId), {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: {"Accept": "application/json"}
+        });
+        if (!response.ok) return;
+        var data = await response.json();
+        latestId = Math.max(latestId, Number(data.latest_id) || 0);
+        if (Array.isArray(data.orders) && data.orders.length) {
+          queue = queue.concat(data.orders);
+          if (backdrop.hidden) showNextAlert();
+        }
+      } catch (error) {
+        // Geçici ağ hatasında bir sonraki yoklama devam eder.
+      } finally {
+        polling = false;
+      }
+    }
+
+    updateSoundButton();
+    if (soundButton) {
+      soundButton.addEventListener("click", function () {
+        setSoundEnabled(!soundEnabled);
+      });
+    }
+    if (closeButton) closeButton.addEventListener("click", closeAlert);
+    if (dismissButton) dismissButton.addEventListener("click", closeAlert);
+    if (backdrop) {
+      backdrop.addEventListener("click", function (event) {
+        if (event.target === backdrop) closeAlert();
+      });
+    }
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && backdrop && !backdrop.hidden) closeAlert();
+    });
+
+    window.setTimeout(checkForNewOrders, 5000);
+    window.setInterval(checkForNewOrders, 15000);
+  })();
+</script>
 {% endblock %}

@@ -2,7 +2,7 @@
 import json
 import secrets
 from datetime import datetime, timedelta
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_
 import pytz
@@ -10,7 +10,7 @@ import pytz
 from extensions import db
 from models import Integration, Order
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
-from utils import platform_label
+from utils import platform_label, status_label
 
 dashboard_bp = Blueprint("dashboard", __name__)
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
@@ -1292,6 +1292,7 @@ def active_orders():
 
     all_user_orders = base_query.with_entities(Order.status, Order.created_at).all()
     counts = _active_order_counts(all_user_orders, now)
+    latest_order_id = db.session.query(func.max(Order.id)).filter_by(user_id=current_user.id).scalar() or 0
 
     return render_template(
         "dashboard/active_orders.html",
@@ -1299,6 +1300,7 @@ def active_orders():
         rows=rows,
         counts=counts,
         filtered_total=filtered_total,
+        latest_order_id=latest_order_id,
         filters={
             "platform": platform,
             "durum": status_group,
@@ -1308,6 +1310,42 @@ def active_orders():
         },
         groups=_status_group_options(),
     )
+
+
+@dashboard_bp.route("/aktif-siparisler/yeni-kontrol")
+@login_required
+def active_orders_check():
+    """Aktif ekran açik kalirken kullanicinin yeni siparislerini döndürür."""
+    since_id = request.args.get("since_id", 0, type=int) or 0
+    latest_order_id = db.session.query(func.max(Order.id)).filter_by(user_id=current_user.id).scalar() or 0
+    if latest_order_id <= since_id:
+        return jsonify({"latest_id": latest_order_id, "orders": []})
+
+    new_orders = (
+        Order.query
+        .filter(Order.user_id == current_user.id, Order.id > since_id)
+        .filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(ACTIVE_EXCLUDED_STATUSES))))
+        .order_by(Order.id.asc())
+        .limit(20)
+        .all()
+    )
+    if not new_orders:
+        return jsonify({"latest_id": latest_order_id, "orders": []})
+    payload = []
+    for order in new_orders:
+        raw = _parse_raw_json(order.raw_json)
+        payload.append({
+            "id": order.id,
+            "order_number": order.order_number or order.external_id or str(order.id),
+            "platform": platform_label(order.platform),
+            "status": status_label(order.status),
+            "items": _active_order_items_summary(order, raw),
+            "total": f"{float(order.total_price or 0):.2f} TL",
+            "created_at": order.created_at.strftime("%d.%m.%Y %H:%M") if order.created_at else "",
+            "url": url_for("dashboard.order_detail", order_id=order.id),
+        })
+    next_since_id = new_orders[-1].id if len(new_orders) >= 20 else latest_order_id
+    return jsonify({"latest_id": next_since_id, "orders": payload})
 
 
 def _apply_active_common_filters(query, platform: str, search: str, date_from: str, date_to: str):
