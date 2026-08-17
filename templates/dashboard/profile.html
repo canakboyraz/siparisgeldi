@@ -78,10 +78,10 @@
     var preview = document.getElementById("order-popup-sound-preview");
     var audioContext = null;
     var patterns = {
-      classic: [660, 880, 660],
-      double: [880, 660],
-      short: [880],
-      bell: [523, 659, 784]
+      classic: {tones: [660, 880, 660, 880], type: "sine", volume: 0.34, duration: 0.38},
+      double: {tones: [880, 660, 880], type: "triangle", volume: 0.38, duration: 0.42},
+      short: {tones: [880, 880], type: "square", volume: 0.28, duration: 0.3},
+      bell: {tones: [523, 659, 784], type: "sine", volume: 0.42, duration: 0.5}
     };
 
     function playPreview() {
@@ -89,21 +89,21 @@
       if (!AudioContextClass) return;
       if (!audioContext) audioContext = new AudioContextClass();
       if (audioContext.state === "suspended") audioContext.resume();
-      var tones = patterns[select.value] || patterns.classic;
+      var pattern = patterns[select.value] || patterns.classic;
       var now = audioContext.currentTime;
-      tones.forEach(function (frequency, index) {
+      pattern.tones.forEach(function (frequency, index) {
         var offset = index * 0.2;
         var oscillator = audioContext.createOscillator();
         var gain = audioContext.createGain();
-        oscillator.type = "sine";
+        oscillator.type = pattern.type;
         oscillator.frequency.value = frequency;
         gain.gain.setValueAtTime(0.0001, now + offset);
-        gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.16);
+        gain.gain.exponentialRampToValueAtTime(pattern.volume, now + offset + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + pattern.duration - 0.04);
         oscillator.connect(gain);
         gain.connect(audioContext.destination);
         oscillator.start(now + offset);
-        oscillator.stop(now + offset + 0.18);
+        oscillator.stop(now + offset + pattern.duration);
       });
     }
 

@@ -1323,9 +1323,17 @@ def active_orders():
 def active_orders_check():
     """Aktif ekran açik kalirken kullanicinin yeni siparislerini döndürür."""
     since_id = request.args.get("since_id", 0, type=int) or 0
+    watch_id = request.args.get("watch_id", 0, type=int) or 0
     latest_order_id = db.session.query(func.max(Order.id)).filter_by(user_id=current_user.id).scalar() or 0
+    watch_pending = None
+    if watch_id:
+        watched_order = Order.query.filter_by(id=watch_id, user_id=current_user.id).first()
+        watch_pending = bool(
+            watched_order
+            and (watched_order.status in PENDING_STATUSES or not (watched_order.status or "").strip())
+        )
     if latest_order_id <= since_id:
-        return jsonify({"latest_id": latest_order_id, "orders": []})
+        return jsonify({"latest_id": latest_order_id, "orders": [], "watch_pending": watch_pending})
 
     new_orders = (
         Order.query
@@ -1336,7 +1344,7 @@ def active_orders_check():
         .all()
     )
     if not new_orders:
-        return jsonify({"latest_id": latest_order_id, "orders": []})
+        return jsonify({"latest_id": latest_order_id, "orders": [], "watch_pending": watch_pending})
     payload = []
     for order in new_orders:
         raw = _parse_raw_json(order.raw_json)
@@ -1351,7 +1359,7 @@ def active_orders_check():
             "url": url_for("dashboard.order_detail", order_id=order.id),
         })
     next_since_id = new_orders[-1].id if len(new_orders) >= 20 else latest_order_id
-    return jsonify({"latest_id": next_since_id, "orders": payload})
+    return jsonify({"latest_id": next_since_id, "orders": payload, "watch_pending": watch_pending})
 
 
 def _apply_active_common_filters(query, platform: str, search: str, date_from: str, date_to: str):

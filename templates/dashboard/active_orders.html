@@ -185,11 +185,13 @@
     var audioContext = null;
     var soundEnabled = {{ 'true' if current_user.order_popup_sound_enabled else 'false' }};
     var soundName = {{ (current_user.order_popup_sound or 'classic')|tojson }};
+    var alertOrderId = null;
+    var alarmTimer = null;
     var soundPatterns = {
-      classic: [660, 880, 660],
-      double: [880, 660],
-      short: [880],
-      bell: [523, 659, 784]
+      classic: {tones: [660, 880, 660, 880], type: "sine", volume: 0.34, duration: 0.38},
+      double: {tones: [880, 660, 880], type: "triangle", volume: 0.38, duration: 0.42},
+      short: {tones: [880, 880], type: "square", volume: 0.28, duration: 0.3},
+      bell: {tones: [523, 659, 784], type: "sine", volume: 0.42, duration: 0.5}
     };
 
     function updateSoundButton() {
@@ -206,21 +208,36 @@
       if (audioContext.state === "suspended") audioContext.resume();
 
       var now = audioContext.currentTime;
-      var tones = soundPatterns[soundName] || soundPatterns.classic;
-      tones.forEach(function (frequency, index) {
+      var pattern = soundPatterns[soundName] || soundPatterns.classic;
+      pattern.tones.forEach(function (frequency, index) {
         var offset = index * 0.2;
         var oscillator = audioContext.createOscillator();
         var gain = audioContext.createGain();
-        oscillator.type = "sine";
+        oscillator.type = pattern.type;
         oscillator.frequency.value = frequency;
         gain.gain.setValueAtTime(0.0001, now + offset);
-        gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.16);
+        gain.gain.exponentialRampToValueAtTime(pattern.volume, now + offset + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + pattern.duration - 0.04);
         oscillator.connect(gain);
         gain.connect(audioContext.destination);
         oscillator.start(now + offset);
-        oscillator.stop(now + offset + 0.18);
+        oscillator.stop(now + offset + pattern.duration);
       });
+    }
+
+    function startAlarm(orderId) {
+      stopAlarm();
+      alertOrderId = orderId;
+      playAlertSound();
+      alarmTimer = window.setInterval(playAlertSound, 2800);
+    }
+
+    function stopAlarm() {
+      if (alarmTimer) {
+        window.clearInterval(alarmTimer);
+        alarmTimer = null;
+      }
+      alertOrderId = null;
     }
 
     function setSoundEnabled(value) {
@@ -239,7 +256,7 @@
       document.getElementById("order-alert-total").textContent = order.total;
       openButton.href = order.url;
       backdrop.hidden = false;
-      playAlertSound();
+      startAlarm(order.id);
     }
 
     function closeAlert() {
@@ -252,7 +269,9 @@
       if (polling) return;
       polling = true;
       try {
-        var response = await fetch(pollUrl + "?since_id=" + encodeURIComponent(latestId), {
+        var query = "?since_id=" + encodeURIComponent(latestId);
+        if (alertOrderId) query += "&watch_id=" + encodeURIComponent(alertOrderId);
+        var response = await fetch(pollUrl + query, {
           credentials: "same-origin",
           cache: "no-store",
           headers: {"Accept": "application/json"}
@@ -260,6 +279,7 @@
         if (!response.ok) return;
         var data = await response.json();
         latestId = Math.max(latestId, Number(data.latest_id) || 0);
+        if (alertOrderId && data.watch_pending === false) stopAlarm();
         if (Array.isArray(data.orders) && data.orders.length) {
           queue = queue.concat(data.orders);
           if (backdrop.hidden) showNextAlert();
