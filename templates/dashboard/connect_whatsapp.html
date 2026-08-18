@@ -44,6 +44,10 @@
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-ghost" type="submit" {{ 'disabled' if not can_use_whatsapp }}>🔔 WhatsApp test mesajı gönder</button>
   </form>
+  <form method="post" action="{{ url_for('dashboard.test_whatsapp_report') }}" style="margin-top:.6rem">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-ghost" type="submit" {{ 'disabled' if not can_use_whatsapp }}>📊 WhatsApp rapor test mesajı gönder</button>
+  </form>
   {% if not can_use_whatsapp %}
   <p class="hint">Test mesajı ve WhatsApp bildirimi Pro planda kullanılabilir.</p>
   {% endif %}
@@ -60,6 +64,7 @@
     <div>Access token: <b>{{ "Tanımlı" if whatsapp_status.token else "Eksik" }}</b></div>
     <div>Phone number ID: <b>{{ "Tanımlı" if whatsapp_status.phone_number_id else "Eksik" }}</b></div>
     <div>Şablon: <b>{{ whatsapp_status.template }}</b> / {{ whatsapp_status.language }}</div>
+    <div>Rapor şablonu: <b>{{ whatsapp_status.report_template }}</b> / {{ whatsapp_status.language }}</div>
     <div>API sürümü: <b>{{ whatsapp_status.version }}</b></div>
   </div>
   {% if whatsapp_status.channel not in ["whatsapp", "both"] %}

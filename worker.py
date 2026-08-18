@@ -564,16 +564,19 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
         f"🛍️ <b>Satılan Ürünler:</b>\n{products}\n"
     )
     user = db.session.get(User, intg.user_id)
-    # WhatsApp rapor şablonu: {{1}}=başlık+dönem {{2}}=ürünler {{3}}=özet {{4}}=ciro
+    # WhatsApp rapor şablonu: {{1}}=başlık+dönem {{2}}=ürünler {{3}}=ciro
     from flask import current_app
-    wa_template = current_app.config.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_rapor")
+    wa_template = current_app.config.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_raporr")
     wa = [
         f"{kind} · {label} · {period_label} · {len(active)} geçerli, {len(cancelled)} iptal, {len(refunded)} iade",
         products[:400] if products != "-" else "Sipariş yok",
         f"{revenue:.2f} ₺",
     ]
-    send_to_user(user, msg, wa=wa, wa_template=wa_template)
-    print(f"[RAPOR/{kind}] user={intg.user_id} platform={intg.platform}")
+    sent = send_to_user(user, msg, wa=wa, wa_template=wa_template)
+    print(
+        f"[RAPOR/{kind}] user={intg.user_id} platform={intg.platform} "
+        f"whatsapp_template={wa_template} sent={sent} params={len(wa)}"
+    )
 
 
 def send_daily_reports(app):

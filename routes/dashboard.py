@@ -131,6 +131,7 @@ def connect_whatsapp():
         "token": bool(cfg.get("WHATSAPP_ACCESS_TOKEN")),
         "phone_number_id": bool(cfg.get("WHATSAPP_PHONE_NUMBER_ID")),
         "template": cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim"),
+        "report_template": cfg.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_raporr"),
         "language": cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
         "version": cfg.get("WHATSAPP_API_VERSION", "v21.0"),
     }
@@ -176,6 +177,45 @@ def test_whatsapp():
         ok, err2 = whatsapp.send_text(num, "🔔 Test — WhatsApp bildirimlerin çalışıyor! (SiparişGeldi)", tok, pnid, ver)
         err = None if ok else (err or err2)
     flash("✅ WhatsApp test mesajı gönderildi." if ok else f"⚠️ Gönderilemedi: {err}",
+          "success" if ok else "warning")
+    return redirect(url_for("dashboard.connect_whatsapp"))
+
+
+@dashboard_bp.route("/whatsapp/test-rapor", methods=["POST"])
+@login_required
+def test_whatsapp_report():
+    """WhatsApp rapor şablonunu ayrıca test eder."""
+    if not _can_use_whatsapp():
+        flash("WhatsApp rapor testi Pro planda kullanılabilir.", "warning")
+        return redirect(url_for("dashboard.connect_whatsapp"))
+    from notifications import whatsapp
+    cfg = current_app.config
+    num = current_user.whatsapp_number
+    tok = cfg.get("WHATSAPP_ACCESS_TOKEN")
+    pnid = cfg.get("WHATSAPP_PHONE_NUMBER_ID")
+    template = cfg.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_raporr")
+    lang = cfg.get("WHATSAPP_TEMPLATE_LANG", "tr")
+    print(
+        "[WHATSAPP RAPOR TEST] user=%s number=%s token=%s phone_number_id=%s template=%s lang=%s"
+        % (current_user.id, bool(num), bool(tok), bool(pnid), template, lang)
+    )
+    if not (num and tok and pnid):
+        flash("WhatsApp numarası veya sistem yapılandırması eksik.", "warning")
+        return redirect(url_for("dashboard.connect_whatsapp"))
+    ok, err = whatsapp.send_template(
+        num,
+        template,
+        lang,
+        [
+            f"Günlük · Test · {datetime.now(TURKEY_TZ).strftime('%d.%m.%Y')} · 1 geçerli, 0 iptal, 0 iade",
+            "Test ürün x1",
+            "100,00 ₺",
+        ],
+        tok,
+        pnid,
+        cfg.get("WHATSAPP_API_VERSION", "v21.0"),
+    )
+    flash("✅ WhatsApp rapor test mesajı gönderildi." if ok else f"⚠️ Rapor şablonu gönderilemedi: {err}",
           "success" if ok else "warning")
     return redirect(url_for("dashboard.connect_whatsapp"))
 
