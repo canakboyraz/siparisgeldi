@@ -49,4 +49,24 @@
   {% endif %}
 </div>
 {% endif %}
+
+{% if whatsapp_status %}
+<div class="card" style="max-width:560px;margin-top:1rem">
+  <div class="card-title" style="font-size:.95rem">WhatsApp sistem kontrolü</div>
+  <div class="muted" style="display:grid;gap:.35rem;font-size:.9rem">
+    <div>Hesap erişimi: <b>{{ "Açık" if whatsapp_status.access else "Kapalı" }}</b></div>
+    <div>Bildirim kanalı: <b>{{ whatsapp_status.channel }}</b></div>
+    <div>Telefon numarası: <b>{{ "Tanımlı" if whatsapp_status.number else "Eksik" }}</b></div>
+    <div>Access token: <b>{{ "Tanımlı" if whatsapp_status.token else "Eksik" }}</b></div>
+    <div>Phone number ID: <b>{{ "Tanımlı" if whatsapp_status.phone_number_id else "Eksik" }}</b></div>
+    <div>Şablon: <b>{{ whatsapp_status.template }}</b> / {{ whatsapp_status.language }}</div>
+    <div>API sürümü: <b>{{ whatsapp_status.version }}</b></div>
+  </div>
+  {% if whatsapp_status.channel not in ["whatsapp", "both"] %}
+  <p class="hint" style="margin-bottom:0">WhatsApp bildirimleri için kanal “Sadece WhatsApp” veya “Her ikisi” olmalı.</p>
+  {% elif not whatsapp_status.token or not whatsapp_status.phone_number_id %}
+  <p class="hint" style="margin-bottom:0">Railway ortam değişkenlerinden eksik olan credential tamamlanmalı.</p>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

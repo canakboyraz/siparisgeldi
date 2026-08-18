@@ -123,7 +123,22 @@ def connect_whatsapp():
         return redirect(url_for("dashboard.connect_whatsapp"))
     _force_free_notification_channel()
     db.session.commit()
-    return render_template("dashboard/connect_whatsapp.html", can_use_whatsapp=_can_use_whatsapp())
+    cfg = current_app.config
+    whatsapp_status = {
+        "access": _can_use_whatsapp(),
+        "channel": (current_user.notification_channel or "telegram").lower(),
+        "number": bool(current_user.whatsapp_number),
+        "token": bool(cfg.get("WHATSAPP_ACCESS_TOKEN")),
+        "phone_number_id": bool(cfg.get("WHATSAPP_PHONE_NUMBER_ID")),
+        "template": cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim"),
+        "language": cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
+        "version": cfg.get("WHATSAPP_API_VERSION", "v21.0"),
+    }
+    return render_template(
+        "dashboard/connect_whatsapp.html",
+        can_use_whatsapp=_can_use_whatsapp(),
+        whatsapp_status=whatsapp_status,
+    )
 
 
 @dashboard_bp.route("/whatsapp/test", methods=["POST"])
@@ -138,6 +153,17 @@ def test_whatsapp():
     num = current_user.whatsapp_number
     tok = cfg.get("WHATSAPP_ACCESS_TOKEN")
     pnid = cfg.get("WHATSAPP_PHONE_NUMBER_ID")
+    print(
+        "[WHATSAPP TEST] user=%s number=%s token=%s phone_number_id=%s template=%s lang=%s"
+        % (
+            current_user.id,
+            bool(num),
+            bool(tok),
+            bool(pnid),
+            cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim"),
+            cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
+        )
+    )
     if not (num and tok and pnid):
         flash("WhatsApp numarası veya sistem yapılandırması eksik.", "warning")
         return redirect(url_for("dashboard.connect_whatsapp"))

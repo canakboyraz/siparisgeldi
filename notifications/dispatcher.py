@@ -44,6 +44,7 @@ def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = N
         return False
     channel = (user.notification_channel or "telegram").lower()
     if not getattr(user, "has_whatsapp_access", False) and channel in ("whatsapp", "both"):
+        print(f"[BİLDİRİM] WhatsApp erişimi yok, Telegram'a dönüldü (user={user.id})")
         channel = "telegram"
     any_sent = False
 
@@ -74,7 +75,18 @@ def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = N
                 version=cfg.get("WHATSAPP_API_VERSION", "v21.0"),
             )
             any_sent = any_sent or ok
+            if not ok:
+                print(
+                    f"[BİLDİRİM] WhatsApp gönderilemedi "
+                    f"(user={user.id}, template={template}): {err}"
+                )
         else:
             print(f"[BİLDİRİM] WhatsApp yapılandırması eksik (user={user.id})")
+    elif channel in ("whatsapp", "both"):
+        print(
+            f"[BİLDİRİM] WhatsApp atlandı "
+            f"(user={user.id}, numara={bool(getattr(user, 'whatsapp_number', None))}, "
+            f"parametre={bool(wa)})"
+        )
 
     return any_sent
