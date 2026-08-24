@@ -1104,6 +1104,7 @@ def order_detail(order_id):
     return render_template(
         "dashboard/order_detail.html",
         order=order,
+        order_created_local=_order_local_datetime(order),
         detail=detail,
         migros_actions=migros_actions,
         migros_cancel_reasons=_migros_cancel_reasons(migros_intg) if migros_actions else [],

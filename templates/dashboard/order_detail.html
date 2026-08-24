@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>Sipariş #{{ order.order_number or order.external_id }}</h1>
-    <div class="muted">{{ platform_label(order.platform) }} · {{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else 'Tarih yok' }}</div>
+    <div class="muted">{{ platform_label(order.platform) }} · {{ order_created_local.strftime('%d.%m.%Y %H:%M') if order_created_local else 'Tarih yok' }}</div>
   </div>
   <div class="inline">
     <button type="button" class="btn btn-primary no-print" onclick="window.print()">Fiş yazdır</button>
@@ -18,7 +18,7 @@
   <div>{{ platform_label(order.platform) }}</div>
   <div>Sipariş #{{ order.order_number or order.external_id }}</div>
   <div>{{ detail.store }}</div>
-  <div>{{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else 'Tarih yok' }}</div>
+  <div>{{ order_created_local.strftime('%d.%m.%Y %H:%M') if order_created_local else 'Tarih yok' }}</div>
 </div>
 
 <div class="stats">
