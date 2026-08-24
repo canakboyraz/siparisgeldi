@@ -386,6 +386,32 @@ def format_order_canceled(p: dict, original_order: dict = None) -> str:
     return msg
 
 
+def format_order_status_update(p: dict, status: str, cancel_reason_id: str = "") -> str:
+    """Panelden yapılan Migros statü güncellemesini bildirim metnine çevirir."""
+    labels = {
+        ORDER_STATUS_APPROVED: ("✅", "SİPARİŞ KABUL EDİLDİ", "Sipariş restoran tarafından kabul edildi."),
+        ORDER_STATUS_REJECTED: ("❌", "SİPARİŞ REDDEDİLDİ", "Sipariş restoran tarafından reddedildi."),
+        ORDER_STATUS_PREPARED: ("🍽️", "SİPARİŞ HAZIRLANDI", "Sipariş hazırlanmaya hazır."),
+        ORDER_STATUS_DELIVERY: ("🛵", "SİPARİŞ YOLA ÇIKTI", "Sipariş teslimata çıktı."),
+        ORDER_STATUS_COMPLETED: ("🎉", "SİPARİŞ TAMAMLANDI", "Sipariş tamamlandı."),
+        "Cancelled": ("❌", "SİPARİŞ İPTAL EDİLDİ", "Sipariş restoran tarafından iptal edildi."),
+    }
+    emoji, title, description = labels.get(
+        status,
+        ("ℹ️", f"SİPARİŞ DURUMU: {status}", f"Sipariş durumu {status} olarak güncellendi."),
+    )
+    order_id = p.get("id") or p.get("orderId") or "N/A"
+    msg = (
+        f"{emoji} <b>{title} — Migros Yemek</b>\n"
+        f"{'━'*28}\n"
+        f"📋 <b>Sipariş No:</b> #{order_id}\n"
+        f"ℹ️ {description}\n"
+    )
+    if cancel_reason_id:
+        msg += f"📌 <b>İptal/ret sebep ID:</b> {cancel_reason_id}\n"
+    return msg
+
+
 _DELIVERY_MAP = {
     "ASSIGNED_FOR_DELIVERY": ("🧭", "Kurye atandı", "Siparişe kurye atandı."),
     "COURIER_APPROACHED":    ("📶", "Kurye yaklaşıyor", "Kurye restorana 1 km yaklaştı."),

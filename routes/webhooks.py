@@ -579,6 +579,13 @@ def _handle_canceled(intg, user, payload):
     order = Order.query.filter_by(
         user_id=intg.user_id, platform="migros", external_id=ext_id
     ).first()
+    already_notified = bool(
+        order
+        and (
+            order.is_status_notified("Cancelled")
+            or order.is_status_notified("Rejected")
+        )
+    )
     original_payload = None
     if order:
         try:
@@ -589,7 +596,7 @@ def _handle_canceled(intg, user, payload):
         if not order.is_status_notified("Cancelled"):
             order.mark_status_notified("Cancelled")
         db.session.commit()
-    if intg.notify_cancel:
+    if intg.notify_cancel and not already_notified:
         amount = f"{order.total_price:.2f} ₺" if order else "-"
         items = migros.summarize_items(original_payload) if original_payload else "-"
         send_to_user(user, migros.format_order_canceled(payload, original_payload),

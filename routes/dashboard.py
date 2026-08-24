@@ -10,6 +10,7 @@ import pytz
 from extensions import db
 from models import Integration, Order
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
+from notifications.dispatcher import send_to_user
 from utils import platform_label, status_label
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -1236,7 +1237,7 @@ def update_migros_order(order_id):
     base_url = current_app.config.get("MIGROS_API_BASE")
     cancel_reason_id = request.form.get("cancel_reason_id", "").strip()
     if action in {"reject", "cancel"} and not cancel_reason_id:
-        flash("Migros red/iptal iÅŸlemi iÃ§in iptal sebebi seÃ§ilmelidir.", "warning")
+        flash("Migros red/iptal işlemi için iptal sebebi seçilmelidir.", "warning")
         return _order_action_redirect(order)
 
     try:
@@ -1269,9 +1270,39 @@ def update_migros_order(order_id):
         order.status = next_status
         raw["status"] = next_status
         order.raw_json = json.dumps(raw, ensure_ascii=False)
+        order.mark_status_notified(next_status)
         intg.last_sync_at = datetime.utcnow()
         intg.last_error = None
         db.session.commit()
+
+        user = current_user
+        amount = f"{order.total_price or 0:.2f} ₺"
+        items = migros.summarize_items(raw)
+        status_message = migros.format_order_status_update(
+            raw,
+            next_status,
+            cancel_reason_id=cancel_reason_id,
+        )
+        is_problem = next_status in {migros.ORDER_STATUS_REJECTED, "Cancelled"}
+        should_notify = intg.notify_cancel if is_problem else intg.notify_status_change
+        if should_notify:
+            title = (
+                "Sipariş reddedildi · Migros Yemek"
+                if next_status == migros.ORDER_STATUS_REJECTED
+                else "Sipariş iptal · Migros Yemek"
+                if next_status == "Cancelled"
+                else f"{status_label(next_status)} · Migros Yemek"
+            )
+            send_to_user(
+                user,
+                status_message,
+                wa=[title, order.order_number or order.external_id, items, amount],
+            )
+            print(
+                f"[MIGROS] manuel durum bildirimi "
+                f"#{order.order_number or order.external_id} -> {next_status} "
+                f"(user={order.user_id})"
+            )
         flash(f"Migros işlemi gönderildi: {selected['label']}", "success")
     except Exception as e:
         intg.last_error = f"Migros sipariş işlemi: {e}"[:300]
