@@ -1219,7 +1219,7 @@ def update_migros_order(order_id):
     actions = {item["action"]: item for item in _migros_order_actions(order, detail)}
     selected = actions.get(action)
     if not selected:
-        flash("Bu Migros sipariÅŸi iÃ§in iÅŸlem kullanÄ±lamaz.", "warning")
+        flash("Bu Migros siparişi için işlem kullanılamaz.", "warning")
         return _order_action_redirect(order)
 
     intg = Integration.query.filter_by(user_id=current_user.id, platform="migros", is_active=True).first()
@@ -1228,7 +1228,7 @@ def update_migros_order(order_id):
         return _order_action_redirect(order)
     secret = current_app.config.get("MIGROS_SECRET_KEY", "")
     if not secret:
-        flash("MIGROS_SECRET_KEY Railway tarafÄ±nda tanÄ±mlÄ± deÄŸil.", "danger")
+        flash("MIGROS_SECRET_KEY Railway tarafında tanımlı değil.", "danger")
         return _order_action_redirect(order)
 
     raw = detail.get("raw") or {}
@@ -1242,7 +1242,7 @@ def update_migros_order(order_id):
         if action == "cancel":
             user_id = _migros_user_id(raw)
             if not user_id:
-                flash("Migros iptal iÅŸlemi iÃ§in sipariÅŸ payload'unda User ID bulunamadÄ±.", "danger")
+                flash("Migros iptal işlemi için sipariş payload'unda User ID bulunamadı.", "danger")
                 return _order_action_redirect(order)
             migros.cancel_order(
                 order.external_id,
@@ -1271,11 +1271,11 @@ def update_migros_order(order_id):
         intg.last_sync_at = datetime.utcnow()
         intg.last_error = None
         db.session.commit()
-        flash(f"Migros iÅŸlemi gÃ¶nderildi: {selected['label']}", "success")
+        flash(f"Migros işlemi gönderildi: {selected['label']}", "success")
     except Exception as e:
-        intg.last_error = f"Migros sipariÅŸ iÅŸlemi: {e}"[:300]
+        intg.last_error = f"Migros sipariş işlemi: {e}"[:300]
         db.session.commit()
-        flash(f"Migros iÅŸlemi gÃ¶nderilemedi: {e}", "danger")
+        flash(f"Migros işlemi gönderilemedi: {e}", "danger")
     return _order_action_redirect(order)
 
 
@@ -1733,13 +1733,13 @@ def _migros_order_actions(order: Order, detail: dict = None) -> list:
         actions.append({"action": "reject", "label": "Reddet", "next_status": migros.ORDER_STATUS_REJECTED, "needs_reason": True})
     elif status in {"Approved", "Prepared"}:
         if status == "Approved":
-            actions.append({"action": "prepared", "label": "HazÄ±rlandÄ± yap", "next_status": migros.ORDER_STATUS_PREPARED})
+            actions.append({"action": "prepared", "label": "Hazırlandı yap", "next_status": migros.ORDER_STATUS_PREPARED})
         if status == "Prepared":
-            actions.append({"action": "delivery", "label": "Yola Ã§Ä±ktÄ± yap", "next_status": migros.ORDER_STATUS_DELIVERY})
-        actions.append({"action": "cancel", "label": "Ä°ptal et", "next_status": "Cancelled", "needs_reason": True})
+            actions.append({"action": "delivery", "label": "Yola çıktı yap", "next_status": migros.ORDER_STATUS_DELIVERY})
+        actions.append({"action": "cancel", "label": "İptal et", "next_status": "Cancelled", "needs_reason": True})
     elif status == "Delivery":
-        actions.append({"action": "completed", "label": "TamamlandÄ± yap", "next_status": migros.ORDER_STATUS_COMPLETED})
-        actions.append({"action": "cancel", "label": "Ä°ptal et", "next_status": "Cancelled", "needs_reason": True})
+        actions.append({"action": "completed", "label": "Tamamlandı yap", "next_status": migros.ORDER_STATUS_COMPLETED})
+        actions.append({"action": "cancel", "label": "İptal et", "next_status": "Cancelled", "needs_reason": True})
     return actions
 
 
@@ -2393,6 +2393,7 @@ def _migros_detail_context(order: Order, raw: dict) -> dict:
         "items": _migros_detail_items(raw),
         "totals": _migros_detail_totals(raw),
         "customer": customer.get("fullName") or "-",
+        "customer_id": customer.get("id") or raw.get("userId") or raw.get("UserId") or "",
         "customer_phone": customer.get("phoneNumber") or "",
         "order_created_at": _migros_order_created_at(raw),
         "store": (raw.get("store") or {}).get("name") or "-",
