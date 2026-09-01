@@ -144,6 +144,16 @@ def whatsapp_status_webhook():
     for entry in payload.get("entry") or []:
         for change in entry.get("changes") or []:
             value = change.get("value") or {}
+            for message in value.get("messages") or []:
+                if not isinstance(message, dict):
+                    continue
+                print(
+                    "[WHATSAPP MESAJ] "
+                    f"from={message.get('from') or '-'} "
+                    f"id={message.get('id') or '-'} "
+                    f"type={message.get('type') or '-'}"
+                )
+                processed += 1
             for status in value.get("statuses") or []:
                 if not isinstance(status, dict):
                     continue
