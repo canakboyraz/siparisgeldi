@@ -33,6 +33,10 @@ class User(UserMixin, db.Model):
     # WhatsApp (Meta Cloud API) ve kanal tercihi
     whatsapp_number     = db.Column(db.String(30))
     notification_channel = db.Column(db.String(20), default="telegram")  # telegram | whatsapp | both
+    whatsapp_last_status = db.Column(db.String(30))
+    whatsapp_last_status_at = db.Column(db.DateTime)
+    whatsapp_last_message_id = db.Column(db.String(200))
+    whatsapp_last_error = db.Column(db.String(300))
     order_popup_sound_enabled = db.Column(db.Boolean, default=False)
     order_popup_sound = db.Column(db.String(20), default="classic")
 

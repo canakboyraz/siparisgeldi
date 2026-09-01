@@ -17,6 +17,10 @@ def _ensure_schema():
         stmts = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(30)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_channel VARCHAR(20) DEFAULT 'telegram'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_last_status VARCHAR(30)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_last_status_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_last_message_id VARCHAR(200)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_last_error VARCHAR(300)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS order_popup_sound_enabled BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS order_popup_sound VARCHAR(20) DEFAULT 'classic'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_whatsapp BOOLEAN DEFAULT FALSE",
@@ -59,6 +63,14 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE users ADD COLUMN whatsapp_number VARCHAR(30)")
             if "notification_channel" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN notification_channel VARCHAR(20) DEFAULT 'telegram'")
+            if "whatsapp_last_status" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN whatsapp_last_status VARCHAR(30)")
+            if "whatsapp_last_status_at" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN whatsapp_last_status_at DATETIME")
+            if "whatsapp_last_message_id" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN whatsapp_last_message_id VARCHAR(200)")
+            if "whatsapp_last_error" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN whatsapp_last_error VARCHAR(300)")
             if "order_popup_sound_enabled" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN order_popup_sound_enabled BOOLEAN DEFAULT FALSE")
             if "order_popup_sound" not in user_cols:

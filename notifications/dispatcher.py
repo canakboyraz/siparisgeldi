@@ -2,9 +2,11 @@
 
 Telegram: zengin serbest metin (merkezi bot).
 WhatsApp: Meta onaylı UTILITY şablonu (proaktif bildirim serbest metin olamaz).
-  wa parametreleri = şablon gövde değişkenleri, sıralı: [olay, sipariş_no, tutar]
+  wa parametreleri = şablon gövde değişkenleri, sıralı:
+  [başlık, sipariş_no, ürünler, tutar]
 """
 from flask import current_app
+from datetime import datetime
 from . import telegram
 from . import whatsapp
 
@@ -79,7 +81,7 @@ def send_to_user(
         template = wa_template or cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim")
         if token and pnid:
             wa_params = _sanitize_wa_params(wa)
-            ok, err = whatsapp.send_template(
+            ok, result = whatsapp.send_template(
                 to=user.whatsapp_number,
                 template_name=template,
                 lang=cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
@@ -90,18 +92,29 @@ def send_to_user(
             )
             any_sent = any_sent or ok
             if not ok:
+                record_whatsapp_result(user, "failed", error=result)
                 print(
                     f"[BİLDİRİM] WhatsApp gönderilemedi "
-                    f"(source={source_label}, user={user.id}, template={template}): {err}"
+                    f"(source={source_label}, user={user.id}, template={template}): {result}"
                 )
             else:
+                record_whatsapp_result(user, "accepted", message_id=result)
                 print(
                     f"[BİLDİRİM {source_label}] WhatsApp Meta'ya kabul edildi "
-                    f"user={user.id} template={template}"
+                    f"user={user.id} template={template} message_id={result or '-'}"
                 )
         else:
+            record_whatsapp_result(
+                user,
+                "skipped",
+                error="WhatsApp yapılandırması eksik (token/phone_number_id)",
+            )
             print(f"[BİLDİRİM] WhatsApp yapılandırması eksik (user={user.id})")
     elif channel in ("whatsapp", "both"):
+        if not getattr(user, "whatsapp_number", None):
+            record_whatsapp_result(user, "skipped", error="WhatsApp numarası eksik")
+        elif not wa:
+            record_whatsapp_result(user, "skipped", error="Şablon parametreleri yok")
         print(
             f"[BİLDİRİM] WhatsApp atlandı "
             f"(source={source_label}, user={user.id}, numara={bool(getattr(user, 'whatsapp_number', None))}, "
@@ -109,3 +122,18 @@ def send_to_user(
         )
 
     return any_sent
+
+
+def record_whatsapp_result(user, status: str, message_id: str = None, error: str = None):
+    """WhatsApp gönderim sonucunu ve Meta message ID'sini kullanıcıya kaydeder."""
+    try:
+        from extensions import db
+        user.whatsapp_last_status = str(status or "unknown")[:30]
+        user.whatsapp_last_status_at = datetime.utcnow()
+        if message_id:
+            user.whatsapp_last_message_id = str(message_id)[:200]
+        user.whatsapp_last_error = str(error or "")[:300] or None
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[WHATSAPP DURUM] sonuç kaydı yazılamadı (user={user.id}): {exc}")

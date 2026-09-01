@@ -82,6 +82,8 @@ class Config:
     # WhatsApp (Meta Cloud API). Değerler Meta Business/Developers'tan alınır.
     WHATSAPP_ACCESS_TOKEN   = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
     WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN = os.environ.get("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "")
+    WHATSAPP_APP_SECRET      = os.environ.get("WHATSAPP_APP_SECRET", "")
     WHATSAPP_API_VERSION    = os.environ.get("WHATSAPP_API_VERSION", "v21.0")
     # Proaktif bildirim için Meta onaylı utility şablonu
     WHATSAPP_TEMPLATE_NAME  = os.environ.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim")

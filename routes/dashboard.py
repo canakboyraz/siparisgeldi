@@ -10,7 +10,7 @@ import pytz
 from extensions import db
 from models import Integration, Order
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
-from notifications.dispatcher import send_to_user
+from notifications.dispatcher import send_to_user, record_whatsapp_result
 from utils import platform_label, status_label
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -135,6 +135,12 @@ def connect_whatsapp():
         "report_template": cfg.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_raporr"),
         "language": cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
         "version": cfg.get("WHATSAPP_API_VERSION", "v21.0"),
+        "webhook_url": url_for("webhooks.whatsapp_status_webhook", _external=True),
+        "webhook_verify_token": bool(cfg.get("WHATSAPP_WEBHOOK_VERIFY_TOKEN")),
+        "app_secret": bool(cfg.get("WHATSAPP_APP_SECRET")),
+        "last_status": current_user.whatsapp_last_status or "",
+        "last_status_at": current_user.whatsapp_last_status_at,
+        "last_error": current_user.whatsapp_last_error or "",
     }
     return render_template(
         "dashboard/connect_whatsapp.html",
@@ -170,14 +176,36 @@ def test_whatsapp():
         flash("WhatsApp numarası veya sistem yapılandırması eksik.", "warning")
         return redirect(url_for("dashboard.connect_whatsapp"))
     ver = cfg.get("WHATSAPP_API_VERSION", "v21.0")
-    ok, err = whatsapp.send_template(
+    ok, result = whatsapp.send_template(
         num, cfg.get("WHATSAPP_TEMPLATE_NAME", "siparis_bildirim"),
         cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
         ["Test bildirimi", "TEST-001", "Örnek ürün x1", "0,00 ₺"], tok, pnid, ver)
-    if not ok:
-        ok, err2 = whatsapp.send_text(num, "🔔 Test — WhatsApp bildirimlerin çalışıyor! (SiparişGeldi)", tok, pnid, ver)
-        err = None if ok else (err or err2)
-    flash("✅ WhatsApp test mesajı gönderildi." if ok else f"⚠️ Gönderilemedi: {err}",
+    if ok:
+        record_whatsapp_result(
+            current_user,
+            "accepted",
+            message_id=result if isinstance(result, str) and result.startswith("wamid.") else None,
+        )
+    else:
+        template_error = result
+        ok, fallback_result = whatsapp.send_text(
+            num,
+            "🔔 Test — WhatsApp bildirimlerin çalışıyor! (SiparişGeldi)",
+            tok,
+            pnid,
+            ver,
+        )
+        if ok:
+            result = fallback_result
+            record_whatsapp_result(
+                current_user,
+                "accepted",
+                message_id=result if isinstance(result, str) and result.startswith("wamid.") else None,
+            )
+        else:
+            result = f"{template_error} | Serbest metin: {fallback_result}"
+            record_whatsapp_result(current_user, "failed", error=result)
+    flash("✅ WhatsApp test mesajı gönderildi." if ok else f"⚠️ Gönderilemedi: {result}",
           "success" if ok else "warning")
     return redirect(url_for("dashboard.connect_whatsapp"))
 
@@ -203,7 +231,7 @@ def test_whatsapp_report():
     if not (num and tok and pnid):
         flash("WhatsApp numarası veya sistem yapılandırması eksik.", "warning")
         return redirect(url_for("dashboard.connect_whatsapp"))
-    ok, err = whatsapp.send_template(
+    ok, result = whatsapp.send_template(
         num,
         template,
         lang,
@@ -216,7 +244,15 @@ def test_whatsapp_report():
         pnid,
         cfg.get("WHATSAPP_API_VERSION", "v21.0"),
     )
-    flash("✅ WhatsApp rapor test mesajı gönderildi." if ok else f"⚠️ Rapor şablonu gönderilemedi: {err}",
+    if ok:
+        record_whatsapp_result(
+            current_user,
+            "accepted",
+            message_id=result if isinstance(result, str) and result.startswith("wamid.") else None,
+        )
+    else:
+        record_whatsapp_result(current_user, "failed", error=result)
+    flash("✅ WhatsApp rapor test mesajı gönderildi." if ok else f"⚠️ Rapor şablonu gönderilemedi: {result}",
           "success" if ok else "warning")
     return redirect(url_for("dashboard.connect_whatsapp"))
 
@@ -2658,12 +2694,34 @@ def send_test_notification():
                 cfg.get("WHATSAPP_TEMPLATE_LANG", "tr"),
                 ["Test bildirimi", "TEST-001", "Örnek ürün x1", "0,00 ₺"], tok, pnid, ver)
             if ok:
+                record_whatsapp_result(
+                    current_user,
+                    "accepted",
+                    message_id=err if isinstance(err, str) and err.startswith("wamid.") else None,
+                )
                 results.append("WhatsApp ✅ (şablon)")
             else:
                 ok2, err2 = whatsapp.send_text(num, wa_text, tok, pnid, ver)
-                results.append("WhatsApp ✅ (serbest metin)" if ok2
-                               else f"WhatsApp ❌ ({err or err2})")
+                if ok2:
+                    record_whatsapp_result(
+                        current_user,
+                        "accepted",
+                        message_id=err2 if isinstance(err2, str) and err2.startswith("wamid.") else None,
+                    )
+                    results.append("WhatsApp ✅ (serbest metin)")
+                else:
+                    record_whatsapp_result(
+                        current_user,
+                        "failed",
+                        error=f"{err or 'Şablon hatası'} | Serbest metin: {err2}",
+                    )
+                    results.append(f"WhatsApp ❌ ({err or err2})")
         else:
+            record_whatsapp_result(
+                current_user,
+                "skipped",
+                error="WhatsApp numarası veya credential eksik",
+            )
             results.append("WhatsApp ⏭ (numara/credential eksik)")
 
     flash("Test sonucu: " + (" · ".join(results) if results else "kanal ayarlı değil"), "info")

@@ -66,6 +66,18 @@
     <div>Şablon: <b>{{ whatsapp_status.template }}</b> / {{ whatsapp_status.language }}</div>
     <div>Rapor şablonu: <b>{{ whatsapp_status.report_template }}</b> / {{ whatsapp_status.language }}</div>
     <div>API sürümü: <b>{{ whatsapp_status.version }}</b></div>
+    <div>Durum webhook adresi: <code>{{ whatsapp_status.webhook_url }}</code></div>
+    <div>Webhook doğrulama tokenı: <b>{{ "Tanımlı" if whatsapp_status.webhook_verify_token else "Eksik" }}</b></div>
+    <div>Meta App Secret: <b>{{ "Tanımlı" if whatsapp_status.app_secret else "Eksik" }}</b></div>
+    <div>Son mesaj durumu:
+      <b>{{ whatsapp_status.last_status or "Henüz durum alınmadı" }}</b>
+      {% if whatsapp_status.last_status_at %}
+      <span>({{ whatsapp_status.last_status_at.strftime('%d.%m.%Y %H:%M') }})</span>
+      {% endif %}
+    </div>
+    {% if whatsapp_status.last_error %}
+    <div style="color:var(--red)">Son hata: <b>{{ whatsapp_status.last_error }}</b></div>
+    {% endif %}
   </div>
   {% if whatsapp_status.channel not in ["whatsapp", "both"] %}
   <p class="hint" style="margin-bottom:0">WhatsApp bildirimleri için kanal “Sadece WhatsApp” veya “Her ikisi” olmalı.</p>

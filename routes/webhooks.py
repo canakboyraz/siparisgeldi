@@ -16,6 +16,7 @@ bu yüzden işleyemesek bile 200 dönüp gereksiz retry'ı önleriz.
 """
 import json
 import hmac
+import hashlib
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 
@@ -23,6 +24,7 @@ from extensions import db
 from models import Integration, Order, User
 from integrations import migros, getir, trendyol_marketplace as tmp, yemeksepeti as ys
 from notifications.dispatcher import send_to_user
+from notifications import whatsapp as whatsapp_client
 from utils import status_label
 
 webhooks_bp = Blueprint("webhooks", __name__)
@@ -76,6 +78,104 @@ def _check_yemeksepeti_token() -> bool:
         else:
             sent = authorization.strip()
     return hmac.compare_digest(str(sent), str(expected))
+
+
+def _check_whatsapp_signature() -> bool:
+    app_secret = current_app.config.get("WHATSAPP_APP_SECRET", "")
+    if not app_secret:
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    if not signature.startswith("sha256="):
+        return False
+    digest = hmac.new(
+        app_secret.encode("utf-8"),
+        request.get_data(cache=True),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(signature[7:], digest)
+
+
+def _whatsapp_status_error(status: dict) -> str:
+    errors = status.get("errors") or []
+    if not isinstance(errors, list):
+        return str(errors)[:300]
+    parts = []
+    for error in errors[:2]:
+        if not isinstance(error, dict):
+            parts.append(str(error))
+            continue
+        code = error.get("code")
+        title = error.get("title") or error.get("message")
+        details = (error.get("error_data") or {}).get("details") if isinstance(error.get("error_data"), dict) else ""
+        text = " - ".join(str(value) for value in (code, title, details) if value)
+        if text:
+            parts.append(text)
+    return " | ".join(parts)[:300]
+
+
+def _find_whatsapp_users(recipient_id: str) -> list:
+    normalized = whatsapp_client._normalize_msisdn(recipient_id)
+    if not normalized:
+        return []
+    users = User.query.filter(User.whatsapp_number.isnot(None)).all()
+    return [
+        user for user in users
+        if whatsapp_client._normalize_msisdn(user.whatsapp_number) == normalized
+    ]
+
+
+@webhooks_bp.route("/whatsapp", methods=["GET", "POST"])
+def whatsapp_status_webhook():
+    """Meta WhatsApp Cloud API doğrulama ve teslimat durum webhook'u."""
+    if request.method == "GET":
+        mode = request.args.get("hub.mode", "")
+        verify_token = request.args.get("hub.verify_token", "")
+        challenge = request.args.get("hub.challenge", "")
+        expected = current_app.config.get("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "")
+        if expected and mode == "subscribe" and hmac.compare_digest(verify_token, expected):
+            return challenge, 200, {"Content-Type": "text/plain"}
+        return jsonify({"ok": False, "error": "verification failed"}), 403
+
+    if not _check_whatsapp_signature():
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    processed = 0
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            value = change.get("value") or {}
+            for status in value.get("statuses") or []:
+                if not isinstance(status, dict):
+                    continue
+                message_id = str(status.get("id") or "")
+                recipient_id = str(status.get("recipient_id") or "")
+                users = []
+                if message_id:
+                    users = User.query.filter(User.whatsapp_last_message_id == message_id).all()
+                if not users and recipient_id:
+                    users = _find_whatsapp_users(recipient_id)
+                if not users:
+                    print(
+                        f"[WHATSAPP DURUM] eşleşen kullanıcı yok "
+                        f"status={status.get('status')} message_id={message_id or '-'}"
+                    )
+                    continue
+                status_name = str(status.get("status") or "unknown").lower()[:30]
+                status_error = _whatsapp_status_error(status)
+                for user in users:
+                    user.whatsapp_last_status = status_name
+                    user.whatsapp_last_status_at = datetime.utcnow()
+                    if message_id:
+                        user.whatsapp_last_message_id = message_id[:200]
+                    user.whatsapp_last_error = status_error or None
+                    print(
+                        f"[WHATSAPP DURUM] user={user.id} status={status_name} "
+                        f"message_id={message_id or '-'}"
+                        + (f" error={status_error}" if status_error else "")
+                    )
+                processed += len(users)
+    db.session.commit()
+    return _ok(f"processed={processed}")
 
 
 def _find_integration(store_id) -> Integration:

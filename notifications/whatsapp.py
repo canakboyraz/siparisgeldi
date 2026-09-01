@@ -32,7 +32,7 @@ def _normalize_msisdn(number: str) -> str:
 def send_template(to: str, template_name: str, lang: str, params: list,
                   token: str, phone_number_id: str, version: str = "v21.0"):
     """Onaylı şablon mesajı gönderir. params = body değişkenleri (sıralı liste).
-    (ok: bool, hata: str|None) döner."""
+    (ok: bool, hata veya Meta message_id) döner."""
     if not token or not phone_number_id:
         return False, "WhatsApp yapılandırması eksik (token/phone_number_id)"
     to = _normalize_msisdn(to)
@@ -99,7 +99,7 @@ def _post(body: dict, token: str, phone_number_id: str, version: str):
             f"template={template or '-'} to_last4={recipient[-4:] or '-'} "
             f"message_id={message_id or '-'}"
         )
-        return True, None
+        return True, message_id or None
     except requests.exceptions.RequestException as e:
         print(f"[WHATSAPP HATA] {e}")
         return False, str(e)[:300]
