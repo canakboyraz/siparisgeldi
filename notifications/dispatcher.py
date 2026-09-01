@@ -32,7 +32,13 @@ def _sanitize_wa_params(params: list) -> list:
     return cleaned
 
 
-def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = None) -> bool:
+def send_to_user(
+    user,
+    telegram_text: str,
+    wa: list = None,
+    wa_template: str = None,
+    source: str = "",
+) -> bool:
     """Kullanıcının seçtiği kanal(lar)a bildirim gönderir.
 
     telegram_text: Telegram için tam biçimli mesaj.
@@ -43,6 +49,13 @@ def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = N
     if not user:
         return False
     channel = (user.notification_channel or "telegram").lower()
+    source_label = source or "genel"
+    print(
+        f"[BİLDİRİM {source_label}] başlangıç "
+        f"user={user.id} channel={channel} access={getattr(user, 'has_whatsapp_access', False)} "
+        f"numara={bool(getattr(user, 'whatsapp_number', None))} "
+        f"wa_parametre={len(wa or [])}"
+    )
     if not getattr(user, "has_whatsapp_access", False) and channel in ("whatsapp", "both"):
         print(f"[BİLDİRİM] WhatsApp erişimi yok, Telegram'a dönüldü (user={user.id})")
         channel = "telegram"
@@ -54,6 +67,7 @@ def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = N
         if token:
             ok = telegram.send_message(token, user.telegram_chat_id, telegram_text)
             any_sent = any_sent or ok
+            print(f"[BİLDİRİM {source_label}] Telegram {'ok' if ok else 'hata'} user={user.id}")
         else:
             print("[BİLDİRİM] TELEGRAM_BOT_TOKEN yok")
 
@@ -78,14 +92,19 @@ def send_to_user(user, telegram_text: str, wa: list = None, wa_template: str = N
             if not ok:
                 print(
                     f"[BİLDİRİM] WhatsApp gönderilemedi "
-                    f"(user={user.id}, template={template}): {err}"
+                    f"(source={source_label}, user={user.id}, template={template}): {err}"
+                )
+            else:
+                print(
+                    f"[BİLDİRİM {source_label}] WhatsApp Meta'ya kabul edildi "
+                    f"user={user.id} template={template}"
                 )
         else:
             print(f"[BİLDİRİM] WhatsApp yapılandırması eksik (user={user.id})")
     elif channel in ("whatsapp", "both"):
         print(
             f"[BİLDİRİM] WhatsApp atlandı "
-            f"(user={user.id}, numara={bool(getattr(user, 'whatsapp_number', None))}, "
+            f"(source={source_label}, user={user.id}, numara={bool(getattr(user, 'whatsapp_number', None))}, "
             f"parametre={bool(wa)})"
         )
 

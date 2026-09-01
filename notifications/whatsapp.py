@@ -84,6 +84,21 @@ def _post(body: dict, token: str, phone_number_id: str, version: str):
                 err = r.text
             print(f"[WHATSAPP HATA] HTTP {r.status_code}: {err}")
             return False, str(err)[:300]
+        try:
+            response = r.json()
+        except ValueError:
+            response = {}
+        message_id = ""
+        messages = response.get("messages") if isinstance(response, dict) else None
+        if isinstance(messages, list) and messages:
+            message_id = str((messages[0] or {}).get("id") or "")
+        template = ((body.get("template") or {}).get("name") if isinstance(body, dict) else "")
+        recipient = str(body.get("to") or "") if isinstance(body, dict) else ""
+        print(
+            f"[WHATSAPP OK] HTTP {r.status_code} type={body.get('type', '')} "
+            f"template={template or '-'} to_last4={recipient[-4:] or '-'} "
+            f"message_id={message_id or '-'}"
+        )
         return True, None
     except requests.exceptions.RequestException as e:
         print(f"[WHATSAPP HATA] {e}")

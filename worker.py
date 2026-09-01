@@ -326,7 +326,8 @@ def _process_tgo_legacy(intg):
                 amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
                 send_to_user(user, tgo.format_new_order_message(order_data),
                              wa=["Yeni sipariş · Trendyol Go", str(order_number),
-                                 tgo.summarize_items(order_data), amount])
+                                 tgo.summarize_items(order_data), amount],
+                             source="trendyolgo")
                 print(f"[TGO] 🆕 #{order_number} (user={intg.user_id})")
         else:
             # Statü değişimi
@@ -340,7 +341,8 @@ def _process_tgo_legacy(intg):
                 amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
                 send_to_user(user, _format_unaccepted_tgo_message(order_data),
                              wa=["Acil: siparis kabul edilmedi", str(order_number),
-                                 tgo.summarize_items(order_data), amount])
+                                 tgo.summarize_items(order_data), amount],
+                             source="trendyolgo")
                 print(f"[TGO] ⚠️ #{order_number} 2 dk kabul edilmedi (user={intg.user_id})")
                 continue
 
@@ -354,7 +356,8 @@ def _process_tgo_legacy(intg):
                 amount = f"{order_data.get('totalPrice', 0) or 0:.2f} ₺"
                 send_to_user(user, tgo.format_status_message(order_data, current_status),
                              wa=[f"{status_label(current_status)} · Trendyol Go", str(order_number),
-                                 tgo.summarize_items(order_data), amount])
+                                 tgo.summarize_items(order_data), amount],
+                             source="trendyolgo")
                 print(f"[TGO] 🔄 #{order_number} → {current_status} (user={intg.user_id})")
             else:
                 db.session.commit()
@@ -707,6 +710,7 @@ def _upsert_tgo_order(intg, user, order_data: dict):
                 user,
                 tgo.format_new_order_message(order_data),
                 wa=[f"Yeni siparis - {_tgo_platform_label(intg.platform)}", order_number, tgo.summarize_items(order_data), amount],
+                source=intg.platform,
             )
         return
 
@@ -725,6 +729,7 @@ def _upsert_tgo_order(intg, user, order_data: dict):
             user,
             _format_unaccepted_tgo_message(order_data),
             wa=["Acil: siparis kabul edilmedi", order_number, tgo.summarize_items(order_data), amount],
+            source=intg.platform,
         )
         return
 
@@ -751,6 +756,7 @@ def _upsert_tgo_order(intg, user, order_data: dict):
             user,
             tgo.format_status_message(order_data, current_status),
             wa=[f"{status_label(current_status)} - {_tgo_platform_label(intg.platform)}", order_number, tgo.summarize_items(order_data), amount],
+            source=intg.platform,
         )
     else:
         db.session.commit()
@@ -765,6 +771,7 @@ def _notify_tgo_problem(intg, user, order_data: dict, title: str, amount: str):
         user,
         tgo.format_status_message(order_data, current_status),
         wa=[f"{title} - {_tgo_platform_label(intg.platform)}", order_number, tgo.summarize_items(order_data), amount],
+        source=intg.platform,
     )
 
 
@@ -873,6 +880,7 @@ def _notify_tgo_claim(user, claim: dict, amount: float, platform: str = TGO_FOOD
         tgo.format_claim_message(claim),
         wa=[f"Siparis iade - {_tgo_platform_label(platform)}", tgo.claim_order_number(claim) or tgo.claim_external_id(claim),
             tgo.claim_items_summary(claim), f"{amount:.2f} TL"],
+        source=platform,
     )
 
 
