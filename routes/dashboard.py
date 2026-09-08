@@ -1200,11 +1200,15 @@ def product_costs():
 
     days = request.args.get("days", "30", type=int)
     days = days if days in (7, 30, 90, 365) else 30
+    selected_platform = request.args.get("platform", "").strip()
+    search = request.args.get("q", "").strip().casefold()
     since = datetime.utcnow() - timedelta(days=days)
     rows = ProductCost.query.filter_by(user_id=current_user.id).all()
     costs = {" ".join((r.product_name or "").casefold().split()): r for r in rows}
     products = {}
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+        if selected_platform and order.platform != selected_platform:
+            continue
         # Karlılıkta teslim edilen siparişler dahil, yalnızca iptal/iade hariçtir.
         if order.status in PROBLEM_STATUSES:
             continue
@@ -1223,7 +1227,9 @@ def product_costs():
         row["avg_price"] = row["revenue"] / row["quantity"] if row["quantity"] else 0
         row["category"] = _cost_product_category(row["name"])
     category_order = {"Yiyecekler": 0, "İçecekler": 1, "Tatlılar": 2, "Paketleme / Ekstra": 3, "Diğer": 4}
-    product_rows = sorted(products.values(), key=lambda r: (category_order.get(_cost_product_category(r["name"]), 9), -r["revenue"], r["name"]))
+    product_rows = sorted(products.values(), key=lambda r: (-r["revenue"], r["name"]))
+    if search:
+        product_rows = [r for r in product_rows if search in r["name"].casefold()]
     expenses = PlatformExpense.query.filter(PlatformExpense.user_id == current_user.id,
                                              PlatformExpense.day_from <= datetime.utcnow().date(),
                                              PlatformExpense.day_to >= (datetime.utcnow() - timedelta(days=days)).date()).all()
@@ -1233,7 +1239,8 @@ def product_costs():
     return render_template("dashboard/product_costs.html", products=product_rows, days=days,
                            platform_label=platform_label, expenses=expenses, expense_total=expense_total,
                            revenue_total=revenue_total, cost_total=cost_total,
-                           profit_total=revenue_total - cost_total - expense_total)
+                           profit_total=revenue_total - cost_total - expense_total,
+                           selected_platform=selected_platform, search=search)
 
 
 def _cost_product_category(name: str) -> str:

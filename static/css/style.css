@@ -192,6 +192,9 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .cost-period{display:flex;align-items:center;gap:.55rem;flex:0 0 auto}
 .cost-period label{font-size:.82rem;font-weight:700;color:var(--muted)}
 .cost-period select{min-width:130px}
+.cost-filters{display:grid;grid-template-columns:1.2fr 1.5fr 1fr auto auto;gap:.75rem;align-items:end;min-width:0}
+.cost-filters .field{margin:0;min-width:0}
+.cost-filters .btn{white-space:nowrap}
 .cost-card{padding:0;overflow:hidden}
 .cost-table{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .cost-table table{min-width:1080px}
@@ -435,6 +438,9 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .cost-toolbar{display:block;padding:.9rem}
   .cost-period{margin-top:.8rem;width:100%;justify-content:space-between}
   .cost-period select{flex:1}
+  .cost-filters{grid-template-columns:1fr 1fr}
+  .cost-filters .field:first-child{grid-column:1 / -1}
+  .cost-filters .btn{width:100%}
   .cost-card{overflow:visible}
   .cost-table{border:1px solid var(--line);border-radius:9px}
   .expense-form{grid-template-columns:1fr 1fr}
