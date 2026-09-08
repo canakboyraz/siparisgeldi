@@ -36,17 +36,19 @@ def iframe_token(config, oid, user, amount, ok_url, fail_url, ip):
         "merchant_ok_url": ok_url, "merchant_fail_url": fail_url, "timeout_limit": "30",
         "debug_on": "0", "test_mode": str(config.get("PAYTR_TEST_MODE", "1")), "lang": "tr",
     }
-    # PayTR iFrame API imzasinda alan sirasi dokumandaki gibi sabittir.
+    # PayTR resmi ornegindeki iFrame API imza sirasi sabittir.
     sign = (payload["merchant_id"] + payload["user_ip"] + oid + payload["email"] + amount_kurus + basket +
             payload["no_installment"] + payload["max_installment"] + payload["user_name"] +
             payload["user_address"] + payload["user_phone"] + payload["merchant_ok_url"] +
-            payload["merchant_fail_url"] + config["PAYTR_MERCHANT_SALT"])
+            payload["merchant_fail_url"] + payload["currency"] + payload["test_mode"])
+    sign += config["PAYTR_MERCHANT_SALT"]
     payload["paytr_token"] = _hmac(sign, config["PAYTR_MERCHANT_KEY"])
     response = requests.post(TOKEN_URL, data=payload, timeout=(5, 20))
     try:
         data = response.json()
     except ValueError:
-        raise ValueError(f"PayTR gecersiz yanit (HTTP {response.status_code})")
+        body = " ".join(response.text.split())[:180]
+        raise ValueError(f"PayTR gecersiz yanit (HTTP {response.status_code}): {body}")
     if data.get("status") != "success" or not data.get("token"):
         reason = data.get("reason") or data.get("message") or f"HTTP {response.status_code}"
         raise ValueError(str(reason)[:300])
