@@ -303,6 +303,32 @@ class Order(db.Model):
         return f"<Order {self.platform}#{self.order_number}>"
 
 
+class ProductCost(db.Model):
+    """Kullanıcının ürün başına girdiği birim maliyet."""
+    __tablename__ = "product_costs"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    platform = db.Column(db.String(30), nullable=False)
+    product_key = db.Column(db.String(180), nullable=False)
+    product_name = db.Column(db.String(180), nullable=False)
+    unit_cost = db.Column(db.Float, nullable=False, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "platform", "product_key", name="uq_product_cost"),)
+
+
+class PlatformExpense(db.Model):
+    """Platforma ve döneme bağlı paketleme/diğer gider toplamı."""
+    __tablename__ = "platform_expenses"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    platform = db.Column(db.String(30), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    amount = db.Column(db.Float, nullable=False, default=0)
+    day_from = db.Column(db.Date, nullable=False)
+    day_to = db.Column(db.Date, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AppState(db.Model):
     """Basit anahtar-değer durum saklama (ör. Telegram getUpdates offset)."""
     __tablename__ = "app_state"

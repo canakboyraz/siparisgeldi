@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 import pytz
 
 from extensions import db
-from models import Integration, Order
+from models import Integration, Order, ProductCost, PlatformExpense
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications.dispatcher import send_to_user, record_whatsapp_result
 from utils import platform_label, status_label
@@ -1151,6 +1151,88 @@ def order_detail(order_id):
     )
 
 
+@dashboard_bp.route("/maliyetler", methods=["GET", "POST"])
+@login_required
+def product_costs():
+    """Satılan ürün bazında birim maliyet ve karlılık görünümü."""
+    if request.method == "POST":
+        if request.form.get("form_type") == "expense":
+            try:
+                amount = float(request.form.get("expense_amount", "0").replace(",", "."))
+                day_from = datetime.strptime(request.form.get("day_from", ""), "%Y-%m-%d").date()
+                day_to = datetime.strptime(request.form.get("day_to", ""), "%Y-%m-%d").date()
+                if amount < 0 or day_to < day_from or amount > 10000000:
+                    raise ValueError
+            except ValueError:
+                flash("Gider tutarı ve tarih aralığını kontrol edin.", "danger")
+                return redirect(url_for("dashboard.product_costs"))
+            db.session.add(PlatformExpense(user_id=current_user.id,
+                platform=request.form.get("expense_platform", "genel")[:30],
+                name=request.form.get("expense_name", "Diğer gider").strip()[:120] or "Diğer gider",
+                amount=amount, day_from=day_from, day_to=day_to))
+            db.session.commit()
+            flash("Platform gideri kaydedildi.", "success")
+            return redirect(url_for("dashboard.product_costs"))
+        key = request.form.get("product_key", "").strip()
+        platform = request.form.get("platform", "").strip()[:30]
+        name = request.form.get("product_name", "Ürün").strip()[:180]
+        try:
+            cost = float(request.form.get("unit_cost", "0").replace(",", "."))
+            if cost < 0 or cost > 1000000:
+                raise ValueError
+        except ValueError:
+            flash("Geçerli bir maliyet girin.", "danger")
+            return redirect(url_for("dashboard.product_costs"))
+        # Aynı ürün farklı platformlarda satılsa da maliyet ortak tutulur.
+        normalized_name = " ".join(name.casefold().split())
+        matching = ProductCost.query.filter_by(user_id=current_user.id).all()
+        row = next((r for r in matching if " ".join((r.product_name or "").casefold().split()) == normalized_name), None)
+        if not row:
+            row = ProductCost(user_id=current_user.id, platform=platform, product_key=key, product_name=name)
+            db.session.add(row)
+        row.product_name, row.unit_cost = name, cost
+        for other in matching:
+            if " ".join((other.product_name or "").casefold().split()) == normalized_name:
+                other.unit_cost = cost
+        db.session.commit()
+        flash("Ürün maliyeti kaydedildi.", "success")
+        return redirect(url_for("dashboard.product_costs", days=request.form.get("days", "30")))
+
+    days = request.args.get("days", "30", type=int)
+    days = days if days in (7, 30, 90, 365) else 30
+    since = datetime.utcnow() - timedelta(days=days)
+    rows = ProductCost.query.filter_by(user_id=current_user.id).all()
+    costs = {" ".join((r.product_name or "").casefold().split()): r for r in rows}
+    products = {}
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+        if order.status in ACTIVE_EXCLUDED_STATUSES:
+            continue
+        data = _parse_raw_json(order.raw_json)
+        for item in _cost_product_lines(order.platform, data):
+            key = (order.platform, item["key"])
+            row = products.setdefault(key, {"platform": order.platform, "key": item["key"], "name": item["name"], "quantity": 0.0, "revenue": 0.0})
+            row["quantity"] += item["quantity"]
+            row["revenue"] += item["revenue"]
+    for row in products.values():
+        saved = costs.get(" ".join(row["name"].casefold().split()))
+        row["cost"] = saved.unit_cost if saved else None
+        row["total_cost"] = row["quantity"] * row["cost"] if row["cost"] is not None else None
+        row["profit"] = row["revenue"] - row["total_cost"] if row["total_cost"] is not None else None
+        row["margin"] = row["profit"] / row["revenue"] * 100 if row["profit"] is not None and row["revenue"] else None
+        row["avg_price"] = row["revenue"] / row["quantity"] if row["quantity"] else 0
+    product_rows = sorted(products.values(), key=lambda r: (-r["revenue"], r["name"]))
+    expenses = PlatformExpense.query.filter(PlatformExpense.user_id == current_user.id,
+                                             PlatformExpense.day_from <= datetime.utcnow().date(),
+                                             PlatformExpense.day_to >= (datetime.utcnow() - timedelta(days=days)).date()).all()
+    expense_total = sum(e.amount for e in expenses)
+    revenue_total = sum(r["revenue"] for r in product_rows)
+    cost_total = sum(r["total_cost"] or 0 for r in product_rows)
+    return render_template("dashboard/product_costs.html", products=product_rows, days=days,
+                           platform_label=platform_label, expenses=expenses, expense_total=expense_total,
+                           revenue_total=revenue_total, cost_total=cost_total,
+                           profit_total=revenue_total - cost_total - expense_total)
+
+
 def _order_action_redirect(order: Order):
     if request.form.get("return_to") == "active_orders":
         return_path = request.form.get("return_path", "")
@@ -2185,6 +2267,40 @@ def _report_products(orders: list, max_items: int = 15) -> list:
         {"name": name, "quantity": qty}
         for name, qty in sorted(counts.items(), key=lambda item: item[1], reverse=True)[:max_items]
     ]
+
+
+def _cost_product_lines(platform, data):
+    """Farklı platform payload'larını maliyet ekranının ortak satırlarına çevirir."""
+    lines = []
+    if platform == "migros":
+        source = data.get("items") or []
+        for item in source:
+            qty = float(item.get("amount") or item.get("quantity") or 1)
+            name = str(item.get("name") or "Ürün")
+            revenue = float(item.get("totalPrice") or item.get("price") or item.get("unitPrice") or 0) * qty
+            lines.append({"key": name, "name": name, "quantity": qty, "revenue": revenue})
+    elif platform in (tmp.PLATFORM, hb.PLATFORM):
+        source = tmp.lines(data) if platform == tmp.PLATFORM else hb.lines(data)
+        getter = tmp if platform == tmp.PLATFORM else hb
+        for item in source:
+            qty = getter.line_quantity(item)
+            name = getter.line_name(item)
+            lines.append({"key": str(item.get("barcode") or item.get("id") or name), "name": name,
+                          "quantity": qty, "revenue": float(item.get("totalPrice") or item.get("price") or 0) * qty})
+    elif platform == ys.PLATFORM:
+        for item in ys.items(data):
+            qty = ys.item_quantity(item)
+            name = ys.item_name(item)
+            lines.append({"key": str(item.get("id") or name), "name": name, "quantity": qty,
+                          "revenue": float(item.get("total_price") or item.get("unit_price") or 0) * qty})
+    else:
+        for item in data.get("lines") or []:
+            qty = tgo._line_quantity(item)
+            name = str(item.get("name") or item.get("productName") or "Ürün")
+            revenue = float(item.get("totalPrice") or item.get("total") or item.get("price") or 0)
+            lines.append({"key": str(item.get("barcode") or item.get("productId") or name), "name": name,
+                          "quantity": qty, "revenue": revenue if revenue and qty <= 1 else revenue * qty})
+    return lines
 
 
 def _report_platforms(valid: list, cancelled: list, refunded: list) -> list:
