@@ -167,6 +167,7 @@ def create_app(config_class=Config, start_scheduler=None):
     from routes.webhooks import webhooks_bp
     from routes.adisyo import adisyo_bp
     from routes.admin import admin_bp
+    from routes.paytr import paytr_bp
 
     app.register_blueprint(public_bp)
     app.register_blueprint(auth_bp)
@@ -174,6 +175,7 @@ def create_app(config_class=Config, start_scheduler=None):
     app.register_blueprint(webhooks_bp, url_prefix="/webhooks")
     app.register_blueprint(adisyo_bp, url_prefix="/panel/adisyo")
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(paytr_bp, url_prefix="/payment/paytr")
 
     # Åablonlarda kullanÄ±lacak yardÄ±mcÄ±lar
     from datetime import datetime
@@ -191,7 +193,7 @@ def create_app(config_class=Config, start_scheduler=None):
 
     @app.before_request
     def protect_forms():
-        if request.method != "POST" or request.path.startswith("/webhooks/"):
+        if request.method != "POST" or request.path.startswith("/webhooks/") or request.path == "/payment/paytr/callback":
             return None
         sent = request.form.get("_csrf_token") or request.headers.get("X-CSRF-Token", "")
         if not secrets.compare_digest(str(session.get("_csrf_token", "")), str(sent)):

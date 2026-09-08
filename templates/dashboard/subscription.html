@@ -40,14 +40,14 @@
     {% if is_pro_user() %}
     <span class="badge green">Mevcut plan</span>
     {% else %}
-    <button class="btn btn-primary btn-block" type="button" disabled>İyzico ödeme yakında</button>
-    <p class="hint">Ödeme altyapısı hazır olduğunda bu buton kredi kartı aboneliğini başlatacak.</p>
+    <form method="post" action="{{ url_for('paytr.start') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-primary btn-block" type="submit">PayTR ile Pro'ya geç</button></form>
+    <p class="hint">Güvenli ödeme PayTR ekranında açılır. Kart bilgileriniz sitemizde tutulmaz.</p>
     {% endif %}
   </div>
 </div>
 
 <div class="card" style="margin-top:1rem">
   <div class="card-title">Ödeme durumu</div>
-  <p class="muted" style="margin:.2rem 0 0">Şu an Pro erişimleri admin tarafından yönetiliyor. İyzico API bilgileri eklendiğinde kartla aylık abonelik bu ekrandan başlatılacak.</p>
+  <p class="muted" style="margin:.2rem 0 0">Ödeme sonucu PayTR bildirimiyle doğrulanır. Başarılı doğrulama sonrası Pro özellikleri otomatik açılır.</p>
 </div>
 {% endblock %}

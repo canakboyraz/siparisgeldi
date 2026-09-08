@@ -11,7 +11,7 @@ class Config:
 
     # Genel alan adı / marka
     APP_DOMAIN = os.environ.get("APP_DOMAIN", "siparisgeldi.net")
-    COMPANY_LEGAL_NAME = os.environ.get("COMPANY_LEGAL_NAME", "Can Akboyraz")
+    COMPANY_LEGAL_NAME = os.environ.get("COMPANY_LEGAL_NAME", "Erol Can Akboyraz")
     COMPANY_BRAND_NAME = os.environ.get("COMPANY_BRAND_NAME", "SiparişGeldi")
     COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "Dumlupınar Mahallesi Hemşire Sokak No 9 Kartepe / Kocaeli")
     COMPANY_PHONE = os.environ.get("COMPANY_PHONE", "0507 499 87 85")
@@ -72,6 +72,13 @@ class Config:
 
     # Adisyo (rapor amaçlı, webhook kullanılmadan okuma)
     ADISYO_API_BASE = os.environ.get("ADISYO_API_BASE", "https://ext.adisyo.com/api/External/v2")
+
+    # PayTR iFrame API
+    PAYTR_MERCHANT_ID = os.environ.get("PAYTR_MERCHANT_ID", "")
+    PAYTR_MERCHANT_KEY = os.environ.get("PAYTR_MERCHANT_KEY", "")
+    PAYTR_MERCHANT_SALT = os.environ.get("PAYTR_MERCHANT_SALT", "")
+    PAYTR_TEST_MODE = os.environ.get("PAYTR_TEST_MODE", "1")
+    PAYTR_CALLBACK_URL = os.environ.get("PAYTR_CALLBACK_URL", "https://www.siparisgeldi.net/payment/paytr/callback")
 
     # Trendyol Pazaryeri (e-ticaret)
     TRENDYOL_MARKETPLACE_API_BASE = os.environ.get("TRENDYOL_MARKETPLACE_API_BASE", "https://apigw.trendyol.com/integration")

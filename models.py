@@ -341,6 +341,20 @@ class PlatformCommission(db.Model):
     __table_args__ = (db.UniqueConstraint("user_id", "platform", name="uq_platform_commission"),)
 
 
+class Payment(db.Model):
+    __tablename__ = "payments"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    merchant_oid = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(3), default="TRY")
+    status = db.Column(db.String(20), default="pending", nullable=False)
+    reference = db.Column(db.String(120))
+    failure_reason = db.Column(db.String(300))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AppState(db.Model):
     """Basit anahtar-değer durum saklama (ör. Telegram getUpdates offset)."""
     __tablename__ = "app_state"
