@@ -1205,7 +1205,8 @@ def product_costs():
     costs = {" ".join((r.product_name or "").casefold().split()): r for r in rows}
     products = {}
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
-        if order.status in ACTIVE_EXCLUDED_STATUSES:
+        # Karlılıkta teslim edilen siparişler dahil, yalnızca iptal/iade hariçtir.
+        if order.status in PROBLEM_STATUSES:
             continue
         data = _parse_raw_json(order.raw_json)
         for item in _cost_product_lines(order.platform, data):
@@ -1220,7 +1221,9 @@ def product_costs():
         row["profit"] = row["revenue"] - row["total_cost"] if row["total_cost"] is not None else None
         row["margin"] = row["profit"] / row["revenue"] * 100 if row["profit"] is not None and row["revenue"] else None
         row["avg_price"] = row["revenue"] / row["quantity"] if row["quantity"] else 0
-    product_rows = sorted(products.values(), key=lambda r: (-r["revenue"], r["name"]))
+        row["category"] = _cost_product_category(row["name"])
+    category_order = {"Yiyecekler": 0, "İçecekler": 1, "Tatlılar": 2, "Paketleme / Ekstra": 3, "Diğer": 4}
+    product_rows = sorted(products.values(), key=lambda r: (category_order.get(_cost_product_category(r["name"]), 9), -r["revenue"], r["name"]))
     expenses = PlatformExpense.query.filter(PlatformExpense.user_id == current_user.id,
                                              PlatformExpense.day_from <= datetime.utcnow().date(),
                                              PlatformExpense.day_to >= (datetime.utcnow() - timedelta(days=days)).date()).all()
@@ -1231,6 +1234,19 @@ def product_costs():
                            platform_label=platform_label, expenses=expenses, expense_total=expense_total,
                            revenue_total=revenue_total, cost_total=cost_total,
                            profit_total=revenue_total - cost_total - expense_total)
+
+
+def _cost_product_category(name: str) -> str:
+    text = (name or "").casefold()
+    if any(word in text for word in ("ayran", "kahve", "latte", "americano", "çay", "cay", "mocha", "soda", "su ", "ice", "matcha", "cola", "şerbet", "serbet")):
+        return "İçecekler"
+    if any(word in text for word in ("kek", "pasta", "kurabiye", "cookie", "tiramisu", "tatlı", "tatli", "dondurma", "marlenka", "brownie")):
+        return "Tatlılar"
+    if any(word in text for word in ("poşet", "poset", "peçete", "pecete", "viyol", "paket", "çatal", "catal", "sos")):
+        return "Paketleme / Ekstra"
+    if any(word in text for word in ("sandviç", "sandvic", "tost", "burger", "köfte", "kofte", "döner", "doner", "pizza", "çorba", "corba", "ekmek", "salata", "makarna", "tavuk")):
+        return "Yiyecekler"
+    return "Diğer"
 
 
 def _order_action_redirect(order: Order):
