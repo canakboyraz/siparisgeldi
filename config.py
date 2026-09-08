@@ -78,6 +78,7 @@ class Config:
     PAYTR_MERCHANT_KEY = os.environ.get("PAYTR_MERCHANT_KEY", "")
     PAYTR_MERCHANT_SALT = os.environ.get("PAYTR_MERCHANT_SALT", "")
     PAYTR_TEST_MODE = os.environ.get("PAYTR_TEST_MODE", "1")
+    PAYTR_DEBUG_ON = os.environ.get("PAYTR_DEBUG_ON", "1")
     PAYTR_CALLBACK_URL = os.environ.get("PAYTR_CALLBACK_URL", "https://www.siparisgeldi.net/payment/paytr/callback")
 
     # Trendyol Pazaryeri (e-ticaret)

@@ -34,7 +34,8 @@ def iframe_token(config, oid, user, amount, ok_url, fail_url, ip):
         "user_phone": str(config.get("COMPANY_PHONE", "05000000000")).replace(" ", "")[:20],
         "currency": "TL",
         "merchant_ok_url": ok_url, "merchant_fail_url": fail_url, "timeout_limit": "30",
-        "debug_on": "0", "test_mode": str(config.get("PAYTR_TEST_MODE", "1")), "lang": "tr",
+        "debug_on": str(config.get("PAYTR_DEBUG_ON", "1")),
+        "test_mode": str(config.get("PAYTR_TEST_MODE", "1")), "lang": "tr",
     }
     # PayTR resmi ornegindeki iFrame API imza sirasi sabittir.
     sign = (payload["merchant_id"] + payload["user_ip"] + oid + payload["email"] + amount_kurus + basket +
