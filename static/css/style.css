@@ -207,6 +207,10 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .expense-form{display:grid;grid-template-columns:1.1fr 1.5fr 1fr 1fr 1fr auto;gap:.75rem;align-items:end}
 .expense-form .field{margin:0;min-width:0}
 .expense-form .btn{white-space:nowrap}
+.commission-form{display:grid;grid-template-columns:1.2fr 1fr auto;gap:.75rem;align-items:end}
+.commission-form .field{margin:0;min-width:0}
+.saved-commissions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem}
+.cost-summary p{line-height:1.8;margin-bottom:0}
 .mini-check{display:inline-flex;align-items:center;gap:.25rem;margin:0;font-size:.82rem;color:var(--muted);white-space:nowrap}
 .mini-check input{width:auto}
 .toggle-line{display:flex;align-items:center;gap:.6rem;padding:.4rem 0}
@@ -445,6 +449,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .cost-table{border:1px solid var(--line);border-radius:9px}
   .expense-form{grid-template-columns:1fr 1fr}
   .expense-form .btn{grid-column:1 / -1;width:100%}
+  .commission-form{grid-template-columns:1fr 1fr}
+  .commission-form .btn{grid-column:1 / -1;width:100%}
   .analytics-row-meta{align-items:flex-start;flex-direction:column;gap:.1rem}
   .comparison-row{grid-template-columns:1fr;gap:.65rem}
   .comparison-trend{justify-self:start}

@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 import pytz
 
 from extensions import db
-from models import Integration, Order, ProductCost, PlatformExpense
+from models import Integration, Order, ProductCost, PlatformExpense, PlatformCommission
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications.dispatcher import send_to_user, record_whatsapp_result
 from utils import platform_label, status_label
@@ -1156,20 +1156,41 @@ def order_detail(order_id):
 def product_costs():
     """Satılan ürün bazında birim maliyet ve karlılık görünümü."""
     if request.method == "POST":
+        if request.form.get("form_type") == "commission":
+            platform = request.form.get("commission_platform", "").strip()[:30]
+            try:
+                percentage = float(request.form.get("commission_percentage", "0").replace(",", "."))
+                if percentage < 0 or percentage > 100:
+                    raise ValueError
+            except ValueError:
+                flash("Komisyon oranı 0 ile 100 arasında olmalı.", "danger")
+                return redirect(url_for("dashboard.product_costs"))
+            row = PlatformCommission.query.filter_by(user_id=current_user.id, platform=platform).first()
+            if not row:
+                row = PlatformCommission(user_id=current_user.id, platform=platform)
+                db.session.add(row)
+            row.percentage = percentage
+            db.session.commit()
+            flash("Platform komisyonu kaydedildi.", "success")
+            return redirect(url_for("dashboard.product_costs"))
         if request.form.get("form_type") == "expense":
             try:
                 amount = float(request.form.get("expense_amount", "0").replace(",", "."))
-                day_from = datetime.strptime(request.form.get("day_from", ""), "%Y-%m-%d").date()
-                day_to = datetime.strptime(request.form.get("day_to", ""), "%Y-%m-%d").date()
-                if amount < 0 or day_to < day_from or amount > 10000000:
+                if amount < 0 or amount > 10000000:
                     raise ValueError
             except ValueError:
                 flash("Gider tutarı ve tarih aralığını kontrol edin.", "danger")
                 return redirect(url_for("dashboard.product_costs"))
-            db.session.add(PlatformExpense(user_id=current_user.id,
+            existing = PlatformExpense.query.filter_by(user_id=current_user.id,
                 platform=request.form.get("expense_platform", "genel")[:30],
-                name=request.form.get("expense_name", "Diğer gider").strip()[:120] or "Diğer gider",
-                amount=amount, day_from=day_from, day_to=day_to))
+                name=request.form.get("expense_name", "Diğer gider").strip()[:120] or "Diğer gider").first()
+            if existing:
+                existing.amount = amount
+            else:
+                db.session.add(PlatformExpense(user_id=current_user.id,
+                    platform=request.form.get("expense_platform", "genel")[:30],
+                    name=request.form.get("expense_name", "Diğer gider").strip()[:120] or "Diğer gider",
+                    amount=amount, day_from=datetime.utcnow().date(), day_to=datetime.utcnow().date()))
             db.session.commit()
             flash("Platform gideri kaydedildi.", "success")
             return redirect(url_for("dashboard.product_costs"))
@@ -1230,16 +1251,18 @@ def product_costs():
     product_rows = sorted(products.values(), key=lambda r: (-r["revenue"], r["name"]))
     if search:
         product_rows = [r for r in product_rows if search in r["name"].casefold()]
-    expenses = PlatformExpense.query.filter(PlatformExpense.user_id == current_user.id,
-                                             PlatformExpense.day_from <= datetime.utcnow().date(),
-                                             PlatformExpense.day_to >= (datetime.utcnow() - timedelta(days=days)).date()).all()
+    all_expenses = PlatformExpense.query.filter_by(user_id=current_user.id).all()
+    expenses = [e for e in all_expenses if not selected_platform or e.platform in (selected_platform, "genel")]
     expense_total = sum(e.amount for e in expenses)
+    commissions = {r.platform: r.percentage for r in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
+    commission_total = sum(r["revenue"] * commissions.get(r["platform"], 0) / 100 for r in product_rows)
     revenue_total = sum(r["revenue"] for r in product_rows)
     cost_total = sum(r["total_cost"] or 0 for r in product_rows)
     return render_template("dashboard/product_costs.html", products=product_rows, days=days,
                            platform_label=platform_label, expenses=expenses, expense_total=expense_total,
+                           commissions=commissions, commission_total=commission_total,
                            revenue_total=revenue_total, cost_total=cost_total,
-                           profit_total=revenue_total - cost_total - expense_total,
+                           profit_total=revenue_total - cost_total - expense_total - commission_total,
                            selected_platform=selected_platform, search=search)
 
 

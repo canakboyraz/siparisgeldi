@@ -329,6 +329,17 @@ class PlatformExpense(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PlatformCommission(db.Model):
+    """Kullanıcının platform için belirlediği komisyon oranı."""
+    __tablename__ = "platform_commissions"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    platform = db.Column(db.String(30), nullable=False)
+    percentage = db.Column(db.Float, nullable=False, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "platform", name="uq_platform_commission"),)
+
+
 class AppState(db.Model):
     """Basit anahtar-değer durum saklama (ör. Telegram getUpdates offset)."""
     __tablename__ = "app_state"
