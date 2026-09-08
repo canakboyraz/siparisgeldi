@@ -29,9 +29,9 @@ def decimal(value):
 def local_day(value):
     try:
         stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        # Adisyo examples have offset-free timestamps; verify against POS at go-live.
+        # Adisyo examples omit the offset; these are POS local times.
         if stamp.tzinfo is None:
-            stamp = stamp.replace(tzinfo=timezone.utc)
+            stamp = TURKEY_TZ.localize(stamp)
         return stamp.astimezone(TURKEY_TZ).date()
     except (ValueError, TypeError):
         raise AdisyoError("Adisyo siparis tarihi eksik veya gecersiz.") from None
@@ -75,7 +75,8 @@ def completed_page(connection, day, page):
 def normalize(order, day):
     if not isinstance(order, dict) or not order.get("id"):
         raise AdisyoError("Adisyo siparis kimligi eksik.")
-    if local_day(order.get("updateDate")) != day:
+    order_day = order.get("insertDate") or order.get("updateDate")
+    if local_day(order_day) != day:
         return None
     status = "".join(c for c in unicodedata.normalize("NFKD", str(order.get("status", "")).casefold())
                      if not unicodedata.combining(c))
@@ -112,6 +113,7 @@ def summarize(rows):
     amounts = defaultdict(Decimal)
     products, payments = {}, defaultdict(Decimal)
     for row in rows:
+        amounts["gross_amount"] += decimal(row["amount"])
         if row["cancelled"]:
             result["cancelled"] += 1
             amounts["cancelled_amount"] += decimal(row["amount"])
@@ -127,7 +129,7 @@ def summarize(rows):
             target["amount"] += decimal(item["amount"])
         for payment in row["payments"]:
             payments[payment["name"]] += decimal(payment["amount"])
-    for name in ("amount", "discount", "tax", "cancelled_amount"):
+    for name in ("amount", "gross_amount", "discount", "tax", "cancelled_amount"):
         result[name] = f"{amounts[name]:.2f}"
     result["products"] = [{**p, "quantity": format(p["quantity"], "f"), "amount": f"{p['amount']:.2f}"}
                           for p in sorted(products.values(), key=lambda p: (-p["quantity"], p["name"]))]

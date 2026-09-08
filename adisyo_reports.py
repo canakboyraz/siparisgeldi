@@ -28,9 +28,10 @@ def queue_report(connection, day, send=False, refresh=False):
 def report_message(report):
     summary = json.loads(report.summary_json)
     label = f"Adisyo - {report.connection.restaurant_name} - {report.day:%d.%m.%Y}"
-    lines = [f"<b>{escape(label)}</b>", "Tamamlanan / son guncelleme gunune gore",
+    lines = [f"<b>{escape(label)}</b>", "Siparis olusturma tarihine gore",
              f"Siparis: {summary['count']} | Iptal: {summary['cancelled']}",
-             f"Siparis tutari: {summary['amount']} TL", f"Iptal tutari: {summary['cancelled_amount']} TL",
+             f"Brut toplam: {summary['gross_amount']} TL", f"Gecerli ciro: {summary['amount']} TL",
+             f"Iptal tutari: {summary['cancelled_amount']} TL",
              f"Indirim: {summary['discount']} TL | Vergi: {summary['tax']} TL", "", "<b>Urunler</b>"]
     for item in summary["products"][:25]:
         lines.append(f"{escape(item['name'][:80])}: {item['quantity']} adet / {item['amount']} TL")
