@@ -1176,21 +1176,23 @@ def product_costs():
         if request.form.get("form_type") == "expense":
             try:
                 amount = float(request.form.get("expense_amount", "0").replace(",", "."))
-                if amount < 0 or amount > 10000000:
+                if not 0 <= amount <= 10000000:
                     raise ValueError
             except ValueError:
-                flash("Gider tutarı ve tarih aralığını kontrol edin.", "danger")
+                flash("Geçerli bir gider tutarı girin.", "danger")
                 return redirect(url_for("dashboard.product_costs"))
             existing = PlatformExpense.query.filter_by(user_id=current_user.id,
                 platform=request.form.get("expense_platform", "genel")[:30],
                 name=request.form.get("expense_name", "Diğer gider").strip()[:120] or "Diğer gider").first()
             if existing:
                 existing.amount = amount
+                existing.expense_type = request.form.get("expense_type", "fixed") if request.form.get("expense_type") in ("fixed", "per_order") else "fixed"
             else:
                 db.session.add(PlatformExpense(user_id=current_user.id,
                     platform=request.form.get("expense_platform", "genel")[:30],
                     name=request.form.get("expense_name", "Diğer gider").strip()[:120] or "Diğer gider",
-                    amount=amount, day_from=datetime.utcnow().date(), day_to=datetime.utcnow().date()))
+                    amount=amount, expense_type=request.form.get("expense_type", "fixed") if request.form.get("expense_type") in ("fixed", "per_order") else "fixed",
+                    day_from=datetime.utcnow().date(), day_to=datetime.utcnow().date()))
             db.session.commit()
             flash("Platform gideri kaydedildi.", "success")
             return redirect(url_for("dashboard.product_costs"))
@@ -1253,14 +1255,19 @@ def product_costs():
         product_rows = [r for r in product_rows if search in r["name"].casefold()]
     all_expenses = PlatformExpense.query.filter_by(user_id=current_user.id).all()
     expenses = [e for e in all_expenses if not selected_platform or e.platform in (selected_platform, "genel")]
-    expense_total = sum(e.amount for e in expenses)
+    order_counts = {}
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+        if (not selected_platform or order.platform == selected_platform) and not _is_cancelled_order(order) and not _is_refunded_order(order):
+            order_counts[order.platform] = order_counts.get(order.platform, 0) + 1
+    order_counts["genel"] = sum(order_counts.values())
+    expense_total = sum(e.amount * order_counts.get(e.platform, 0) if e.expense_type == "per_order" else e.amount for e in expenses)
     commissions = {r.platform: r.percentage for r in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
-    commission_total = sum(r["revenue"] * commissions.get(r["platform"], 0) / 100 for r in product_rows)
-    revenue_total = sum(r["revenue"] for r in product_rows)
-    cost_total = sum(r["total_cost"] or 0 for r in product_rows)
+    commission_total = sum(r["revenue"] * commissions.get(r["platform"], 0) / 100 for r in products.values())
+    revenue_total = sum(r["revenue"] for r in products.values())
+    cost_total = sum(r["total_cost"] or 0 for r in products.values())
     return render_template("dashboard/product_costs.html", products=product_rows, days=days,
                            platform_label=platform_label, expenses=expenses, expense_total=expense_total,
-                           commissions=commissions, commission_total=commission_total,
+                           commissions=commissions, commission_total=commission_total, order_counts=order_counts,
                            revenue_total=revenue_total, cost_total=cost_total,
                            profit_total=revenue_total - cost_total - expense_total - commission_total,
                            selected_platform=selected_platform, search=search)

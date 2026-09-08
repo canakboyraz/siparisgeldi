@@ -13,9 +13,23 @@
 <div class="card cost-expense-card">
   <div class="card-title">Platforma özel diğer giderler</div>
   <p class="muted">Kraft poşet, viyöl, peçete ve benzeri giderleri platform bazında kaydedin. Adisyo’da olmayan giderleri yalnızca ilgili platforma ekleyin.</p>
-  <form method="post" class="expense-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="form_type" value="expense"><div class="field"><label>Platform</label><select name="expense_platform"><option value="trendyolgo">Trendyol Go</option><option value="migros">Migros Yemek</option><option value="yemeksepeti">Yemeksepeti</option><option value="adisyo">Adisyo</option><option value="genel">Genel</option></select></div><div class="field"><label>Gider adı</label><input name="expense_name" placeholder="Kraft poşet, peçete vb." required></div><div class="field"><label>Toplam tutar</label><input name="expense_amount" type="number" min="0" step="0.01" placeholder="0,00 TL" required></div><button class="btn btn-primary" type="submit">Gideri kaydet</button></form>
-  {% if expenses %}<table style="margin-top:1rem"><tr><th>Platform</th><th>Gider</th><th>Tutar</th></tr>{% for expense in expenses %}<tr><td>{{ platform_label(expense.platform) }}</td><td>{{ expense.name }}</td><td>{{ '%.2f'|format(expense.amount) }} TL</td></tr>{% endfor %}</table>{% endif %}
+  <form method="post" class="expense-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="form_type" value="expense"><div class="field"><label>Platform</label><select name="expense_platform"><option value="trendyolgo">Trendyol Go</option><option value="migros">Migros Yemek</option><option value="yemeksepeti">Yemeksepeti</option><option value="adisyo">Adisyo</option><option value="genel">Genel</option></select></div><div class="field"><label>Gider adı</label><input name="expense_name" placeholder="Kraft poşet, peçete vb." required></div><div class="field"><label>Hesaplama</label><select name="expense_type"><option value="per_order">Sipariş başı</option><option value="fixed">Dönem toplamı</option></select></div><div class="field"><label>Tutar</label><input name="expense_amount" type="number" min="0" step="0.01" placeholder="10,00 TL" required></div><button class="btn btn-primary" type="submit">Gideri kaydet</button></form>
+  {% if expenses %}
+  <table style="margin-top:1rem">
+    <thead><tr><th>Platform</th><th>Gider</th><th>Birim tutar</th><th>Sipariş adedi</th><th>Dönem gideri</th></tr></thead>
+    <tbody>{% for expense in expenses %}
+      {% set per_order = expense.expense_type == 'per_order' %}
+      {% set count = order_counts.get(expense.platform, 0) %}
+      <tr>
+        <td>{{ platform_label(expense.platform) }}</td><td>{{ expense.name }}</td>
+        <td>{{ '%.2f'|format(expense.amount) }} TL / {{ 'sipariş' if per_order else 'dönem' }}</td>
+        <td>{{ count if per_order else '—' }}</td>
+        <td>{{ '%.2f'|format(expense.amount * count if per_order else expense.amount) }} TL</td>
+      </tr>
+    {% endfor %}</tbody>
+  </table>
+  {% endif %}
 </div>
 <div class="card cost-commission-card"><div class="card-title">Platform komisyonları</div><p class="muted">Her platform için komisyon oranını yüzde olarak girin. Bu oran satış toplamından otomatik düşülür.</p><form method="post" class="commission-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="form_type" value="commission"><div class="field"><label>Platform</label><select name="commission_platform"><option value="trendyolgo">Trendyol Go</option><option value="trendyol_marketplace">Trendyol Pazaryeri</option><option value="migros">Migros Yemek</option><option value="yemeksepeti">Yemeksepeti</option><option value="adisyo">Adisyo</option></select></div><div class="field"><label>Komisyon (%)</label><input name="commission_percentage" type="number" min="0" max="100" step="0.01" placeholder="0,00" required></div><button class="btn btn-primary" type="submit">Komisyonu kaydet</button></form>{% if commissions %}<div class="saved-commissions">{% for platform, percentage in commissions.items() %}<span class="badge gray">{{ platform_label(platform) }}: {{ percentage }}%</span>{% endfor %}</div>{% endif %}</div>
-<div class="card cost-summary"><div class="card-title">Dönem özeti</div><p>Satış: <b>{{ '%.2f'|format(revenue_total) }} TL</b> · Ürün maliyeti: <b>{{ '%.2f'|format(cost_total) }} TL</b> · Komisyon: <b>{{ '%.2f'|format(commission_total) }} TL</b> · Diğer gider: <b>{{ '%.2f'|format(expense_total) }} TL</b> · Tahmini kâr: <b>{{ '%.2f'|format(profit_total) }} TL</b></p></div>
+<div class="card cost-summary"><div class="card-title">Dönem özeti</div><p>Satış: <b>{{ '%.2f'|format(revenue_total) }} TL</b> · Ürün maliyeti: <b>{{ '%.2f'|format(cost_total) }} TL</b> · Komisyon: <b>{{ '%.2f'|format(commission_total) }} TL</b> · Diğer gider: <b>{{ '%.2f'|format(expense_total) }} TL</b> · Toplam maliyet ve gider: <b>{{ '%.2f'|format(cost_total + expense_total + commission_total) }} TL</b> · Tahmini kâr: <b>{{ '%.2f'|format(profit_total) }} TL</b></p></div>
 {% endblock %}

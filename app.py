@@ -48,6 +48,7 @@ def _ensure_schema():
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_client_secret VARCHAR(512)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE platform_expenses ADD COLUMN IF NOT EXISTS expense_type VARCHAR(20) DEFAULT 'fixed'",
             """
             CREATE UNIQUE INDEX IF NOT EXISTS uq_migros_store_id
             ON integrations (migros_store_id)
@@ -125,6 +126,9 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE integrations ADD COLUMN notify_weekly_report BOOLEAN DEFAULT TRUE")
             if "notify_monthly_report" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN notify_monthly_report BOOLEAN DEFAULT TRUE")
+            expense_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(platform_expenses)")).fetchall()} if conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='platform_expenses'")).fetchone() else set()
+            if expense_cols and "expense_type" not in expense_cols:
+                stmts.append("ALTER TABLE platform_expenses ADD COLUMN expense_type VARCHAR(20) DEFAULT 'fixed'")
             for s in stmts:
                 try:
                     conn.execute(text(s))

@@ -324,6 +324,7 @@ class PlatformExpense(db.Model):
     platform = db.Column(db.String(30), nullable=False)
     name = db.Column(db.String(120), nullable=False)
     amount = db.Column(db.Float, nullable=False, default=0)
+    expense_type = db.Column(db.String(20), nullable=False, default="fixed")  # fixed | per_order
     day_from = db.Column(db.Date, nullable=False)
     day_to = db.Column(db.Date, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
