@@ -120,6 +120,11 @@ def adisyo_webhook():
     if request.method == "GET":
         return jsonify({"ok": True, "service": "adisyo"}), 200
     payload = request.get_json(silent=True) or {}
+    # Adisyo paneli URL kontrolü sırasında imzasız bir probe gönderebilir.
+    # Probe'u kabul ediyoruz ancak payload'u işlemiyoruz; gerçek event için
+    # aşağıdaki imza kontrolü zorunludur.
+    if not request.headers.get("X-Adisyo-Signature"):
+        return _ok("probe")
     connection = _adisyo_connection_for_payload(payload)
     if not connection:
         return jsonify({"ok": False, "error": "invalid signature"}), 401
