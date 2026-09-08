@@ -18,12 +18,18 @@ def merchant_oid():
 
 
 def iframe_token(config, oid, user, amount, ok_url, fail_url, ip):
+    required = ("PAYTR_MERCHANT_ID", "PAYTR_MERCHANT_KEY", "PAYTR_MERCHANT_SALT")
+    missing = [key for key in required if not str(config.get(key) or "").strip()]
+    if missing:
+        raise ValueError("PayTR eksik degisken: " + ", ".join(missing))
+
     amount_kurus = str(int(round(amount * 100)))
     basket = base64.b64encode(json.dumps([["SiparisGeldi Pro Aylik Abonelik", f"{amount:.2f}", 1]], ensure_ascii=False, separators=(",", ":")).encode()).decode()
     payload = {
         "merchant_id": config["PAYTR_MERCHANT_ID"], "user_ip": ip[:39], "merchant_oid": oid,
         "email": user.email, "payment_amount": amount_kurus, "user_basket": basket,
-        "no_installment": "0", "max_installment": "0", "user_name": user.name[:60],
+        "no_installment": "0", "max_installment": "0",
+        "user_name": (user.name or user.email or "SiparisGeldi")[:60],
         "user_address": str(config.get("COMPANY_ADDRESS", "Dijital hizmet aboneligi"))[:400],
         "user_phone": str(config.get("COMPANY_PHONE", "05000000000")).replace(" ", "")[:20],
         "currency": "TL",
@@ -37,10 +43,13 @@ def iframe_token(config, oid, user, amount, ok_url, fail_url, ip):
             payload["merchant_fail_url"] + config["PAYTR_MERCHANT_SALT"])
     payload["paytr_token"] = _hmac(sign, config["PAYTR_MERCHANT_KEY"])
     response = requests.post(TOKEN_URL, data=payload, timeout=(5, 20))
-    response.raise_for_status()
-    data = response.json()
+    try:
+        data = response.json()
+    except ValueError:
+        raise ValueError(f"PayTR gecersiz yanit (HTTP {response.status_code})")
     if data.get("status") != "success" or not data.get("token"):
-        raise ValueError(str(data.get("reason") or "PayTR token alınamadı")[:300])
+        reason = data.get("reason") or data.get("message") or f"HTTP {response.status_code}"
+        raise ValueError(str(reason)[:300])
     return data["token"]
 
 

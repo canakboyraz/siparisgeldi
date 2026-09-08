@@ -29,7 +29,7 @@ def start():
     except Exception as exc:
         payment.status, payment.failure_reason = "failed", str(exc)[:300]
         db.session.commit()
-        current_app.logger.warning("PayTR token olusturulamadi user_id=%s: %s", current_user.id, str(exc)[:300])
+        current_app.logger.warning("PayTR token olusturulamadi user_id=%s reason=%s", current_user.id, str(exc)[:300])
         flash("PayTR ödeme başlatılamadı. Railway değişkenlerini ve PayTR test modunu kontrol edin.", "danger")
         return redirect(url_for("dashboard.subscription"))
     return render_template("dashboard/paytr_checkout.html", token=token)
