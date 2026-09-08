@@ -161,12 +161,14 @@ def create_app(config_class=Config, start_scheduler=None):
     from routes.auth import auth_bp
     from routes.dashboard import dashboard_bp
     from routes.webhooks import webhooks_bp
+    from routes.adisyo import adisyo_bp
     from routes.admin import admin_bp
 
     app.register_blueprint(public_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp, url_prefix="/panel")
     app.register_blueprint(webhooks_bp, url_prefix="/webhooks")
+    app.register_blueprint(adisyo_bp, url_prefix="/panel/adisyo")
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
     # Åablonlarda kullanÄ±lacak yardÄ±mcÄ±lar

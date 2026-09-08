@@ -70,6 +70,9 @@ class Config:
     # Yemeksepeti webhook
     YEMEKSEPETI_WEBHOOK_TOKEN = os.environ.get("YEMEKSEPETI_WEBHOOK_TOKEN", "")
 
+    # Adisyo (rapor amaçlı, webhook kullanılmadan okuma)
+    ADISYO_API_BASE = os.environ.get("ADISYO_API_BASE", "https://ext.adisyo.com/api/External/v2")
+
     # Trendyol Pazaryeri (e-ticaret)
     TRENDYOL_MARKETPLACE_API_BASE = os.environ.get("TRENDYOL_MARKETPLACE_API_BASE", "https://apigw.trendyol.com/integration")
     TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY = os.environ.get("TRENDYOL_MARKETPLACE_WEBHOOK_API_KEY", "")

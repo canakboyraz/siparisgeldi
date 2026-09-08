@@ -220,6 +220,54 @@ class Integration(db.Model):
         return f"<Integration user={self.user_id} platform={self.platform}>"
 
 
+class AdisyoConnection(db.Model):
+    __tablename__ = "adisyo_connections"
+
+    id = db.Column(db.Integer, primary_key=True)
+    integration_id = db.Column(db.Integer, db.ForeignKey("integrations.id"), unique=True, nullable=False)
+    integration = db.relationship("Integration", backref=db.backref("adisyo_connection", uselist=False, cascade="all, delete-orphan"))
+    restaurant_name = db.Column(db.String(120), nullable=False)
+    consumer = db.Column(db.String(120), nullable=False)
+    _api_key = db.Column("api_key", db.Text, nullable=False)
+    _api_secret = db.Column("api_secret", db.Text, nullable=False)
+    next_request_at = db.Column(db.DateTime)
+
+    @property
+    def api_key(self):
+        return security.decrypt(self._api_key)
+
+    @api_key.setter
+    def api_key(self, value):
+        self._api_key = security.encrypt(value)
+
+    @property
+    def api_secret(self):
+        return security.decrypt(self._api_secret)
+
+    @api_secret.setter
+    def api_secret(self, value):
+        self._api_secret = security.encrypt(value)
+
+
+class AdisyoReport(db.Model):
+    __tablename__ = "adisyo_reports"
+
+    id = db.Column(db.Integer, primary_key=True)
+    connection_id = db.Column(db.Integer, db.ForeignKey("adisyo_connections.id"), nullable=False)
+    connection = db.relationship("AdisyoConnection", backref=db.backref("reports", cascade="all, delete-orphan"))
+    day = db.Column(db.Date, nullable=False)
+    state = db.Column(db.String(20), default="queued", nullable=False)
+    page = db.Column(db.Integer, default=1, nullable=False)
+    attempts = db.Column(db.Integer, default=0, nullable=False)
+    rows_json = db.Column(db.Text, default="{}", nullable=False)
+    summary_json = db.Column(db.Text)
+    error = db.Column(db.String(300))
+    send_requested = db.Column(db.Boolean, default=False, nullable=False)
+    notification_status = db.Column(db.String(30))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("connection_id", "day", name="uq_adisyo_report_day"),)
+
+
 class Order(db.Model):
     """Gelen tüm siparişlerin kaydı."""
     __tablename__ = "orders"

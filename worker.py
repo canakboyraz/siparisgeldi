@@ -586,6 +586,9 @@ def send_daily_reports(app):
     with app.app_context():
         today = datetime.now(TURKEY_TZ).date()
         for intg in Integration.query.filter_by(is_active=True).all():
+            if intg.platform == "adisyo":
+                # Adisyo raporu kendi sayfalama/limit akışıyla 00:15'te gönderilir.
+                continue
             if not intg.notify_daily_report:
                 continue
             try:
@@ -898,6 +901,10 @@ def start_scheduler(app):
 
     scheduler.add_job(poll_hepsiburada, "interval", seconds=interval,
                       args=[app], id="hb_poll", replace_existing=True, max_instances=1)
+
+    from adisyo_reports import tick as tick_adisyo_reports
+    scheduler.add_job(tick_adisyo_reports, "interval", seconds=45,
+                      args=[app], id="adisyo_reports", replace_existing=True, max_instances=1)
 
     scheduler.add_job(poll_telegram_binds, "interval", seconds=5,
                       args=[app], id="tg_bind", replace_existing=True, max_instances=1)

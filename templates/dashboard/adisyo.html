@@ -1,0 +1,35 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Adisyo · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><h1>Adisyo rapor bağlantısı</h1></div>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Pion restoranı</div>
+    <p class="muted">Bu bağlantı tamamlanan siparişleri arka planda okuyup ürün ve ödeme bazında gün sonu raporu hazırlar. Anlık sipariş bildirimi için webhook gerekir; şu an kullanılmıyor.</p>
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label>Restoran adı</label><input name="restaurant_name" required maxlength="120" value="{{ connection.restaurant_name if connection else 'Pion' }}"></div>
+      <div class="field"><label>Consumer</label><input name="consumer" required maxlength="120" pattern="[ -~]+" value="{{ connection.consumer if connection else 'SiparisGeldi-Pion' }}"><p class="hint">Benzersiz değer: SiparisGeldi-Pion</p></div>
+      <div class="field"><label>Web App Key</label><input type="password" name="api_key" {{ 'required' if not connection }} placeholder="{{ 'Kayıtlı, değiştirmek için yeni değer gir' if connection else 'Adisyo Web App Key' }}"></div>
+      <div class="field"><label>Api Secret Key</label><input type="password" name="api_secret" {{ 'required' if not connection }} placeholder="{{ 'Kayıtlı, değiştirmek için yeni değer gir' if connection else 'Restoran Identity secret' }}"></div>
+      <label class="toggle-line"><input type="checkbox" name="daily_report" {{ 'checked' if integration and integration.notify_daily_report else '' }}> Gün sonu raporu gönder</label>
+      <button class="btn btn-primary btn-lg" type="submit">Bağlantıyı kaydet</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">Rapor oluştur</div>
+    <p class="muted">Rapor, Adisyo’daki tamamlanan siparişleri ve iptalleri seçilen güne göre toplar. Her 45 saniyede bir sayfa işlenir.</p>
+    {% if connection %}
+    <form method="post" action="{{ url_for('adisyo.report') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label>Tarih</label><input type="date" name="day" value="{{ yesterday.isoformat() }}" required></div>
+      <label class="toggle-line"><input type="checkbox" name="send"> Hazır olunca Telegram / WhatsApp’a gönder</label>
+      <button class="btn btn-ghost" type="submit">Raporu hazırla</button>
+    </form>
+    {% else %}<p class="hint">Önce bağlantıyı kaydedin.</p>{% endif %}
+    {% if reports %}<hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0"><div class="card-title" style="font-size:.95rem">Son raporlar</div>
+    {% for report in reports %}<p><a href="{{ url_for('adisyo.setup', report=report.id) }}">{{ report.day.strftime('%d.%m.%Y') }}</a> <span class="badge {{ 'green' if report.state == 'ready' else 'red' if report.state == 'error' else 'amber' }}">{{ report.state }}</span>{% if report.error %}<br><span class="hint">{{ report.error }}</span>{% endif %}</p>{% endfor %}{% endif %}
+  </div>
+</div>
+{% if summary %}<div class="card" style="margin-top:1rem"><div class="card-title">{{ selected.day.strftime('%d.%m.%Y') }} raporu</div><p><b>{{ summary.count }}</b> sipariş · <b>{{ summary.amount }} TL</b> · {{ summary.cancelled }} iptal ({{ summary.cancelled_amount }} TL)</p><p>İndirim: {{ summary.discount }} TL · Vergi: {{ summary.tax }} TL</p><h3>Ürünler</h3><table><tr><th>Ürün</th><th>Adet</th><th>Tutar</th></tr>{% for item in summary.products %}<tr><td>{{ item.name }}</td><td>{{ item.quantity }}</td><td>{{ item.amount }} TL</td></tr>{% endfor %}</table><h3>Ödemeler</h3>{% for p in summary.payments %}<p>{{ p.name }}: {{ p.amount }} TL</p>{% endfor %}</div>{% endif %}
+{% endblock %}

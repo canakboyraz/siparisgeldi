@@ -17,12 +17,14 @@ bu yüzden işleyemesek bile 200 dönüp gereksiz retry'ı önleriz.
 import json
 import hmac
 import hashlib
+import base64
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 
 from extensions import db
-from models import Integration, Order, User
+from models import Integration, Order, User, AdisyoConnection
 from integrations import migros, getir, trendyol_marketplace as tmp, yemeksepeti as ys
+from integrations import adisyo
 from notifications.dispatcher import send_to_user
 from notifications import whatsapp as whatsapp_client
 from utils import status_label
@@ -93,6 +95,46 @@ def _check_whatsapp_signature() -> bool:
         hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(signature[7:], digest)
+
+
+def _adisyo_connection_for_payload(payload: dict):
+    """İmza anahtarı restoran bazında olduğundan, kayıtlı key'leri denetler."""
+    event_type = str(payload.get("webhookEventType") or "")
+    event_time = str(payload.get("eventTimeUtc") or "")
+    signature = request.headers.get("X-Adisyo-Signature", "")
+    if not event_type or not event_time or not signature:
+        return None
+    message = f"{event_type}|{event_time}|"
+    for connection in AdisyoConnection.query.join(Integration).filter(Integration.is_active.is_(True)).all():
+        key = connection.api_key
+        expected = base64.b64encode(hmac.new(key.encode("utf-8"),
+            (message + key).encode("utf-8"), hashlib.sha256).digest()).decode("ascii")
+        if hmac.compare_digest(signature, expected):
+            return connection
+    return None
+
+
+@webhooks_bp.route("/adisyo", methods=["GET", "POST"])
+def adisyo_webhook():
+    """Adisyo doğrulama ve ilerideki olaylar için erişilebilir webhook adresi."""
+    if request.method == "GET":
+        return jsonify({"ok": True, "service": "adisyo"}), 200
+    payload = request.get_json(silent=True) or {}
+    connection = _adisyo_connection_for_payload(payload)
+    if not connection:
+        return jsonify({"ok": False, "error": "invalid signature"}), 401
+    event_type = str(payload.get("webhookEventType") or "")
+    event_id = str(payload.get("eventId") or "")
+    print(f"[ADISYO WEBHOOK] kabul edildi connection_id={connection.id} event={event_type} event_id={event_id[:80]}")
+    # Sipariş detayları polling ile alınır; webhook yalnızca hızlı tetikleyicidir.
+    if event_type in ("order.created", "order.updated"):
+        try:
+            day = adisyo.local_day(payload.get("eventTimeUtc"))
+            from adisyo_reports import queue_report
+            queue_report(connection, day, send=False, refresh=True)
+        except Exception as exc:
+            current_app.logger.warning("Adisyo webhook rapor kuyruğu başarısız connection_id=%s: %s", connection.id, exc)
+    return _ok("accepted")
 
 
 def _whatsapp_status_error(status: dict) -> str:
