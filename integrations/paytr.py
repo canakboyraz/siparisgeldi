@@ -26,14 +26,16 @@ def iframe_token(config, oid, user, amount, ok_url, fail_url, ip):
         "no_installment": "0", "max_installment": "0", "user_name": user.name[:60],
         "user_address": str(config.get("COMPANY_ADDRESS", "Dijital hizmet aboneligi"))[:400],
         "user_phone": str(config.get("COMPANY_PHONE", "05000000000")).replace(" ", "")[:20],
+        "currency": "TL",
         "merchant_ok_url": ok_url, "merchant_fail_url": fail_url, "timeout_limit": "30",
         "debug_on": "0", "test_mode": str(config.get("PAYTR_TEST_MODE", "1")), "lang": "tr",
     }
+    # PayTR iFrame API imzasinda alan sirasi dokumandaki gibi sabittir.
     sign = (payload["merchant_id"] + payload["user_ip"] + oid + payload["email"] + amount_kurus + basket +
             payload["no_installment"] + payload["max_installment"] + payload["user_name"] +
             payload["user_address"] + payload["user_phone"] + payload["merchant_ok_url"] +
-            payload["merchant_fail_url"] + payload["timeout_limit"] + payload["debug_on"] + payload["test_mode"])
-    payload["paytr_token"] = _hmac(sign + config["PAYTR_MERCHANT_SALT"], config["PAYTR_MERCHANT_KEY"])
+            payload["merchant_fail_url"] + config["PAYTR_MERCHANT_SALT"])
+    payload["paytr_token"] = _hmac(sign, config["PAYTR_MERCHANT_KEY"])
     response = requests.post(TOKEN_URL, data=payload, timeout=(5, 20))
     response.raise_for_status()
     data = response.json()
