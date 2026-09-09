@@ -185,6 +185,7 @@
         try {
           var query = "?since_id=" + encodeURIComponent(latestId);
           if (alertOrderId) query += "&watch_id=" + encodeURIComponent(alertOrderId);
+          if (queue.length) query += "&watch_ids=" + encodeURIComponent(queue.map(function (order) { return order.id; }).join(","));
           var response = await fetch(pollUrl + query, {
             credentials: "same-origin",
             cache: "no-store",
@@ -196,6 +197,9 @@
           }
           var data = await response.json();
           latestId = Math.max(latestId, Number(data.latest_id) || 0);
+          if (data.pending_by_id) {
+            queue = queue.filter(function (order) { return data.pending_by_id[String(order.id)] !== false; });
+          }
           if (statusText) statusText.textContent = "Son kontrol: " + new Date().toLocaleTimeString("tr-TR");
           if (alertOrderId && data.watch_pending === false) stopAlarm();
           if (Array.isArray(data.orders) && data.orders.length) {
