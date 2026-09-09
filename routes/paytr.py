@@ -11,10 +11,19 @@ PRICE = 250.0
 
 
 def _amount_in_kurus(value):
-    """PayTR tutarini TL/krs farklarindan etkilenmeden normalize eder."""
+    """Veritabanindaki TL tutari kuruşa cevirir."""
     raw = str(value or "").strip().replace(" ", "").replace(",", ".")
     try:
         return int((Decimal(raw) * 100).quantize(Decimal("1")))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _paytr_total_in_kurus(value):
+    """PayTR callback'indeki total_amount kuruş formatindadir (25000 = 250 TL)."""
+    raw = str(value or "").strip().replace(" ", "")
+    try:
+        return int(Decimal(raw))
     except (InvalidOperation, ValueError):
         return None
 
@@ -65,7 +74,7 @@ def callback():
     status = request.form.get("status", "")
     total_raw = request.form.get("total_amount", "")
     status_normalized = status.strip().lower()
-    total_kurus = _amount_in_kurus(total_raw)
+    total_kurus = _paytr_total_in_kurus(total_raw)
     expected_kurus = _amount_in_kurus(payment.amount)
     current_app.logger.info(
         "PayTR callback verisi payment_id=%s status=%s total_var=%s tutar_eslesti=%s",
