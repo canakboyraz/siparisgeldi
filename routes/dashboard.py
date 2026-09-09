@@ -1239,7 +1239,8 @@ def product_costs():
     except ValueError:
         custom_start, custom_end = None, None
         start_date, end_date = "", ""
-    selected_platform = request.args.get("platform", "").strip()
+    selected_platforms = [value.strip() for value in request.args.getlist("platform") if value.strip()]
+    platform_filter = set(selected_platforms)
     search = request.args.get("q", "").strip().casefold()
     since = custom_start or (datetime.utcnow() - timedelta(days=days))
     until = custom_end or datetime.utcnow() + timedelta(seconds=1)
@@ -1251,7 +1252,7 @@ def product_costs():
     costs = {" ".join((r.product_name or "").casefold().split()): r for r in rows}
     products = {}
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
-        if selected_platform and order.platform != selected_platform:
+        if platform_filter and order.platform not in platform_filter:
             continue
         # Karlılıkta teslim edilen siparişler dahil, yalnızca iptal/iade hariçtir.
         if order.status in PROBLEM_STATUSES:
@@ -1263,7 +1264,7 @@ def product_costs():
             row["quantity"] += item["quantity"]
             row["revenue"] += item["revenue"]
     # Adisyo siparişleri Order tablosunda değil, hazır günlük raporlarda tutulur.
-    if not selected_platform or selected_platform == "adisyo":
+    if not platform_filter or "adisyo" in platform_filter:
         adisyo_reports = (AdisyoReport.query.join(AdisyoConnection)
                           .join(Integration, AdisyoConnection.integration_id == Integration.id)
                           .filter(Integration.user_id == current_user.id,
@@ -1296,12 +1297,12 @@ def product_costs():
     if search:
         product_rows = [r for r in product_rows if search in r["name"].casefold()]
     all_expenses = PlatformExpense.query.filter_by(user_id=current_user.id).all()
-    expenses = [e for e in all_expenses if not selected_platform or e.platform in (selected_platform, "genel")]
+    expenses = [e for e in all_expenses if not platform_filter or e.platform in platform_filter or e.platform == "genel"]
     order_counts = {}
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
-        if (not selected_platform or order.platform == selected_platform) and not _is_cancelled_order(order) and not _is_refunded_order(order):
+        if (not platform_filter or order.platform in platform_filter) and not _is_cancelled_order(order) and not _is_refunded_order(order):
             order_counts[order.platform] = order_counts.get(order.platform, 0) + 1
-    if not selected_platform or selected_platform == "adisyo":
+    if not platform_filter or "adisyo" in platform_filter:
         for report in adisyo_reports if 'adisyo_reports' in locals() else []:
             try:
                 summary = json.loads(report.summary_json or "{}")
@@ -1317,7 +1318,7 @@ def product_costs():
     # Günlük özet: iptal/iade siparişleri hariç, ürün maliyeti ve platform kesintileri dahil.
     daily = {}
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
-        if selected_platform and order.platform != selected_platform:
+        if platform_filter and order.platform not in platform_filter:
             continue
         if _is_cancelled_order(order) or _is_refunded_order(order):
             continue
@@ -1338,7 +1339,7 @@ def product_costs():
             product["revenue"] += item["revenue"]
             if saved:
                 product["cost"] += item["quantity"] * saved.unit_cost
-    if not selected_platform or selected_platform == "adisyo":
+    if not platform_filter or "adisyo" in platform_filter:
         for report in adisyo_reports if 'adisyo_reports' in locals() else []:
             try:
                 summary = json.loads(report.summary_json or "{}")
@@ -1394,7 +1395,7 @@ def product_costs():
                            commissions=commissions, commission_total=commission_total, order_counts=order_counts,
                            revenue_total=revenue_total, cost_total=cost_total,
                            profit_total=revenue_total - cost_total - expense_total - commission_total,
-                           selected_platform=selected_platform, search=search, daily_rows=daily_rows,
+                           selected_platforms=selected_platforms, search=search, daily_rows=daily_rows,
                            start_date=start_date, end_date=end_date)
 
 
