@@ -51,6 +51,7 @@
               <option value="free" {{ 'selected' if (u.plan or 'free') == 'free' }}>Ücretsiz</option>
               <option value="pro" {{ 'selected' if u.plan == 'pro' }}>Pro</option>
             </select>
+            <input type="number" name="add_pro_days" min="0" max="3650" placeholder="+ gün" title="Pro süresine eklenecek gün" style="width:78px">
             <label class="mini-check"><input type="checkbox" name="feature_whatsapp" {{ 'checked' if u.feature_whatsapp }}> WA</label>
             <label class="mini-check"><input type="checkbox" name="feature_multi_platform" {{ 'checked' if u.feature_multi_platform }}> Çoklu</label>
             <select name="notification_channel" style="min-width:130px">
@@ -59,6 +60,7 @@
               <option value="both" {{ 'selected' if u.notification_channel == 'both' }}>TG + WA</option>
             </select>
             <button class="btn btn-ghost btn-sm" type="submit">Kaydet</button>
+            {% if u.pro_expires_at %}<div class="muted small">{{ [((u.pro_expires_at.date() - now().date()).days), 0]|max }} gün kaldı · {{ u.pro_expires_at.strftime('%d.%m.%Y') }}</div>{% elif u.plan == 'pro' %}<div class="muted small">Süresiz eski kayıt</div>{% endif %}
           </form>
         </td>
         <td class="muted">{{ u.created_at.strftime('%d.%m.%Y') if u.created_at else '—' }}</td>

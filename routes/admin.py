@@ -3,6 +3,7 @@
 KullanÄ±cÄ±larÄ±, entegrasyonlarÄ± ve genel istatistikleri gÃ¶rÃ¼ntÃ¼ler. Salt-okunur
 (yÃ¶netim/silme aksiyonlarÄ± ileride eklenebilir).
 """
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import Blueprint, render_template, current_app, abort, request, redirect, url_for, flash
 from flask_login import login_required, current_user
@@ -157,6 +158,21 @@ def update_user_plan(user_id):
     user.plan = plan
     user.feature_whatsapp = "feature_whatsapp" in request.form
     user.feature_multi_platform = "feature_multi_platform" in request.form
+    try:
+        add_days = int(request.form.get("add_pro_days", "0") or 0)
+        if add_days < 0 or add_days > 3650:
+            raise ValueError
+    except ValueError:
+        flash("Eklenecek Pro günü 0 ile 3650 arasında olmalı.", "danger")
+        return redirect(back)
+    if plan == "pro" and add_days:
+        now = datetime.utcnow()
+        base = user.pro_expires_at if user.pro_expires_at and user.pro_expires_at > now else now
+        user.pro_started_at = user.pro_started_at or now
+        user.pro_expires_at = base + timedelta(days=add_days)
+    elif plan == "free":
+        user.pro_started_at = None
+        user.pro_expires_at = None
     channel = request.form.get("notification_channel", "").strip().lower()
     if channel in ("telegram", "whatsapp", "both"):
         user.notification_channel = channel

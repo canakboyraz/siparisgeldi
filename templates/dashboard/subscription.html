@@ -13,11 +13,12 @@
   <div class="stat"><div class="v">{{ 'Açık' if user_can_whatsapp() else 'Kapalı' }}</div><div class="l">WhatsApp</div></div>
   <div class="stat"><div class="v">{{ 'Açık' if user_can_multi_platform() else 'Kapalı' }}</div><div class="l">Çoklu platform</div></div>
 </div>
-{% if is_pro_user() and pro_days_left is not none %}
+{% if is_pro_user() %}
 <div class="card" style="margin-top:1rem{% if pro_days_left <= 5 %};border-color:#d97706{% endif %}">
   <div class="card-title">Pro kullanım süresi</div>
-  <p class="muted" style="margin:.2rem 0 0">{{ pro_days_left }} gün kaldı. Bitiş: {{ current_user.pro_expires_at.strftime('%d.%m.%Y') }}</p>
+  {% if pro_days_left is not none %}<p class="muted" style="margin:.2rem 0 0">{{ pro_days_left }} gün kaldı. Bitiş: {{ current_user.pro_expires_at.strftime('%d.%m.%Y') }}</p>
   {% if pro_days_left <= 5 %}<p class="hint">Pro süreniz yakında sona eriyor. Yenilemek için ödeme adımını kullanın.</p>{% endif %}
+  {% else %}<p class="muted" style="margin:.2rem 0 0">Pro aktif. Bu eski hesap için bitiş tarihi tanımlanmamış.</p>{% endif %}
 </div>
 {% endif %}
 
