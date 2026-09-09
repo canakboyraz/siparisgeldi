@@ -1279,12 +1279,13 @@ def product_costs():
         if _is_cancelled_order(order) or _is_refunded_order(order):
             continue
         day = order.created_at.date()
-        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0})
+        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0})
         row["orders"] += 1
         row["platform_orders"][order.platform] = row["platform_orders"].get(order.platform, 0) + 1
         data = _parse_raw_json(order.raw_json)
         for item in _cost_product_lines(order.platform, data):
             row["revenue"] += item["revenue"]
+            row["platform_revenue"][order.platform] = row["platform_revenue"].get(order.platform, 0.0) + item["revenue"]
             saved = costs.get(" ".join(item["name"].casefold().split()))
             if saved:
                 row["cost"] += item["quantity"] * saved.unit_cost
@@ -1294,7 +1295,12 @@ def product_costs():
             product["revenue"] += item["revenue"]
             if saved:
                 product["cost"] += item["quantity"] * saved.unit_cost
-        row["commission"] += row["revenue"] * commissions.get(order.platform, 0) / 100
+    # Komisyonu günlük/platform cirosu tamamlandıktan sonra bir kez hesapla.
+    for row in daily.values():
+        row["commission"] = sum(
+            revenue * commissions.get(platform, 0) / 100
+            for platform, revenue in row["platform_revenue"].items()
+        )
     fixed_expenses = 0.0
     for expense in expenses:
         if expense.expense_type == "per_order":
