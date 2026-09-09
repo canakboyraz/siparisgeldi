@@ -1081,6 +1081,27 @@ def analytics():
         query = query.filter_by(platform=platform)
     query = _apply_report_date_filter(query, start_date, end_date)
     orders = query.order_by(Order.created_at.desc()).all()
+    # Adisyo siparişleri günlük rapor modelinde tutulur; istatistikler için
+    # aynı ortak sipariş biçimine dönüştürülür.
+    if not platform or platform == "adisyo":
+        reports = (AdisyoReport.query.join(AdisyoConnection)
+                   .join(Integration, AdisyoConnection.integration_id == Integration.id)
+                   .filter(Integration.user_id == current_user.id, AdisyoReport.state == "ready",
+                           AdisyoReport.day >= start_date, AdisyoReport.day <= end_date).all())
+        for report in reports:
+            try:
+                summary = json.loads(report.summary_json or "{}")
+                count = max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+                total = float(summary.get("amount") or 0)
+            except (TypeError, ValueError):
+                continue
+            per_order = total / count if count else 0
+            for index in range(count):
+                orders.append(Order(user_id=current_user.id, platform="adisyo",
+                                    external_id=f"adisyo-{report.day}-{index}",
+                                    status="Completed", total_price=per_order,
+                                    created_at=datetime.combine(report.day, datetime.min.time())))
+        orders.sort(key=lambda item: item.created_at or datetime.min, reverse=True)
     summary = _build_analytics_summary(orders, start_date, end_date)
     previous_start, previous_end = _previous_calendar_week(end_date)
     current_week_start = end_date - timedelta(days=end_date.weekday())
@@ -1088,8 +1109,11 @@ def analytics():
     if platform:
         current_week_query = current_week_query.filter_by(platform=platform)
     current_week_query = _apply_report_date_filter(current_week_query, current_week_start, end_date)
+    current_week_orders = current_week_query.all()
+    if not platform or platform == "adisyo":
+        current_week_orders += _analytics_adisyo_orders(current_user.id, current_week_start, end_date)
     current_week = _build_previous_week_summary(
-        current_week_query.all(),
+        current_week_orders,
         current_week_start,
         week_end=end_date,
     )
@@ -1097,7 +1121,10 @@ def analytics():
     if platform:
         previous_query = previous_query.filter_by(platform=platform)
     previous_query = _apply_report_date_filter(previous_query, previous_start, previous_end)
-    previous_week = _build_previous_week_summary(previous_query.all(), previous_start)
+    previous_orders = previous_query.all()
+    if not platform or platform == "adisyo":
+        previous_orders += _analytics_adisyo_orders(current_user.id, previous_start, previous_end)
+    previous_week = _build_previous_week_summary(previous_orders, previous_start)
     week_comparison = _build_week_comparison(current_week, previous_week)
 
     return render_template(
@@ -1114,6 +1141,27 @@ def analytics():
         },
         period_label=period_label,
     )
+
+
+def _analytics_adisyo_orders(user_id, start_date, end_date):
+    reports = (AdisyoReport.query.join(AdisyoConnection)
+               .join(Integration, AdisyoConnection.integration_id == Integration.id)
+               .filter(Integration.user_id == user_id, AdisyoReport.state == "ready",
+                       AdisyoReport.day >= start_date, AdisyoReport.day <= end_date).all())
+    result = []
+    for report in reports:
+        try:
+            summary = json.loads(report.summary_json or "{}")
+            count = max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+            total = float(summary.get("amount") or 0)
+        except (TypeError, ValueError):
+            continue
+        for index in range(count):
+            result.append(Order(user_id=user_id, platform="adisyo",
+                                external_id=f"adisyo-{report.day}-{index}", status="Completed",
+                                total_price=total / count if count else 0,
+                                created_at=datetime.combine(report.day, datetime.min.time())))
+    return result
 
 
 @dashboard_bp.route("/abonelik")
