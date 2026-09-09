@@ -213,6 +213,12 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .cost-summary p{line-height:1.8;margin-bottom:0}
 .daily-detail{border:0}
 .daily-detail summary{display:grid;grid-template-columns:1.1fr .65fr repeat(6,1fr);gap:.75rem;align-items:center;padding:.9rem 1rem;cursor:pointer;list-style:none;min-width:760px}
+.cost-daily-card> .table-wrap>table{min-width:900px;table-layout:fixed}
+.cost-daily-card> .table-wrap>table th:nth-child(1){width:13%}
+.cost-daily-card> .table-wrap>table th:nth-child(2){width:8%}
+.cost-daily-card> .table-wrap>table th:nth-child(n+3){width:13.16%}
+.cost-daily-card .daily-detail summary{grid-template-columns:13% 8% repeat(6,13.16%);gap:0;text-align:left}
+.cost-daily-card .daily-detail summary>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .daily-detail summary::-webkit-details-marker{display:none}
 .daily-detail summary span:first-child:before{content:'+';display:inline-block;width:1.2rem;color:var(--accent);font-weight:800}
 .daily-detail[open] summary span:first-child:before{content:'−'}
@@ -450,8 +456,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .cost-toolbar{display:block;padding:.9rem}
   .cost-period{margin-top:.8rem;width:100%;justify-content:space-between}
   .cost-period select{flex:1}
-  .cost-filters{grid-template-columns:1fr 1fr}
-  .cost-filters .field:first-child{grid-column:1 / -1}
+  .cost-filters{grid-template-columns:1fr}
+  .cost-filters .field:first-child{grid-column:auto}
   .cost-filters .btn{width:100%}
   .cost-card{overflow:visible}
   .cost-table{border:1px solid var(--line);border-radius:9px}
