@@ -37,7 +37,7 @@ ORDER_POPUP_SOUND_OPTIONS = [
 
 def _is_pro_user(user=None) -> bool:
     user = user or current_user
-    return (getattr(user, "plan", "free") or "free").lower() == "pro"
+    return bool(getattr(user, "is_pro_active", False))
 
 
 def _can_use_whatsapp(user=None) -> bool:
@@ -1121,10 +1121,16 @@ def analytics():
 def subscription():
     integrations = Integration.query.filter_by(user_id=current_user.id).all()
     active_integrations = [i for i in integrations if i.is_active]
+    now = datetime.utcnow()
+    pro_days_left = None
+    if current_user.pro_expires_at:
+        pro_days_left = max(0, (current_user.pro_expires_at.date() - now.date()).days)
     return render_template(
         "dashboard/subscription.html",
         integrations=integrations,
         active_integrations=active_integrations,
+        pro_days_left=pro_days_left,
+        payment_returned=request.args.get("payment_returned") == "1",
     )
 
 

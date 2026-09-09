@@ -25,6 +25,8 @@ def _ensure_schema():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS order_popup_sound VARCHAR(20) DEFAULT 'classic'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_whatsapp BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_multi_platform BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_started_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMP",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tgo_store_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_warehouse_id VARCHAR(50)",
@@ -80,6 +82,10 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE users ADD COLUMN feature_whatsapp BOOLEAN DEFAULT FALSE")
             if "feature_multi_platform" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN feature_multi_platform BOOLEAN DEFAULT FALSE")
+            if "pro_started_at" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN pro_started_at DATETIME")
+            if "pro_expires_at" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN pro_expires_at DATETIME")
             if "tgo_store_id" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN tgo_store_id VARCHAR(50)")
             if "migros_group_id" not in intg_cols:
@@ -229,7 +235,7 @@ def create_app(config_class=Config, start_scheduler=None):
             "platform_label": utils.platform_label,
             "bot_username": app.config.get("TELEGRAM_BOT_USERNAME", ""),
             "user_is_admin": is_admin(current_user),
-            "is_pro_user": lambda user=None: (getattr(user or current_user, "plan", "free") or "free").lower() == "pro",
+            "is_pro_user": lambda user=None: bool(getattr(user or current_user, "is_pro_active", False)),
             "user_can_whatsapp": lambda user=None: bool(getattr(user or current_user, "has_whatsapp_access", False)),
             "user_can_multi_platform": lambda user=None: bool(getattr(user or current_user, "has_multi_platform_access", False)),
             "company": {

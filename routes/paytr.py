@@ -84,6 +84,10 @@ def callback():
     if status_normalized == "success" and total_kurus is not None and total_kurus == expected_kurus:
         payment.status = "success"
         user = db.session.get(__import__("models").User, payment.user_id)
+        now = datetime.utcnow()
+        period_start = user.pro_expires_at if user.pro_expires_at and user.pro_expires_at > now else now
+        user.pro_started_at = user.pro_started_at or period_start
+        user.pro_expires_at = period_start + timedelta(days=30)
         user.plan = "pro"
         user.feature_whatsapp = True
         user.feature_multi_platform = True
@@ -103,7 +107,7 @@ def callback():
 @login_required
 def success():
     flash("Odeme sonucu isleniyor. Pro erisim callback onayindan sonra acilir.", "info")
-    return redirect(url_for("dashboard.subscription"))
+    return redirect(url_for("dashboard.subscription", payment_returned=1))
 
 
 @paytr_bp.get("/fail")

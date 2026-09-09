@@ -21,6 +21,8 @@ class User(UserMixin, db.Model):
     name          = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     plan          = db.Column(db.String(20), default="free")   # free | pro
+    pro_started_at = db.Column(db.DateTime)
+    pro_expires_at = db.Column(db.DateTime)
     feature_whatsapp = db.Column(db.Boolean, default=False)
     feature_multi_platform = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)
@@ -60,11 +62,16 @@ class User(UserMixin, db.Model):
 
     @property
     def has_whatsapp_access(self) -> bool:
-        return (self.plan or "free").lower() == "pro" or bool(self.feature_whatsapp)
+        return self.is_pro_active or bool(self.feature_whatsapp and not self.pro_expires_at)
 
     @property
     def has_multi_platform_access(self) -> bool:
-        return (self.plan or "free").lower() == "pro" or bool(self.feature_multi_platform)
+        return self.is_pro_active or bool(self.feature_multi_platform and not self.pro_expires_at)
+
+    @property
+    def is_pro_active(self) -> bool:
+        return ((self.plan or "free").lower() == "pro" and
+                (not self.pro_expires_at or self.pro_expires_at > datetime.utcnow()))
 
     def __repr__(self):
         return f"<User {self.email}>"
