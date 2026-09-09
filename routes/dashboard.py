@@ -1212,17 +1212,19 @@ def product_costs():
         except ValueError:
             flash("Geçerli bir maliyet girin.", "danger")
             return redirect(url_for("dashboard.product_costs"))
-        # Aynı ürün farklı platformlarda satılsa da maliyet ortak tutulur.
+        # Maliyet ürün adina aittir; platformdan bagimsiz ortak kayit tutulur.
         normalized_name = " ".join(name.casefold().split())
         matching = ProductCost.query.filter_by(user_id=current_user.id).all()
         row = next((r for r in matching if " ".join((r.product_name or "").casefold().split()) == normalized_name), None)
         if not row:
-            row = ProductCost(user_id=current_user.id, platform=platform, product_key=key, product_name=name)
+            row = ProductCost(user_id=current_user.id, platform="all", product_key=normalized_name, product_name=name)
             db.session.add(row)
+        row.platform, row.product_key = "all", normalized_name
         row.product_name, row.unit_cost = name, cost
         for other in matching:
-            if " ".join((other.product_name or "").casefold().split()) == normalized_name:
+            if other is not row and " ".join((other.product_name or "").casefold().split()) == normalized_name:
                 other.unit_cost = cost
+                db.session.delete(other)
         db.session.commit()
         flash("Ürün maliyeti kaydedildi.", "success")
         return redirect(url_for("dashboard.product_costs", days=request.form.get("days", "30")))
