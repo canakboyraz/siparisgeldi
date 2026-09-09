@@ -38,8 +38,17 @@ def start():
 @paytr_bp.post("/callback")
 def callback():
     oid = request.form.get("merchant_oid", "")
+    current_app.logger.info("PayTR callback alindi method=%s oid_var=%s", request.method, bool(oid))
     payment = Payment.query.filter_by(merchant_oid=oid).first()
-    if not payment or not paytr.verify_callback(current_app.config, oid, request.form.get("status", ""), request.form.get("total_amount", ""), request.form.get("hash", "")):
+    valid = bool(payment and paytr.verify_callback(
+        current_app.config, oid, request.form.get("status", ""),
+        request.form.get("total_amount", ""), request.form.get("hash", "")
+    ))
+    if not payment or not valid:
+        current_app.logger.warning(
+            "PayTR callback reddedildi payment=%s hash_valid=%s status=%s",
+            bool(payment), valid, request.form.get("status", "")[:30]
+        )
         return "PAYTR notification failed", 400
     if payment.status == "success":
         return "OK"
@@ -58,6 +67,7 @@ def callback():
     else:
         payment.status, payment.failure_reason = "failed", request.form.get("failed_reason_msg", "")[:300]
     db.session.commit()
+    current_app.logger.info("PayTR callback islendi payment_id=%s status=%s", payment.id, payment.status)
     return "OK"
 
 
