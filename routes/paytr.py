@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from flask import Blueprint, current_app, render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from extensions import db
@@ -7,6 +8,15 @@ from integrations import paytr
 
 paytr_bp = Blueprint("paytr", __name__)
 PRICE = 250.0
+
+
+def _amount_in_kurus(value):
+    """PayTR tutarini TL/krs farklarindan etkilenmeden normalize eder."""
+    raw = str(value or "").strip().replace(" ", "").replace(",", ".")
+    try:
+        return int((Decimal(raw) * 100).quantize(Decimal("1")))
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def configured():
@@ -53,11 +63,16 @@ def callback():
     if payment.status == "success":
         return "OK"
     status = request.form.get("status", "")
-    try:
-        total = float(request.form.get("total_amount", "0"))
-    except ValueError:
-        total = -1
-    if status == "success" and abs(total - payment.amount) < 0.01:
+    total_raw = request.form.get("total_amount", "")
+    status_normalized = status.strip().lower()
+    total_kurus = _amount_in_kurus(total_raw)
+    expected_kurus = _amount_in_kurus(payment.amount)
+    current_app.logger.info(
+        "PayTR callback verisi payment_id=%s status=%s total_var=%s tutar_eslesti=%s",
+        payment.id, status_normalized[:30], bool(total_raw),
+        total_kurus is not None and total_kurus == expected_kurus,
+    )
+    if status_normalized == "success" and total_kurus is not None and total_kurus == expected_kurus:
         payment.status = "success"
         user = db.session.get(__import__("models").User, payment.user_id)
         user.plan = "pro"
@@ -65,7 +80,11 @@ def callback():
         user.feature_multi_platform = True
         payment.reference = request.form.get("payment_id", "")[:120]
     else:
-        payment.status, payment.failure_reason = "failed", request.form.get("failed_reason_msg", "")[:300]
+        payment.status = "failed"
+        payment.failure_reason = (
+            request.form.get("failed_reason_msg", "")
+            or f"status={status_normalized or 'bos'}, total_amount={str(total_raw)[:40]}"
+        )[:300]
     db.session.commit()
     current_app.logger.info("PayTR callback islendi payment_id=%s status=%s", payment.id, payment.status)
     return "OK"
