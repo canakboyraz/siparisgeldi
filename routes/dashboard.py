@@ -1279,7 +1279,7 @@ def product_costs():
         if _is_cancelled_order(order) or _is_refunded_order(order):
             continue
         day = order.created_at.date()
-        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0})
+        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0})
         row["orders"] += 1
         row["platform_orders"][order.platform] = row["platform_orders"].get(order.platform, 0) + 1
         data = _parse_raw_json(order.raw_json)
@@ -1288,6 +1288,12 @@ def product_costs():
             saved = costs.get(" ".join(item["name"].casefold().split()))
             if saved:
                 row["cost"] += item["quantity"] * saved.unit_cost
+            product_key = " ".join(item["name"].casefold().split())
+            product = row["products"].setdefault(product_key, {"name": item["name"], "quantity": 0.0, "revenue": 0.0, "cost": 0.0})
+            product["quantity"] += item["quantity"]
+            product["revenue"] += item["revenue"]
+            if saved:
+                product["cost"] += item["quantity"] * saved.unit_cost
         row["commission"] += row["revenue"] * commissions.get(order.platform, 0) / 100
     fixed_expenses = 0.0
     for expense in expenses:
@@ -1304,6 +1310,10 @@ def product_costs():
     for row in daily_rows:
         row["profit"] = row["revenue"] - row["cost"] - row["commission"] - row["expense"]
         row["margin"] = row["profit"] / row["revenue"] * 100 if row["revenue"] else 0
+        row["products"] = sorted(
+            ({**product, "profit": product["revenue"] - product["cost"]} for product in row["products"].values()),
+            key=lambda product: (-product["revenue"], product["name"]),
+        )
     return render_template("dashboard/product_costs.html", products=product_rows, days=days,
                            platform_label=platform_label, expenses=expenses, expense_total=expense_total,
                            commissions=commissions, commission_total=commission_total, order_counts=order_counts,
