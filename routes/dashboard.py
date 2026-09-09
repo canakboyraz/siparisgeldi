@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 import pytz
 
 from extensions import db
-from models import Integration, Order, ProductCost, PlatformExpense, PlatformCommission
+from models import Integration, Order, ProductCost, PlatformExpense, PlatformCommission, AdisyoReport, AdisyoConnection
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications.dispatcher import send_to_user, record_whatsapp_result
 from utils import platform_label, status_label
@@ -1260,6 +1260,27 @@ def product_costs():
             row = products.setdefault(key, {"platform": order.platform, "key": item["key"], "name": item["name"], "quantity": 0.0, "revenue": 0.0})
             row["quantity"] += item["quantity"]
             row["revenue"] += item["revenue"]
+    # Adisyo siparişleri Order tablosunda değil, hazır günlük raporlarda tutulur.
+    if not selected_platform or selected_platform == "adisyo":
+        adisyo_reports = (AdisyoReport.query.join(AdisyoConnection)
+                          .join(Integration, AdisyoConnection.integration_id == Integration.id)
+                          .filter(Integration.user_id == current_user.id,
+                                  AdisyoReport.state == "ready",
+                                  AdisyoReport.day >= since.date(),
+                                  AdisyoReport.day < until.date()).all())
+        for report in adisyo_reports:
+            try:
+                summary = json.loads(report.summary_json or "{}")
+            except (TypeError, ValueError):
+                continue
+            for item in summary.get("products", []):
+                name = str(item.get("name") or "Ürün").strip()
+                quantity = float(item.get("quantity") or 0)
+                revenue = float(item.get("amount") or 0)
+                key = ("adisyo", " ".join(name.casefold().split()))
+                row = products.setdefault(key, {"platform": "adisyo", "key": key[1], "name": name, "quantity": 0.0, "revenue": 0.0})
+                row["quantity"] += quantity
+                row["revenue"] += revenue
     for row in products.values():
         saved = costs.get(" ".join(row["name"].casefold().split()))
         row["cost"] = saved.unit_cost if saved else None
@@ -1278,6 +1299,13 @@ def product_costs():
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
         if (not selected_platform or order.platform == selected_platform) and not _is_cancelled_order(order) and not _is_refunded_order(order):
             order_counts[order.platform] = order_counts.get(order.platform, 0) + 1
+    if not selected_platform or selected_platform == "adisyo":
+        for report in adisyo_reports if 'adisyo_reports' in locals() else []:
+            try:
+                summary = json.loads(report.summary_json or "{}")
+                order_counts["adisyo"] = order_counts.get("adisyo", 0) + max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+            except (TypeError, ValueError):
+                pass
     order_counts["genel"] = sum(order_counts.values())
     expense_total = sum(e.amount * order_counts.get(e.platform, 0) if e.expense_type == "per_order" else e.amount for e in expenses)
     commissions = {r.platform: r.percentage for r in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
@@ -1308,6 +1336,32 @@ def product_costs():
             product["revenue"] += item["revenue"]
             if saved:
                 product["cost"] += item["quantity"] * saved.unit_cost
+    if not selected_platform or selected_platform == "adisyo":
+        for report in adisyo_reports if 'adisyo_reports' in locals() else []:
+            try:
+                summary = json.loads(report.summary_json or "{}")
+            except (TypeError, ValueError):
+                continue
+            day = report.day
+            row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0})
+            valid_orders = max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+            row["orders"] += valid_orders
+            row["platform_orders"]["adisyo"] = row["platform_orders"].get("adisyo", 0) + valid_orders
+            for item in summary.get("products", []):
+                name = str(item.get("name") or "Ürün").strip()
+                quantity = float(item.get("quantity") or 0)
+                revenue = float(item.get("amount") or 0)
+                row["revenue"] += revenue
+                row["platform_revenue"]["adisyo"] = row["platform_revenue"].get("adisyo", 0.0) + revenue
+                saved = costs.get(" ".join(name.casefold().split()))
+                if saved:
+                    row["cost"] += quantity * saved.unit_cost
+                product_key = " ".join(name.casefold().split())
+                product = row["products"].setdefault(product_key, {"name": name, "quantity": 0.0, "revenue": 0.0, "cost": 0.0})
+                product["quantity"] += quantity
+                product["revenue"] += revenue
+                if saved:
+                    product["cost"] += quantity * saved.unit_cost
     # Komisyonu günlük/platform cirosu tamamlandıktan sonra bir kez hesapla.
     for row in daily.values():
         row["commission"] = sum(
