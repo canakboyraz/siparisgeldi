@@ -197,6 +197,10 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .cost-filters label{display:block;margin-bottom:.35rem}
 .cost-filters select,.cost-filters input{width:100%;min-height:42px}
 .cost-filters .btn{white-space:nowrap;width:100%}
+.platform-checks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.4rem;max-width:620px}
+.platform-checks label{display:flex;align-items:center;gap:.4rem;padding:.45rem .55rem;border:1px solid var(--line);border-radius:7px;background:var(--surface);cursor:pointer;font-size:.84rem;font-weight:600;white-space:nowrap}
+.platform-checks label:has(input:checked){border-color:var(--brand);background:var(--surface-2)}
+.platform-checks input{width:.95rem;height:.95rem;accent-color:var(--brand);margin:0;flex:0 0 auto}
 .cost-card{padding:0;overflow:hidden}
 .cost-table{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .cost-table table{min-width:1080px}
