@@ -1271,12 +1271,45 @@ def product_costs():
     commission_total = sum(r["revenue"] * commissions.get(r["platform"], 0) / 100 for r in products.values())
     revenue_total = sum(r["revenue"] for r in products.values())
     cost_total = sum(r["total_cost"] or 0 for r in products.values())
+    # Günlük özet: iptal/iade siparişleri hariç, ürün maliyeti ve platform kesintileri dahil.
+    daily = {}
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+        if selected_platform and order.platform != selected_platform:
+            continue
+        if _is_cancelled_order(order) or _is_refunded_order(order):
+            continue
+        day = order.created_at.date()
+        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0})
+        row["orders"] += 1
+        row["platform_orders"][order.platform] = row["platform_orders"].get(order.platform, 0) + 1
+        data = _parse_raw_json(order.raw_json)
+        for item in _cost_product_lines(order.platform, data):
+            row["revenue"] += item["revenue"]
+            saved = costs.get(" ".join(item["name"].casefold().split()))
+            if saved:
+                row["cost"] += item["quantity"] * saved.unit_cost
+        row["commission"] += row["revenue"] * commissions.get(order.platform, 0) / 100
+    fixed_expenses = 0.0
+    for expense in expenses:
+        if expense.expense_type == "per_order":
+            for row in daily.values():
+                count = row["orders"] if expense.platform == "genel" else row["platform_orders"].get(expense.platform, 0)
+                row["expense"] += expense.amount * count
+        else:
+            fixed_expenses += expense.amount
+    if daily and fixed_expenses:
+        for row in daily.values():
+            row["expense"] += fixed_expenses * row["revenue"] / revenue_total if revenue_total else fixed_expenses / len(daily)
+    daily_rows = sorted(daily.values(), key=lambda row: row["date"], reverse=True)
+    for row in daily_rows:
+        row["profit"] = row["revenue"] - row["cost"] - row["commission"] - row["expense"]
+        row["margin"] = row["profit"] / row["revenue"] * 100 if row["revenue"] else 0
     return render_template("dashboard/product_costs.html", products=product_rows, days=days,
                            platform_label=platform_label, expenses=expenses, expense_total=expense_total,
                            commissions=commissions, commission_total=commission_total, order_counts=order_counts,
                            revenue_total=revenue_total, cost_total=cost_total,
                            profit_total=revenue_total - cost_total - expense_total - commission_total,
-                           selected_platform=selected_platform, search=search)
+                           selected_platform=selected_platform, search=search, daily_rows=daily_rows)
 
 
 def _cost_product_category(name: str) -> str:
