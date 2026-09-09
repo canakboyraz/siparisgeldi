@@ -1229,13 +1229,26 @@ def product_costs():
 
     days = request.args.get("days", "30", type=int)
     days = days if days in (7, 30, 90, 365) else 30
+    start_date = request.args.get("start_date", "").strip()
+    end_date = request.args.get("end_date", "").strip()
+    try:
+        custom_start = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
+        custom_end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) if end_date else None
+    except ValueError:
+        custom_start, custom_end = None, None
+        start_date, end_date = "", ""
     selected_platform = request.args.get("platform", "").strip()
     search = request.args.get("q", "").strip().casefold()
-    since = datetime.utcnow() - timedelta(days=days)
+    since = custom_start or (datetime.utcnow() - timedelta(days=days))
+    until = custom_end or datetime.utcnow() + timedelta(seconds=1)
+    if until <= since:
+        since = datetime.utcnow() - timedelta(days=days)
+        until = datetime.utcnow() + timedelta(seconds=1)
+        start_date, end_date = "", ""
     rows = ProductCost.query.filter_by(user_id=current_user.id).all()
     costs = {" ".join((r.product_name or "").casefold().split()): r for r in rows}
     products = {}
-    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
         if selected_platform and order.platform != selected_platform:
             continue
         # Karlılıkta teslim edilen siparişler dahil, yalnızca iptal/iade hariçtir.
@@ -1262,7 +1275,7 @@ def product_costs():
     all_expenses = PlatformExpense.query.filter_by(user_id=current_user.id).all()
     expenses = [e for e in all_expenses if not selected_platform or e.platform in (selected_platform, "genel")]
     order_counts = {}
-    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
         if (not selected_platform or order.platform == selected_platform) and not _is_cancelled_order(order) and not _is_refunded_order(order):
             order_counts[order.platform] = order_counts.get(order.platform, 0) + 1
     order_counts["genel"] = sum(order_counts.values())
@@ -1273,7 +1286,7 @@ def product_costs():
     cost_total = sum(r["total_cost"] or 0 for r in products.values())
     # Günlük özet: iptal/iade siparişleri hariç, ürün maliyeti ve platform kesintileri dahil.
     daily = {}
-    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
         if selected_platform and order.platform != selected_platform:
             continue
         if _is_cancelled_order(order) or _is_refunded_order(order):
@@ -1325,7 +1338,8 @@ def product_costs():
                            commissions=commissions, commission_total=commission_total, order_counts=order_counts,
                            revenue_total=revenue_total, cost_total=cost_total,
                            profit_total=revenue_total - cost_total - expense_total - commission_total,
-                           selected_platform=selected_platform, search=search, daily_rows=daily_rows)
+                           selected_platform=selected_platform, search=search, daily_rows=daily_rows,
+                           start_date=start_date, end_date=end_date)
 
 
 def _cost_product_category(name: str) -> str:
