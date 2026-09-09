@@ -14,6 +14,7 @@
       <a href="{{ url_for('dashboard.reports') }}" class="{{ 'active' if request.endpoint=='dashboard.reports' }}">Raporlar</a>
       <a href="{{ url_for('dashboard.analytics') }}" class="{{ 'active' if request.endpoint=='dashboard.analytics' }}">İstatistikler</a>
       <a href="{{ url_for('dashboard.product_costs') }}" class="{{ 'active' if request.endpoint=='dashboard.product_costs' }}">Maliyet</a>
+      <a href="{{ url_for('dashboard.product_cost_entry') }}" class="{{ 'active' if request.endpoint=='dashboard.product_cost_entry' }}">Maliyet girişi</a>
 
       <details class="nav-group" data-mobile-nav="food" {{ 'open' if request.endpoint in platform_endpoints }}>
         <summary class="{{ 'active' if request.endpoint in platform_endpoints }}">Yemek Platformları</summary>

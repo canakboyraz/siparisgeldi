@@ -1398,6 +1398,61 @@ def product_costs():
                            start_date=start_date, end_date=end_date)
 
 
+@dashboard_bp.route("/maliyet-girisi", methods=["GET", "POST"])
+@login_required
+def product_cost_entry():
+    """Eksik ürün maliyetlerini tek ekrandan toplu kaydetme."""
+    if request.method == "POST":
+        names = request.form.getlist("product_name")
+        saved = 0
+        existing = ProductCost.query.filter_by(user_id=current_user.id).all()
+        by_name = {" ".join((row.product_name or "").casefold().split()): row for row in existing}
+        for index, name in enumerate(names):
+            name = name.strip()[:180]
+            raw = request.form.get(f"unit_cost_{index}", "").strip().replace(",", ".")
+            if not name or not raw:
+                continue
+            try:
+                amount = float(raw)
+                if amount < 0 or amount > 1000000:
+                    continue
+            except ValueError:
+                continue
+            key = " ".join(name.casefold().split())
+            row = by_name.get(key)
+            if not row:
+                row = ProductCost(user_id=current_user.id, platform="all", product_key=key, product_name=name)
+                db.session.add(row)
+                by_name[key] = row
+            row.platform, row.product_key, row.product_name, row.unit_cost = "all", key, name, amount
+            saved += 1
+        db.session.commit()
+        flash(f"{saved} ürün maliyeti kaydedildi.", "success")
+        return redirect(url_for("dashboard.product_cost_entry"))
+
+    since = datetime.utcnow() - timedelta(days=365)
+    names = set()
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+        if _is_cancelled_order(order) or _is_refunded_order(order):
+            continue
+        for item in _cost_product_lines(order.platform, _parse_raw_json(order.raw_json)):
+            names.add(" ".join(item["name"].casefold().split()))
+    for report in (AdisyoReport.query.join(AdisyoConnection)
+                   .join(Integration, AdisyoConnection.integration_id == Integration.id)
+                   .filter(Integration.user_id == current_user.id, AdisyoReport.state == "ready",
+                           AdisyoReport.day >= since.date()).all()):
+        try:
+            summary = json.loads(report.summary_json or "{}")
+            names.update(" ".join(str(item.get("name") or "Ürün").casefold().split())
+                         for item in summary.get("products", []))
+        except (TypeError, ValueError):
+            continue
+    existing = ProductCost.query.filter_by(user_id=current_user.id).all()
+    cost_names = {" ".join((row.product_name or "").casefold().split()) for row in existing}
+    missing = sorted((name for name in names if name not in cost_names), key=str.casefold)
+    return render_template("dashboard/product_cost_entry.html", products=missing)
+
+
 def _cost_product_category(name: str) -> str:
     text = (name or "").casefold()
     if any(word in text for word in ("ayran", "kahve", "latte", "americano", "çay", "cay", "mocha", "soda", "su ", "ice", "matcha", "cola", "şerbet", "serbet")):

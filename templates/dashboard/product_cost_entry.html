@@ -1,0 +1,8 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Maliyet Girişi · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><div><h1>Maliyet girişi</h1><p class="muted">Henüz maliyet girmediğiniz ürünleri tek seferde kaydedin.</p></div><a class="btn btn-ghost" href="{{ url_for('dashboard.product_costs') }}">Kârlılık ekranı</a></div>
+{% if products %}
+<form method="post" class="card bulk-cost-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><div class="table-wrap"><table><thead><tr><th>Ürün</th><th>Birim maliyet (TL)</th></tr></thead><tbody>{% for name in products %}<tr><td><strong>{{ name }}</strong><input type="hidden" name="product_name" value="{{ name }}"></td><td><input type="number" name="unit_cost_{{ loop.index0 }}" min="0" step="0.01" placeholder="Örn. 25,00" inputmode="decimal"></td></tr>{% endfor %}</tbody></table></div><div class="bulk-cost-actions"><span class="muted">{{ products|length }} ürün bekliyor</span><button class="btn btn-primary" type="submit">Tümünü kaydet</button></div></form>
+{% else %}<div class="card empty"><strong>Eksik maliyetli ürün yok.</strong><p class="muted">Tüm ürünler için ortak birim maliyet girilmiş.</p></div>{% endif %}
+{% endblock %}
