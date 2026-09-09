@@ -257,7 +257,10 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .row-alert td:first-child{border-left:3px solid var(--red)}
 .note-cell{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .items-cell{max-width:280px;white-space:normal;line-height:1.35}
-.action-cell{min-width:112px;white-space:nowrap}
+.action-cell{min-width:112px;white-space:nowrap;text-align:center;vertical-align:middle}
+.action-cell form,.action-cell .btn{display:inline-flex;justify-content:center}
+.date-cell{text-align:center;white-space:nowrap;vertical-align:middle}
+.mobile-active-table .action-cell{text-align:right}
 .action-cell form{margin:0}
 .table-link{color:var(--brand);font-weight:800}
 .table-link:hover{text-decoration:underline}
@@ -552,6 +555,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .mobile-active-table td:nth-child(6)::before{content:"Not"}
   .mobile-active-table td:nth-child(7)::before{content:"Tarih"}
   .mobile-active-table td:nth-child(8)::before{content:"Islem"}
+  .mobile-active-table .date-cell{text-align:right}
   .card table.mobile-orders-table td:empty::after,
   .card table.mobile-active-table td:empty::after{content:"-";color:var(--muted)}
   .note-cell{max-width:none;text-align:right;white-space:normal;overflow:visible;text-overflow:clip}

@@ -120,7 +120,7 @@
         <td data-label="Durum"><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
         <td>{{ '%.2f'|format(o.total_price or 0) }} ₺</td>
         <td class="note-cell">{{ o.customer_note or '—' }}</td>
-        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
+        <td data-label="Tarih" class="muted date-cell">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
         <td data-label="İşlem" class="action-cell">
           {% if row.quick_action %}
           <form method="post" action="{{ url_for(row.quick_action.endpoint, order_id=o.id) }}" onsubmit="this.querySelector('button').disabled=true;">
