@@ -257,8 +257,17 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .row-alert td:first-child{border-left:3px solid var(--red)}
 .note-cell{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .items-cell{max-width:280px;white-space:normal;line-height:1.35}
-.action-cell{min-width:112px;white-space:nowrap;text-align:center;vertical-align:middle}
-.action-cell form,.action-cell .btn{display:inline-flex;justify-content:center}
+.mobile-active-table{width:100%;table-layout:fixed}
+.mobile-active-table th:nth-child(1),.mobile-active-table td:nth-child(1){width:12%}
+.mobile-active-table th:nth-child(2),.mobile-active-table td:nth-child(2){width:22%}
+.mobile-active-table th:nth-child(3),.mobile-active-table td:nth-child(3){width:11%}
+.mobile-active-table th:nth-child(4),.mobile-active-table td:nth-child(4){width:11%}
+.mobile-active-table th:nth-child(5),.mobile-active-table td:nth-child(5){width:9%}
+.mobile-active-table th:nth-child(6),.mobile-active-table td:nth-child(6){width:17%}
+.mobile-active-table th:nth-child(7),.mobile-active-table td:nth-child(7){width:9%}
+.mobile-active-table th:nth-child(8),.mobile-active-table td:nth-child(8){width:9%}
+.action-cell{white-space:normal;text-align:center;vertical-align:middle}
+.action-cell form,.action-cell .btn{display:inline-flex;justify-content:center;max-width:100%;white-space:normal}
 .date-cell{text-align:center;white-space:nowrap;vertical-align:middle}
 .mobile-active-table .action-cell{text-align:right}
 .action-cell form{margin:0}
@@ -519,7 +528,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .btn{min-height:40px}
   .card table.mobile-orders-table,
   .card table.mobile-active-table{
-    display:block;width:100%;overflow:visible;white-space:normal
+    display:block;width:100%;table-layout:auto;overflow:visible;white-space:normal
   }
   .card table.mobile-orders-table thead,
   .card table.mobile-active-table thead{display:none}
