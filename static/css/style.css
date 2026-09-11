@@ -229,7 +229,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .daily-detail summary span:first-child:before{content:'+';display:inline-block;width:1.2rem;color:var(--accent);font-weight:800}
 .daily-detail[open] summary span:first-child:before{content:'−'}
 .cost-advertising-card{margin-top:1rem}
-.advertising-form{display:grid;grid-template-columns:220px minmax(220px,320px) auto;gap:.75rem;align-items:end}
+.advertising-form{display:grid;grid-template-columns:180px 180px minmax(220px,320px) auto;gap:.75rem;align-items:end}
 .advertising-form .field{margin:0;min-width:0}
 .advertising-form .btn{white-space:nowrap}
 .advertising-table{margin-top:1rem;max-width:560px}

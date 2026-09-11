@@ -77,28 +77,30 @@ class PackageExpensesTest(unittest.TestCase):
         self.assertEqual(PlatformExpense.query.count(), 0)
 
     def test_daily_advertising_expense_is_upserted_and_added_to_daily_profit(self):
-        day = (datetime.utcnow() - timedelta(days=1)).date()
+        day = (datetime.utcnow() - timedelta(days=3)).date()
+        end_day = day + timedelta(days=2)
         payload = {
             "_csrf_token": "test",
             "form_type": "advertising",
-            "advertising_day": day.isoformat(),
+            "advertising_day_from": day.isoformat(),
+            "advertising_day_to": end_day.isoformat(),
             "advertising_amount": "125.50",
         }
         self.assertEqual(self.client.post("/panel/maliyetler", data=payload).status_code, 302)
         payload["advertising_amount"] = "150.00"
         self.client.post("/panel/maliyetler", data=payload)
-        self.assertEqual(DailyAdvertisingExpense.query.count(), 1)
-        self.assertEqual(DailyAdvertisingExpense.query.first().amount, 150.0)
+        self.assertEqual(DailyAdvertisingExpense.query.count(), 3)
+        self.assertEqual(DailyAdvertisingExpense.query.filter_by(day=day).first().amount, 150.0)
 
         with patch("routes.dashboard.render_template", return_value="ok") as render:
-            self.client.get(f"/panel/maliyetler?start_date={day.isoformat()}&end_date={day.isoformat()}")
+            self.client.get(f"/panel/maliyetler?start_date={day.isoformat()}&end_date={end_day.isoformat()}")
             values = render.call_args.kwargs
             row = next(item for item in values["daily_rows"] if item["date"] == day)
             self.assertEqual(row["advertising_expense"], 150.0)
             self.assertEqual(row["expense"], 150.0)
             self.assertEqual(row["profit"], -150.0)
-            self.assertEqual(values["advertising_total"], 150.0)
-            self.assertEqual(values["expense_total"], 150.0)
+            self.assertEqual(values["advertising_total"], 450.0)
+            self.assertEqual(values["expense_total"], 450.0)
 
 
 if __name__ == "__main__":

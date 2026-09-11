@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_
+from sqlalchemy.exc import SQLAlchemyError
 import pytz
 
 from extensions import db
@@ -1233,24 +1234,38 @@ def product_costs():
             flash("Platform gideri kaydedildi.", "success")
             return redirect(url_for("dashboard.product_costs"))
         if request.form.get("form_type") == "advertising":
-            raw_day = request.form.get("advertising_day", "").strip()
+            raw_start = request.form.get("advertising_day_from", "").strip() or request.form.get("advertising_day", "").strip()
+            raw_end = request.form.get("advertising_day_to", "").strip() or raw_start
             try:
-                advertising_day = datetime.strptime(raw_day, "%Y-%m-%d").date()
+                advertising_start = datetime.strptime(raw_start, "%Y-%m-%d").date()
+                advertising_end = datetime.strptime(raw_end, "%Y-%m-%d").date()
                 amount = float(request.form.get("advertising_amount", "0").replace(",", "."))
+                if advertising_end < advertising_start or (advertising_end - advertising_start).days > 730:
+                    raise ValueError
                 if not 0 <= amount <= 10000000:
                     raise ValueError
             except (TypeError, ValueError):
-                flash("Geçerli bir tarih ve reklam gideri tutarı girin.", "danger")
+                flash("Geçerli bir tarih aralığı ve reklam gideri tutarı girin. Aralık en fazla 731 gün olabilir.", "danger")
                 return redirect(url_for("dashboard.product_costs"))
-            expense = DailyAdvertisingExpense.query.filter_by(
-                user_id=current_user.id, day=advertising_day
-            ).first()
-            if not expense:
-                expense = DailyAdvertisingExpense(user_id=current_user.id, day=advertising_day)
-                db.session.add(expense)
-            expense.amount = amount
-            db.session.commit()
-            flash("Günlük reklam gideri kaydedildi.", "success")
+            try:
+                day = advertising_start
+                while day <= advertising_end:
+                    expense = DailyAdvertisingExpense.query.filter_by(
+                        user_id=current_user.id, day=day
+                    ).first()
+                    if not expense:
+                        expense = DailyAdvertisingExpense(user_id=current_user.id, day=day)
+                        db.session.add(expense)
+                    expense.amount = amount
+                    day += timedelta(days=1)
+                db.session.commit()
+            except SQLAlchemyError:
+                db.session.rollback()
+                current_app.logger.exception("Günlük reklam gideri kaydedilemedi user_id=%s", current_user.id)
+                flash("Reklam gideri kaydedilemedi. Lütfen tekrar deneyin.", "danger")
+                return redirect(url_for("dashboard.product_costs"))
+            day_count = (advertising_end - advertising_start).days + 1
+            flash(f"{day_count} gün için günlük reklam gideri kaydedildi.", "success")
             return redirect(url_for("dashboard.product_costs"))
         key = request.form.get("product_key", "").strip()
         platform = request.form.get("platform", "").strip()[:30]
