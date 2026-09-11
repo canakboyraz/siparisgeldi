@@ -11,6 +11,10 @@ from extensions import db, login_manager
 
 def _ensure_schema():
     """Mevcut veritabanlarina sonradan eklenen kolonlari guvenle ekler."""
+    # Reklam gideri modeli daha sonra eklendi; eski ortamlarda tabloyu acikca
+    # kontrol ederek uygulama baslangicinda hazir oldugundan emin ol.
+    from models import DailyAdvertisingExpense
+    DailyAdvertisingExpense.__table__.create(bind=db.engine, checkfirst=True)
     backend = db.engine.url.get_backend_name()
 
     if backend.startswith("postgres"):

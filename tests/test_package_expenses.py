@@ -102,6 +102,11 @@ class PackageExpensesTest(unittest.TestCase):
             self.assertEqual(values["advertising_total"], 450.0)
             self.assertEqual(values["expense_total"], 450.0)
 
+    def test_cost_page_renders_without_advertising_records(self):
+        response = self.client.get("/panel/maliyetler?days=30")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Günlük reklam gideri", response.get_data(as_text=True))
+
 
 if __name__ == "__main__":
     unittest.main()

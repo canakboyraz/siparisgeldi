@@ -1430,11 +1430,17 @@ def product_costs():
                 product["revenue"] += revenue
                 if saved:
                     product["cost"] += quantity * saved.unit_cost
-    advertising_expenses = (DailyAdvertisingExpense.query
-                            .filter(DailyAdvertisingExpense.user_id == current_user.id,
-                                    DailyAdvertisingExpense.day >= since.date(),
-                                    DailyAdvertisingExpense.day < until.date())
-                            .order_by(DailyAdvertisingExpense.day.desc()).all())
+    try:
+        advertising_expenses = (DailyAdvertisingExpense.query
+                                .filter(DailyAdvertisingExpense.user_id == current_user.id,
+                                        DailyAdvertisingExpense.day >= since.date(),
+                                        DailyAdvertisingExpense.day < until.date())
+                                .order_by(DailyAdvertisingExpense.day.desc()).all())
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.exception("Günlük reklam giderleri okunamadı user_id=%s", current_user.id)
+        advertising_expenses = []
+        flash("Reklam giderleri şu an okunamadı. Sayfa diğer bilgilerle açıldı.", "warning")
     advertising_total = sum(expense.amount for expense in advertising_expenses)
     expense_total += advertising_total
     for expense in advertising_expenses:
