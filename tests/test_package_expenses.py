@@ -107,6 +107,15 @@ class PackageExpensesTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Günlük reklam gideri", response.get_data(as_text=True))
 
+    def test_advertising_expense_with_existing_order_day_does_not_raise_key_error(self):
+        day = datetime.utcnow().date()
+        db.session.add(DailyAdvertisingExpense(user_id=self.user_id, day=day, amount=75.0))
+        db.session.add(Order(user_id=self.user_id, platform="trendyolgo", external_id="same-day",
+                             status="Delivered", created_at=datetime.utcnow()))
+        db.session.commit()
+        response = self.client.get(f"/panel/maliyetler?start_date={day.isoformat()}&end_date={day.isoformat()}")
+        self.assertEqual(response.status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()

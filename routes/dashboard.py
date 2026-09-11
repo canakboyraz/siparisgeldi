@@ -1388,7 +1388,7 @@ def product_costs():
         if _is_cancelled_order(order) or _is_refunded_order(order):
             continue
         day = order.created_at.date()
-        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0})
+        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0, "advertising_expense": 0.0})
         row["orders"] += 1
         row["platform_orders"][order.platform] = row["platform_orders"].get(order.platform, 0) + 1
         data = _parse_raw_json(order.raw_json)
@@ -1411,7 +1411,7 @@ def product_costs():
             except (TypeError, ValueError):
                 continue
             day = report.day
-            row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0})
+            row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0, "advertising_expense": 0.0})
             valid_orders = max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
             row["orders"] += valid_orders
             row["platform_orders"]["adisyo"] = row["platform_orders"].get("adisyo", 0) + valid_orders
