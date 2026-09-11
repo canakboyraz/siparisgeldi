@@ -8,7 +8,8 @@ from sqlalchemy import func, or_
 import pytz
 
 from extensions import db
-from models import Integration, Order, ProductCost, PlatformExpense, PlatformCommission, AdisyoReport, AdisyoConnection
+from models import (Integration, Order, ProductCost, PlatformExpense, DailyAdvertisingExpense,
+                    PlatformCommission, AdisyoReport, AdisyoConnection)
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications.dispatcher import send_to_user, record_whatsapp_result
 from utils import platform_label, status_label
@@ -19,7 +20,7 @@ TGO_FOOD_PLATFORM = "trendyolgo"
 TGO_MARKET_PLATFORM = "trendyolgo_market"
 
 PENDING_STATUSES = {"Created", "NEW_PENDING", "Pending", "New", "Scheduled", "Awaiting", "RECEIVED"}
-PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared", "ScheduledApproved", "READY_FOR_PICKUP"}
+PREPARING_STATUSES = {"Picking", "Invoiced", "Approved", "Prepared", "ScheduledApproved", "READY_FOR_PICKUP", "ACCEPTED", "PREPARED"}
 DELIVERY_STATUSES = {"Shipped", "Delivery", "OnDelivery", "On_Delivery", "AtCollectionPoint", "DISPATCHED"}
 CANCELLED_STATUSES = {"Cancelled", "Canceled", "CANCELED", "CANCELLED", "UnSupplied", "Rejected", "REJECTED", "AdminCancelled", "AutoCancelled"}
 REFUNDED_STATUSES = {"Refunded", "Refund", "Returned", "Return", "PartiallyRefunded", "PartialRefunded", "RETURNED", "REFUNDED"}
@@ -489,7 +490,7 @@ def yemeksepeti_setup():
     if request.method == "POST":
         chain_id = request.form.get("chain_id", "").strip()
         store_id = request.form.get("store_id", "").strip()
-        vendor_id = request.form.get("vendor_id", "").strip()
+        vendor_id = request.form.get("remote_id", request.form.get("vendor_id", "")).strip()
         environment = request.form.get("environment", "live").strip().lower()
         client_id = request.form.get("client_id", "").strip()
         client_secret = request.form.get("client_secret", "").strip()
@@ -497,8 +498,8 @@ def yemeksepeti_setup():
         if not _can_enable_platform(intg):
             flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
             return render_template("dashboard/yemeksepeti_setup.html", intg=intg, **_ys_setup_context(intg))
-        if not store_id:
-            flash("Mağaza/Store ID zorunludur.", "danger")
+        if not vendor_id and not store_id:
+            flash("Yemeksepeti POS remoteId zorunludur.", "danger")
             return render_template("dashboard/yemeksepeti_setup.html", intg=intg, **_ys_setup_context(intg))
         if environment not in ("sandbox", "live"):
             environment = "live"
@@ -507,7 +508,7 @@ def yemeksepeti_setup():
             intg = Integration(user_id=current_user.id, platform=ys.PLATFORM)
             db.session.add(intg)
         intg.ys_chain_id = chain_id or None
-        intg.ys_store_id = store_id
+        intg.ys_store_id = store_id or vendor_id
         intg.ys_vendor_id = vendor_id or store_id
         intg.ys_environment = environment
         if client_id:
@@ -518,7 +519,7 @@ def yemeksepeti_setup():
         intg.last_error = None
         db.session.commit()
 
-        flash("Yemeksepeti bağlantısı kaydedildi. Webhook artık bu Store ID için bekleniyor.", "success")
+        flash("Yemeksepeti POS restoran kimliği kaydedildi. Sipariş endpoint'i bu remoteId için hazır.", "success")
         return redirect(url_for("dashboard.yemeksepeti_setup"))
 
     return render_template("dashboard/yemeksepeti_setup.html", intg=intg, **_ys_setup_context(intg))
@@ -533,29 +534,24 @@ def test_yemeksepeti_connection():
     if not intg:
         flash("Önce Yemeksepeti mağaza bilgilerini kaydetmelisin.", "warning")
         return redirect(url_for("dashboard.yemeksepeti_setup"))
-    if not intg.ys_chain_id or not (intg.ys_vendor_id or intg.ys_store_id):
-        flash("Chain ID ve Vendor/Store ID bilgileri eksik.", "warning")
+    username = current_app.config.get("YEMEKSEPETI_POS_USERNAME", "")
+    password = current_app.config.get("YEMEKSEPETI_POS_PASSWORD", "")
+    if not username or not password:
+        flash("Yemeksepeti POS username/password bilgileri henüz tanımlanmadı.", "warning")
         return redirect(url_for("dashboard.yemeksepeti_setup"))
-    if not intg.ys_client_id or not intg.ys_client_secret:
-        flash("OAuth client_id ve client_secret bilgileri henüz kaydedilmemiş.", "warning")
-        return redirect(url_for("dashboard.yemeksepeti_setup"))
-
-    ok, message, data = ys.test_connection(
-        intg.ys_chain_id,
-        intg.ys_vendor_id or intg.ys_store_id,
-        intg.ys_client_id,
-        intg.ys_client_secret,
-        intg.ys_environment or "live",
-    )
-    if ok:
+    try:
+        ys.get_pos_access_token(
+            username, password, intg.ys_environment or "live",
+            current_app.config.get("YEMEKSEPETI_POS_API_BASE", ""),
+        )
         intg.last_error = None
         intg.last_sync_at = datetime.utcnow()
         db.session.commit()
-        flash(message, "success")
-    else:
-        intg.last_error = message[:300]
+        flash("Yemeksepeti POS Middleware bağlantısı doğrulandı.", "success")
+    except Exception as exc:
+        intg.last_error = f"Yemeksepeti POS baglanti: {exc}"[:300]
         db.session.commit()
-        flash(message, "danger")
+        flash("Yemeksepeti POS Middleware bağlantısı doğrulanamadı.", "danger")
     return redirect(url_for("dashboard.yemeksepeti_setup"))
 
 
@@ -568,61 +564,47 @@ def update_yemeksepeti_vendor_status():
     if not intg:
         flash("Önce Yemeksepeti bağlantısını kaydetmelisin.", "warning")
         return redirect(url_for("dashboard.yemeksepeti_setup"))
-    if not intg.ys_chain_id or not (intg.ys_vendor_id or intg.ys_store_id):
-        flash("Chain ID ve Vendor/Store ID bilgileri eksik.", "warning")
+    chain_code = intg.ys_chain_id or current_app.config.get("YEMEKSEPETI_POS_CHAIN_CODE", "")
+    remote_id = intg.ys_vendor_id or intg.ys_store_id
+    username = current_app.config.get("YEMEKSEPETI_POS_USERNAME", "")
+    password = current_app.config.get("YEMEKSEPETI_POS_PASSWORD", "")
+    status = request.form.get("status", "").strip().lower()
+    if not chain_code or not remote_id or not username or not password:
+        flash("Chain code, remoteId veya POS credential bilgileri eksik.", "warning")
         return redirect(url_for("dashboard.yemeksepeti_setup"))
-    if not intg.ys_client_id or not intg.ys_client_secret:
-        flash("Yemeksepeti OAuth bilgileri henüz kaydedilmemiş.", "warning")
-        return redirect(url_for("dashboard.yemeksepeti_setup"))
-
-    status = request.form.get("status", "").strip().upper()
-    body = {"status": status}
-    if status == "CLOSED_UNTIL":
-        closed_until = request.form.get("closed_until", "").strip()
-        if not closed_until:
-            flash("Belirli saate kadar kapatma için tarih/saat seçmelisin.", "warning")
-            return redirect(url_for("dashboard.yemeksepeti_setup"))
-        try:
-            local_until = datetime.fromisoformat(closed_until)
-            closed_until = TURKEY_TZ.localize(local_until).astimezone(pytz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        except ValueError:
-            flash("Kapatma zamanı geçerli değil.", "warning")
-            return redirect(url_for("dashboard.yemeksepeti_setup"))
-        body["closed_until"] = closed_until
-        body["closed_reason"] = request.form.get("closed_reason", "TOO_BUSY_KITCHEN").strip().upper()
-    elif status == "CLOSED_TODAY":
-        body["closed_reason"] = request.form.get("closed_reason", "TOO_BUSY_KITCHEN").strip().upper()
-    elif status not in {"OPEN", "CHECKIN"}:
-        flash("Geçersiz restoran durumu.", "warning")
+    if status not in {"online", "offline"}:
+        flash("Geçersiz POS erişilebilirlik durumu.", "warning")
         return redirect(url_for("dashboard.yemeksepeti_setup"))
 
     try:
-        result = ys.update_vendor_status(
-            intg.ys_chain_id,
-            intg.ys_vendor_id or intg.ys_store_id,
-            body,
-            intg.ys_client_id,
-            intg.ys_client_secret,
+        ys.set_pos_reachability(
+            chain_code, remote_id, status == "online", username, password,
             intg.ys_environment or "live",
+            current_app.config.get("YEMEKSEPETI_POS_API_BASE", ""),
         )
         intg.last_sync_at = datetime.utcnow()
         intg.last_error = None
         db.session.commit()
-        flash(f"Yemeksepeti restoran durumu güncellendi: {result.get('status') or status}", "success")
+        flash(f"Yemeksepeti POS durumu gönderildi: {status}", "success")
     except Exception as e:
-        intg.last_error = f"Yemeksepeti restoran durumu: {e}"[:300]
+        intg.last_error = f"Yemeksepeti POS erisilebilirlik: {e}"[:300]
         db.session.commit()
-        flash("Yemeksepeti restoran durumu güncellenemedi. Yetki ve bağlantı bilgilerini kontrol et.", "danger")
+        flash("Yemeksepeti POS durumu gönderilemedi.", "danger")
     return redirect(url_for("dashboard.yemeksepeti_setup"))
 
 
 def _ys_setup_context(intg: Integration = None) -> dict:
     return {
-        "ys_webhook_url": url_for("webhooks.yemeksepeti_order", _external=True),
-        "ys_token_ready": bool(current_app.config.get("YEMEKSEPETI_WEBHOOK_TOKEN")),
-        "ys_live_base": ys.api_base("live"),
-        "ys_sandbox_base": ys.api_base("sandbox"),
-        "ys_oauth_ready": bool(intg and intg._ys_client_id and intg._ys_client_secret),
+        "ys_plugin_base_url": url_for("webhooks.yemeksepeti_pos_dispatch", remote_id="REMOTE_ID", _external=True).rsplit("/order/", 1)[0],
+        "ys_pos_credentials_ready": bool(
+            current_app.config.get("YEMEKSEPETI_POS_USERNAME")
+            and current_app.config.get("YEMEKSEPETI_POS_PASSWORD")
+            and current_app.config.get("YEMEKSEPETI_POS_JWT_SECRET")
+        ),
+        "ys_pos_base": ys.pos_api_base(
+            (intg.ys_environment if intg else "live") or "live",
+            current_app.config.get("YEMEKSEPETI_POS_API_BASE", ""),
+        ),
     }
 
 
@@ -1250,6 +1232,26 @@ def product_costs():
             db.session.commit()
             flash("Platform gideri kaydedildi.", "success")
             return redirect(url_for("dashboard.product_costs"))
+        if request.form.get("form_type") == "advertising":
+            raw_day = request.form.get("advertising_day", "").strip()
+            try:
+                advertising_day = datetime.strptime(raw_day, "%Y-%m-%d").date()
+                amount = float(request.form.get("advertising_amount", "0").replace(",", "."))
+                if not 0 <= amount <= 10000000:
+                    raise ValueError
+            except (TypeError, ValueError):
+                flash("Geçerli bir tarih ve reklam gideri tutarı girin.", "danger")
+                return redirect(url_for("dashboard.product_costs"))
+            expense = DailyAdvertisingExpense.query.filter_by(
+                user_id=current_user.id, day=advertising_day
+            ).first()
+            if not expense:
+                expense = DailyAdvertisingExpense(user_id=current_user.id, day=advertising_day)
+                db.session.add(expense)
+            expense.amount = amount
+            db.session.commit()
+            flash("Günlük reklam gideri kaydedildi.", "success")
+            return redirect(url_for("dashboard.product_costs"))
         key = request.form.get("product_key", "").strip()
         platform = request.form.get("platform", "").strip()[:30]
         name = request.form.get("product_name", "Ürün").strip()[:180]
@@ -1413,8 +1415,24 @@ def product_costs():
                 product["revenue"] += revenue
                 if saved:
                     product["cost"] += quantity * saved.unit_cost
+    advertising_expenses = (DailyAdvertisingExpense.query
+                            .filter(DailyAdvertisingExpense.user_id == current_user.id,
+                                    DailyAdvertisingExpense.day >= since.date(),
+                                    DailyAdvertisingExpense.day < until.date())
+                            .order_by(DailyAdvertisingExpense.day.desc()).all())
+    advertising_total = sum(expense.amount for expense in advertising_expenses)
+    expense_total += advertising_total
+    for expense in advertising_expenses:
+        row = daily.setdefault(expense.day, {"date": expense.day, "orders": 0,
+                                             "platform_orders": {}, "platform_revenue": {},
+                                             "products": {}, "revenue": 0.0, "cost": 0.0,
+                                             "commission": 0.0, "expense": 0.0,
+                                             "advertising_expense": 0.0})
+        row["advertising_expense"] += expense.amount
+        row["expense"] += expense.amount
     # Komisyonu günlük/platform cirosu tamamlandıktan sonra bir kez hesapla.
     for row in daily.values():
+        row.setdefault("advertising_expense", 0.0)
         row["commission"] = sum(
             revenue * commissions.get(platform, 0) / 100
             for platform, revenue in row["platform_revenue"].items()
@@ -1444,7 +1462,10 @@ def product_costs():
                            revenue_total=revenue_total, cost_total=cost_total,
                            profit_total=revenue_total - cost_total - expense_total - commission_total,
                            selected_platforms=selected_platforms, search=search, daily_rows=daily_rows,
-                           start_date=start_date, end_date=end_date)
+                           start_date=start_date, end_date=end_date,
+                           advertising_expenses=advertising_expenses,
+                           advertising_total=advertising_total,
+                           today=datetime.now(TURKEY_TZ).date().isoformat())
 
 
 @dashboard_bp.route("/maliyet-girisi", methods=["GET", "POST"])
@@ -1729,47 +1750,42 @@ def update_yemeksepeti_order(order_id):
     intg = Integration.query.filter_by(
         user_id=current_user.id, platform=ys.PLATFORM, is_active=True
     ).first()
-    if not intg or not intg.ys_chain_id or not (intg.ys_vendor_id or intg.ys_store_id):
-        flash("Yemeksepeti Chain ID ve Vendor/Store ID bilgileri eksik.", "danger")
+    if not intg or not (intg.ys_vendor_id or intg.ys_store_id):
+        flash("Yemeksepeti POS remoteId bilgisi eksik.", "danger")
         return _order_action_redirect(order)
-    if not intg.ys_client_id or not intg.ys_client_secret:
-        flash("Yemeksepeti OAuth bilgileri henüz kaydedilmemiş.", "danger")
+    username = current_app.config.get("YEMEKSEPETI_POS_USERNAME", "")
+    password = current_app.config.get("YEMEKSEPETI_POS_PASSWORD", "")
+    if not username or not password:
+        flash("Yemeksepeti POS credential bilgileri henüz tanımlanmadı.", "danger")
         return _order_action_redirect(order)
 
     raw = _parse_raw_json(order.raw_json)
-    if action == "fulfill":
-        next_status = ys.fulfillment_status(raw)
-        body = ys.build_order_update_payload(raw, next_status)
-    elif action == "cancel":
-        reason = request.form.get("cancel_reason", "TOO_BUSY").strip().upper()
-        if reason not in {"CLOSED", "ITEM_UNAVAILABLE", "TOO_BUSY"}:
-            reason = "TOO_BUSY"
-        next_status = ys.STATUS_CANCELLED
-        body = ys.build_order_update_payload(raw, next_status, reason)
-    else:
-        flash("Geçersiz Yemeksepeti işlemi.", "warning")
-        return _order_action_redirect(order)
+    reason = request.form.get("rejection_reason", "OTHER").strip().upper()
+    method, callback_url, body, next_status = ys.pos_action(
+        raw, action, str(order.id), rejection_reason=reason
+    )
 
     try:
-        ys.update_order(
-            intg.ys_chain_id,
-            order.external_id,
+        ys.send_pos_callback(
+            method,
+            callback_url,
             body,
-            intg.ys_client_id,
-            intg.ys_client_secret,
+            username,
+            password,
             intg.ys_environment or "live",
+            current_app.config.get("YEMEKSEPETI_POS_API_BASE", ""),
         )
         order.status = next_status
-        raw["status"] = next_status
         order.raw_json = json.dumps(raw, ensure_ascii=False)
         intg.last_sync_at = datetime.utcnow()
         intg.last_error = None
         db.session.commit()
-        flash("Yemeksepeti sipariş işlemi gönderildi. Son durum webhook ile güncellenecek.", "success")
+        flash(f"Yemeksepeti işlemi gönderildi: {selected['label']}", "success")
     except Exception as e:
         intg.last_error = f"Yemeksepeti sipariş işlemi: {e}"[:300]
         db.session.commit()
-        flash("Yemeksepeti sipariş işlemi gönderilemedi. Bağlantı ve yetkileri kontrol et.", "danger")
+        current_app.logger.warning("Yemeksepeti POS islemi basarisiz order_id=%s: %s", order.id, e)
+        flash(f"Yemeksepeti işlemi gönderilemedi: {e}", "danger")
     return _order_action_redirect(order)
 
 
@@ -2018,8 +2034,8 @@ def _quick_accept_action(order: Order, raw: dict) -> dict:
     if order.platform == ys.PLATFORM and order.status == ys.STATUS_RECEIVED:
         return {
             "endpoint": "dashboard.update_yemeksepeti_order",
-            "action": "fulfill",
-            "label": "Hazırla / kabul et",
+            "action": "accept",
+            "label": "Kabul et",
         }
 
     return None
@@ -2129,30 +2145,25 @@ def _yemeksepeti_order_actions(order: Order, detail: dict = None) -> list:
     status = order.status or ys.STATUS_RECEIVED
     actions = []
 
+    urls = ys.callback_urls(raw)
     if status == ys.STATUS_RECEIVED:
-        next_status = ys.fulfillment_status(raw)
-        label = "Hazır olarak işaretle" if next_status == ys.STATUS_READY else "Sevk edildi yap"
-        actions.append({
-            "action": "fulfill",
-            "label": label,
-            "next_status": next_status,
-        })
-
-    if status in {ys.STATUS_RECEIVED, ys.STATUS_READY}:
-        actions.append({
-            "action": "cancel",
-            "label": "Siparişi iptal et",
-            "next_status": ys.STATUS_CANCELLED,
-        })
+        if urls.get("orderAcceptedUrl"):
+            actions.append({"action": "accept", "label": "Kabul et", "next_status": ys.STATUS_ACCEPTED})
+        if urls.get("orderRejectedUrl"):
+            actions.append({"action": "reject", "label": "Reddet", "next_status": ys.STATUS_REJECTED, "needs_reason": True})
+    if status in {ys.STATUS_RECEIVED, ys.STATUS_ACCEPTED} and urls.get("orderPreparedUrl"):
+        actions.append({"action": "prepared", "label": "Hazırlandı yap", "next_status": ys.STATUS_PREPARED})
+    if status in {ys.STATUS_ACCEPTED, ys.STATUS_PREPARED} and urls.get("orderPickedUpUrl"):
+        actions.append({"action": "picked_up", "label": "Teslim alındı yap", "next_status": ys.STATUS_DISPATCHED})
 
     intg = Integration.query.filter_by(
         user_id=order.user_id, platform=ys.PLATFORM, is_active=True
     ).first()
     disabled_reason = None
-    if not intg or not intg.ys_chain_id or not (intg.ys_vendor_id or intg.ys_store_id):
-        disabled_reason = "Önce Chain ID ve Vendor/Store ID bilgilerini kaydet."
-    elif not intg._ys_client_id or not intg._ys_client_secret:
-        disabled_reason = "Yemeksepeti OAuth bilgileri geldiğinde bu işlem açılacak."
+    if not intg or not (intg.ys_vendor_id or intg.ys_store_id):
+        disabled_reason = "Önce Yemeksepeti POS remoteId bilgisini kaydet."
+    elif not current_app.config.get("YEMEKSEPETI_POS_USERNAME") or not current_app.config.get("YEMEKSEPETI_POS_PASSWORD"):
+        disabled_reason = "Yemeksepeti POS credential bilgileri geldiğinde bu işlem açılacak."
     if disabled_reason:
         for item in actions:
             item["disabled"] = True
@@ -2819,22 +2830,22 @@ def _ys_detail_context(order: Order, raw: dict) -> dict:
         "items": items,
         "totals": _generic_detail_totals(order.total_price),
         "customer": customer,
-        "customer_phone": customer_data.get("phone_number") or "",
+        "customer_phone": customer_data.get("mobilePhone") or customer_data.get("phone_number") or "",
         "order_created_at": _ys_order_created_at(raw),
-        "store": ys.client(raw).get("name") or "-",
+        "store": (raw.get("platformRestaurant") or {}).get("id") or ys.client(raw).get("name") or "-",
         "source": "Yemeksepeti",
         "delivery": ys.delivery_label(raw),
         "payment": order.payment_type or ys.payment_type(raw),
         "address": ys.address_text(raw),
         "address_direction": ys.address_instructions(raw),
-        "flags": [],
+        "flags": ["Test siparişi - mutfağa hazırlatmayın"] if raw.get("test") else [],
         "order_note": order.customer_note or "",
     }
 
 
 def _ys_order_created_at(raw: dict) -> str:
     sys_data = raw.get("sys") or {}
-    value = str(sys_data.get("created_at") or "").strip()
+    value = str(raw.get("createdAt") or sys_data.get("created_at") or "").strip()
     if not value:
         return ""
     try:

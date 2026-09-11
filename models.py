@@ -337,6 +337,18 @@ class PlatformExpense(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class DailyAdvertisingExpense(db.Model):
+    """Kullanıcının belirli bir gün için girdiği reklam gideri."""
+    __tablename__ = "daily_advertising_expenses"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    day = db.Column(db.Date, nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "day", name="uq_user_daily_advertising_expense"),)
+
+
 class PlatformCommission(db.Model):
     """Kullanıcının platform için belirlediği komisyon oranı."""
     __tablename__ = "platform_commissions"
