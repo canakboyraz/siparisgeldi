@@ -51,6 +51,11 @@ def _can_use_multi_platform(user=None) -> bool:
     return bool(getattr(user or current_user, "has_multi_platform_access", False))
 
 
+def _cost_input_redirect():
+    endpoint = "dashboard.product_cost_entry" if request.form.get("return_to") == "entry" else "dashboard.product_costs"
+    return redirect(url_for(endpoint))
+
+
 def _active_integration_count(exclude_id: int = None) -> int:
     query = Integration.query.filter_by(user_id=current_user.id, is_active=True)
     if exclude_id:
@@ -1202,7 +1207,7 @@ def product_costs():
                     raise ValueError
             except ValueError:
                 flash("Komisyon oranı 0 ile 100 arasında olmalı.", "danger")
-                return redirect(url_for("dashboard.product_costs"))
+                return _cost_input_redirect()
             row = PlatformCommission.query.filter_by(user_id=current_user.id, platform=platform).first()
             if not row:
                 row = PlatformCommission(user_id=current_user.id, platform=platform)
@@ -1210,7 +1215,7 @@ def product_costs():
             row.percentage = percentage
             db.session.commit()
             flash("Platform komisyonu kaydedildi.", "success")
-            return redirect(url_for("dashboard.product_costs"))
+            return _cost_input_redirect()
         if request.form.get("form_type") == "expense":
             try:
                 amount = float(request.form.get("expense_amount", "0").replace(",", "."))
@@ -1218,7 +1223,7 @@ def product_costs():
                     raise ValueError
             except ValueError:
                 flash("Geçerli bir gider tutarı girin.", "danger")
-                return redirect(url_for("dashboard.product_costs"))
+                return _cost_input_redirect()
             existing = PlatformExpense.query.filter_by(user_id=current_user.id,
                 platform=request.form.get("expense_platform", "genel")[:30],
                 name=request.form.get("expense_name", "Diğer gider").strip()[:120] or "Diğer gider").first()
@@ -1233,7 +1238,7 @@ def product_costs():
                     day_from=datetime.utcnow().date(), day_to=datetime.utcnow().date()))
             db.session.commit()
             flash("Platform gideri kaydedildi.", "success")
-            return redirect(url_for("dashboard.product_costs"))
+            return _cost_input_redirect()
         if request.form.get("form_type") == "advertising":
             raw_start = request.form.get("advertising_day_from", "").strip() or request.form.get("advertising_day", "").strip()
             raw_end = request.form.get("advertising_day_to", "").strip() or raw_start
@@ -1247,7 +1252,7 @@ def product_costs():
                     raise ValueError
             except (TypeError, ValueError):
                 flash("Geçerli bir tarih aralığı ve reklam gideri tutarı girin. Aralık en fazla 731 gün olabilir.", "danger")
-                return redirect(url_for("dashboard.product_costs"))
+                return _cost_input_redirect()
             try:
                 day = advertising_start
                 while day <= advertising_end:
@@ -1264,10 +1269,10 @@ def product_costs():
                 db.session.rollback()
                 current_app.logger.exception("Günlük reklam gideri kaydedilemedi user_id=%s", current_user.id)
                 flash("Reklam gideri kaydedilemedi. Lütfen tekrar deneyin.", "danger")
-                return redirect(url_for("dashboard.product_costs"))
+                return _cost_input_redirect()
             day_count = (advertising_end - advertising_start).days + 1
             flash(f"{day_count} gün için günlük reklam gideri kaydedildi.", "success")
-            return redirect(url_for("dashboard.product_costs"))
+            return _cost_input_redirect()
         key = request.form.get("product_key", "").strip()
         platform = request.form.get("platform", "").strip()[:30]
         name = request.form.get("product_name", "Ürün").strip()[:180]
@@ -1661,7 +1666,32 @@ def product_cost_entry():
     existing = ProductCost.query.filter_by(user_id=current_user.id).all()
     cost_names = {" ".join((row.product_name or "").casefold().split()) for row in existing}
     missing = sorted((name for name in names if name not in cost_names), key=str.casefold)
-    return render_template("dashboard/product_cost_entry.html", products=missing)
+    expense_since = datetime.utcnow() - timedelta(days=30)
+    platform_expenses = PlatformExpense.query.filter_by(user_id=current_user.id).order_by(PlatformExpense.platform, PlatformExpense.name).all()
+    order_counts = {}
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= expense_since).all():
+        if not _is_cancelled_order(order) and not _is_refunded_order(order):
+            order_counts[order.platform] = order_counts.get(order.platform, 0) + 1
+    recent_adisyo = (AdisyoReport.query.join(AdisyoConnection)
+                     .join(Integration, AdisyoConnection.integration_id == Integration.id)
+                     .filter(Integration.user_id == current_user.id,
+                             AdisyoReport.state == "ready",
+                             AdisyoReport.day >= expense_since.date()).all())
+    for report in recent_adisyo:
+        try:
+            summary = json.loads(report.summary_json or "{}")
+            order_counts["adisyo"] = order_counts.get("adisyo", 0) + max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+        except (TypeError, ValueError):
+            pass
+    order_counts["genel"] = sum(order_counts.values())
+    advertising_expenses = DailyAdvertisingExpense.query.filter_by(
+        user_id=current_user.id
+    ).order_by(DailyAdvertisingExpense.day.desc()).limit(90).all()
+    commissions = {row.platform: row.percentage for row in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
+    return render_template("dashboard/product_cost_entry.html", products=missing,
+                           platform_expenses=platform_expenses, order_counts=order_counts,
+                           advertising_expenses=advertising_expenses, commissions=commissions,
+                           today=datetime.now(TURKEY_TZ).date().isoformat())
 
 
 def _cost_product_category(name: str) -> str:

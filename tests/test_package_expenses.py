@@ -106,7 +106,19 @@ class PackageExpensesTest(unittest.TestCase):
     def test_cost_page_renders_without_advertising_records(self):
         response = self.client.get("/panel/maliyetler?days=30")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Günlük reklam gideri", response.get_data(as_text=True))
+        self.assertIn("Gün gün kârlılık", response.get_data(as_text=True))
+
+    def test_cost_entry_contains_expense_inputs_and_keeps_user_on_page(self):
+        response = self.client.get("/panel/maliyet-girisi")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Platforma özel diğer giderler", response.get_data(as_text=True))
+        saved = self.client.post("/panel/maliyetler", data={
+            "_csrf_token": "test", "return_to": "entry", "form_type": "expense",
+            "expense_platform": "trendyolgo", "expense_name": "Paket",
+            "expense_amount": "10", "expense_type": "per_order",
+        })
+        self.assertEqual(saved.status_code, 302)
+        self.assertIn("/panel/maliyet-girisi", saved.headers["Location"])
 
     def test_advertising_expense_with_existing_order_day_does_not_raise_key_error(self):
         day = datetime.utcnow().date()

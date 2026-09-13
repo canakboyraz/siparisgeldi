@@ -213,6 +213,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .expense-form{display:grid;grid-template-columns:1.1fr 1.5fr 1fr 1fr 1fr auto;gap:.75rem;align-items:end}
 .expense-form .field{margin:0;min-width:0}
 .expense-form .btn{white-space:nowrap}
+.input-expense-table{min-width:720px;margin-top:1rem}
 .commission-form{display:grid;grid-template-columns:1.2fr 1fr auto;gap:.75rem;align-items:end}
 .commission-form .field{margin:0;min-width:0}
 .saved-commissions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem}
