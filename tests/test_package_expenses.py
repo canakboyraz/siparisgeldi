@@ -1,10 +1,11 @@
 import unittest
+from calendar import monthrange
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from app import create_app
 from extensions import db
-from models import User, Order, PlatformExpense, DailyAdvertisingExpense
+from models import User, Order, PlatformExpense, DailyAdvertisingExpense, MonthlyExpense
 
 
 class TestConfig:
@@ -115,6 +116,27 @@ class PackageExpensesTest(unittest.TestCase):
         db.session.commit()
         response = self.client.get(f"/panel/maliyetler?start_date={day.isoformat()}&end_date={day.isoformat()}")
         self.assertEqual(response.status_code, 200)
+
+    def test_monthly_expense_is_upserted_and_included_in_profit(self):
+        month = datetime.utcnow().date().replace(day=1)
+        payload = {
+            "_csrf_token": "test",
+            "expense_month": month.strftime("%Y-%m"),
+            "expense_name": "Kira",
+            "expense_amount": "3000",
+        }
+        self.assertEqual(self.client.post("/panel/aylik-giderler", data=payload).status_code, 302)
+        payload["expense_amount"] = "3500"
+        self.client.post("/panel/aylik-giderler", data=payload)
+        self.assertEqual(MonthlyExpense.query.count(), 1)
+        self.assertEqual(MonthlyExpense.query.first().amount, 3500.0)
+        monthly_page = self.client.get(f"/panel/aylik-giderler?month={month.strftime('%Y-%m')}")
+        self.assertEqual(monthly_page.status_code, 200)
+        self.assertIn("Kira", monthly_page.get_data(as_text=True))
+        with patch("routes.dashboard.render_template", return_value="ok") as render:
+            self.client.get(f"/panel/maliyetler?start_date={month.isoformat()}&end_date={month.isoformat()}")
+            expected = 3500.0 / monthrange(month.year, month.month)[1]
+            self.assertAlmostEqual(render.call_args.kwargs["monthly_expense_total"], expected)
 
 
 if __name__ == "__main__":

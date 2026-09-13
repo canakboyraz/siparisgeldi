@@ -1,0 +1,11 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Aylık Giderler · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head"><div><h1>Aylık giderler</h1><p class="muted">Kira, personel, muhasebe ve benzeri sabit giderleri ay bazında kaydedin.</p></div><form method="get" class="monthly-filter-form"><div class="field"><label for="expense-filter-month">Görüntülenecek ay</label><input id="expense-filter-month" name="month" type="month" value="{{ selected_month }}" required></div><button class="btn btn-ghost" type="submit">Göster</button><a class="btn btn-ghost" href="{{ url_for('dashboard.product_costs') }}">Kârlılık</a></form></div>
+<div class="card monthly-expense-card">
+  <div class="card-title">Aylık gider ekle</div>
+  <form method="post" class="monthly-expense-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><div class="field"><label for="expense-month">Ay</label><input id="expense-month" name="expense_month" type="month" value="{{ selected_month }}" required></div><div class="field"><label for="expense-name">Gider adı</label><input id="expense-name" name="expense_name" placeholder="Kira, personel, muhasebe vb." required></div><div class="field"><label for="expense-amount">Aylık tutar</label><input id="expense-amount" name="expense_amount" type="number" min="0" step="0.01" placeholder="Örn. 25000,00 TL" required></div><button class="btn btn-primary" type="submit">Gideri kaydet</button></form>
+</div>
+<div class="stats cost-daily-stats"><div class="stat"><div class="v">{{ '%.2f'|format(monthly_total) }} TL</div><div class="l">{{ selected_month }} toplam gider</div></div><div class="stat"><div class="v">{{ expenses|length }}</div><div class="l">Kayıtlı gider</div></div></div>
+<div class="card monthly-expense-card"><div class="card-title">{{ selected_month }} giderleri</div>{% if expenses %}<div class="table-wrap"><table class="monthly-expense-table"><thead><tr><th>Gider</th><th>Aylık tutar</th></tr></thead><tbody>{% for expense in expenses %}<tr><td>{{ expense.name }}</td><td>{{ '%.2f'|format(expense.amount) }} TL</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="muted">Bu ay için kayıtlı gider bulunmuyor.</p>{% endif %}</div>
+{% endblock %}

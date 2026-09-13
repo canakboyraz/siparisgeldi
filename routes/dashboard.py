@@ -1,6 +1,7 @@
 """Panel: özet, Telegram bağlama, TrendyolGo kurulum, siparişler, profil."""
 import json
 import secrets
+from calendar import monthrange
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import login_required, current_user
@@ -10,7 +11,7 @@ import pytz
 
 from extensions import db
 from models import (Integration, Order, ProductCost, PlatformExpense, DailyAdvertisingExpense,
-                    PlatformCommission, AdisyoReport, AdisyoConnection)
+                    MonthlyExpense, PlatformCommission, AdisyoReport, AdisyoConnection)
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications.dispatcher import send_to_user, record_whatsapp_result
 from utils import platform_label, status_label
@@ -1376,6 +1377,26 @@ def product_costs():
                 pass
     order_counts["genel"] = sum(order_counts.values())
     expense_total = sum(e.amount * order_counts.get(e.platform, 0) if e.expense_type == "per_order" else e.amount for e in expenses)
+    period_end_date = (until - timedelta(microseconds=1)).date()
+    month_start = since.date().replace(day=1)
+    last_month_start = period_end_date.replace(day=1)
+    monthly_expenses = MonthlyExpense.query.filter(
+        MonthlyExpense.user_id == current_user.id,
+        MonthlyExpense.month >= month_start,
+        MonthlyExpense.month <= last_month_start,
+    ).order_by(MonthlyExpense.month.desc(), MonthlyExpense.name.asc()).all()
+    monthly_expense_total = 0.0
+    monthly_allocations = {}
+    for expense in monthly_expenses:
+        month_days = monthrange(expense.month.year, expense.month.month)[1]
+        month_end = expense.month + timedelta(days=month_days)
+        overlap_start = max(since.date(), expense.month)
+        overlap_end = min(until.date(), month_end)
+        overlap_days = max(0, (overlap_end - overlap_start).days)
+        prorated = expense.amount * overlap_days / month_days
+        monthly_expense_total += prorated
+        monthly_allocations[expense.month] = monthly_allocations.get(expense.month, 0.0) + prorated
+    expense_total += monthly_expense_total
     commissions = {r.platform: r.percentage for r in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
     commission_total = sum(r["revenue"] * commissions.get(r["platform"], 0) / 100 for r in products.values())
     revenue_total = sum(r["revenue"] for r in products.values())
@@ -1451,6 +1472,17 @@ def product_costs():
                                              "advertising_expense": 0.0})
         row["advertising_expense"] += expense.amount
         row["expense"] += expense.amount
+    for row in daily.values():
+        row.setdefault("monthly_expense", 0.0)
+    for expense_month, amount in monthly_allocations.items():
+        rows_in_month = [row for row in daily.values()
+                         if row["date"].year == expense_month.year and row["date"].month == expense_month.month]
+        month_revenue = sum(row["revenue"] for row in rows_in_month)
+        for row in rows_in_month:
+            share = row["revenue"] / month_revenue if month_revenue else 1 / len(rows_in_month)
+            allocated = amount * share
+            row["monthly_expense"] += allocated
+            row["expense"] += allocated
     # Komisyonu günlük/platform cirosu tamamlandıktan sonra bir kez hesapla.
     for row in daily.values():
         row.setdefault("advertising_expense", 0.0)
@@ -1486,7 +1518,56 @@ def product_costs():
                            start_date=start_date, end_date=end_date,
                            advertising_expenses=advertising_expenses,
                            advertising_total=advertising_total,
+                           monthly_expenses=monthly_expenses,
+                           monthly_expense_total=monthly_expense_total,
                            today=datetime.now(TURKEY_TZ).date().isoformat())
+
+
+@dashboard_bp.route("/aylik-giderler", methods=["GET", "POST"])
+@login_required
+def monthly_expenses():
+    """Kira, personel ve benzeri ay bazlı sabit giderleri yönetir."""
+    if request.method == "POST":
+        raw_month = request.form.get("expense_month", "").strip()
+        name = request.form.get("expense_name", "").strip()[:120]
+        try:
+            month = datetime.strptime(raw_month, "%Y-%m").date().replace(day=1)
+            amount = float(request.form.get("expense_amount", "0").replace(",", "."))
+            if not name or not 0 <= amount <= 100000000:
+                raise ValueError
+        except (TypeError, ValueError):
+            flash("Geçerli bir ay, gider adı ve tutar girin.", "danger")
+            return redirect(url_for("dashboard.monthly_expenses"))
+        try:
+            expense = MonthlyExpense.query.filter_by(
+                user_id=current_user.id, month=month, name=name
+            ).first()
+            if not expense:
+                expense = MonthlyExpense(user_id=current_user.id, month=month, name=name)
+                db.session.add(expense)
+            expense.amount = amount
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception("Aylık gider kaydedilemedi user_id=%s", current_user.id)
+            flash("Aylık gider kaydedilemedi. Lütfen tekrar deneyin.", "danger")
+            return redirect(url_for("dashboard.monthly_expenses"))
+        flash("Aylık gider kaydedildi.", "success")
+        return redirect(url_for("dashboard.monthly_expenses", month=raw_month))
+
+    today = datetime.now(TURKEY_TZ).date()
+    selected_month = request.args.get("month", today.strftime("%Y-%m"))
+    try:
+        selected_month_date = datetime.strptime(selected_month, "%Y-%m").date().replace(day=1)
+    except ValueError:
+        selected_month = today.strftime("%Y-%m")
+        selected_month_date = today.replace(day=1)
+    expenses = MonthlyExpense.query.filter_by(
+        user_id=current_user.id, month=selected_month_date
+    ).order_by(MonthlyExpense.name.asc()).all()
+    return render_template("dashboard/monthly_expenses.html", expenses=expenses,
+                           selected_month=selected_month,
+                           monthly_total=sum(expense.amount for expense in expenses))
 
 
 @dashboard_bp.route("/maliyet-girisi", methods=["GET", "POST"])

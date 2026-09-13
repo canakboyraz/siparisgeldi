@@ -349,6 +349,19 @@ class DailyAdvertisingExpense(db.Model):
     __table_args__ = (db.UniqueConstraint("user_id", "day", name="uq_user_daily_advertising_expense"),)
 
 
+class MonthlyExpense(db.Model):
+    """Kullanıcının ay bazında tuttuğu kira, personel ve benzeri sabit gider."""
+    __tablename__ = "monthly_expenses"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    month = db.Column(db.Date, nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    amount = db.Column(db.Float, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "month", "name", name="uq_user_monthly_expense"),)
+
+
 class PlatformCommission(db.Model):
     """Kullanıcının platform için belirlediği komisyon oranı."""
     __tablename__ = "platform_commissions"
