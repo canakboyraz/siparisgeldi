@@ -102,6 +102,7 @@ class PackageExpensesTest(unittest.TestCase):
             self.assertEqual(row["profit"], -150.0)
             self.assertEqual(values["advertising_total"], 450.0)
             self.assertEqual(values["expense_total"], 450.0)
+            self.assertEqual(row["estimated_profit"], 0.0)
 
     def test_cost_page_renders_without_advertising_records(self):
         response = self.client.get("/panel/maliyetler?days=30")

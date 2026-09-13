@@ -1509,7 +1509,10 @@ def product_costs():
     daily_rows = sorted(daily.values(), key=lambda row: row["date"], reverse=True)
     for row in daily_rows:
         row["profit"] = row["revenue"] - row["cost"] - row["commission"] - row["expense"]
+        general_expenses = row["advertising_expense"] + row["monthly_expense"]
+        row["estimated_profit"] = row["profit"] + general_expenses
         row["margin"] = row["profit"] / row["revenue"] * 100 if row["revenue"] else 0
+        row["estimated_margin"] = row["estimated_profit"] / row["revenue"] * 100 if row["revenue"] else 0
         row["products"] = sorted(
             ({**product, "profit": product["revenue"] - product["cost"]} for product in row["products"].values()),
             key=lambda product: (-product["revenue"], product["name"]),
