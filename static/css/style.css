@@ -238,6 +238,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .monthly-expense-form .field{margin:0;min-width:0}
 .monthly-expense-form .btn{white-space:nowrap}
 .monthly-expense-table{max-width:620px;margin-top:.5rem}
+.monthly-expense-actions{display:flex;align-items:center;gap:.4rem}
+.monthly-expense-actions form{margin:0}
 .monthly-filter-form{display:flex;align-items:end;gap:.65rem}
 .monthly-filter-form .field{margin:0}
 .daily-products{margin:0 1rem 1rem;padding:.8rem 1rem;border-left:3px solid var(--accent);background:var(--surface-2);overflow-x:auto}

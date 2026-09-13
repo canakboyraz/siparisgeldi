@@ -1530,6 +1530,7 @@ def monthly_expenses():
     if request.method == "POST":
         raw_month = request.form.get("expense_month", "").strip()
         name = request.form.get("expense_name", "").strip()[:120]
+        expense_id = request.form.get("expense_id", "").strip()
         try:
             month = datetime.strptime(raw_month, "%Y-%m").date().replace(day=1)
             amount = float(request.form.get("expense_amount", "0").replace(",", "."))
@@ -1539,12 +1540,23 @@ def monthly_expenses():
             flash("Geçerli bir ay, gider adı ve tutar girin.", "danger")
             return redirect(url_for("dashboard.monthly_expenses"))
         try:
-            expense = MonthlyExpense.query.filter_by(
-                user_id=current_user.id, month=month, name=name
-            ).first()
+            expense = None
+            if expense_id.isdigit():
+                expense = MonthlyExpense.query.filter_by(
+                    id=int(expense_id), user_id=current_user.id
+                ).first()
+                if not expense:
+                    flash("Aylık gider kaydı bulunamadı.", "danger")
+                    return redirect(url_for("dashboard.monthly_expenses"))
+            if not expense:
+                expense = MonthlyExpense.query.filter_by(
+                    user_id=current_user.id, month=month, name=name
+                ).first()
             if not expense:
                 expense = MonthlyExpense(user_id=current_user.id, month=month, name=name)
                 db.session.add(expense)
+            expense.month = month
+            expense.name = name
             expense.amount = amount
             db.session.commit()
         except SQLAlchemyError:
@@ -1562,12 +1574,39 @@ def monthly_expenses():
     except ValueError:
         selected_month = today.strftime("%Y-%m")
         selected_month_date = today.replace(day=1)
+    editing_expense = None
+    edit_id = request.args.get("edit_id", "").strip()
+    if edit_id.isdigit():
+        editing_expense = MonthlyExpense.query.filter_by(
+            id=int(edit_id), user_id=current_user.id
+        ).first()
+        if editing_expense:
+            selected_month = editing_expense.month.strftime("%Y-%m")
+            selected_month_date = editing_expense.month
     expenses = MonthlyExpense.query.filter_by(
         user_id=current_user.id, month=selected_month_date
     ).order_by(MonthlyExpense.name.asc()).all()
     return render_template("dashboard/monthly_expenses.html", expenses=expenses,
                            selected_month=selected_month,
-                           monthly_total=sum(expense.amount for expense in expenses))
+                           monthly_total=sum(expense.amount for expense in expenses),
+                           editing_expense=editing_expense)
+
+
+@dashboard_bp.route("/aylik-giderler/<int:expense_id>/sil", methods=["POST"])
+@login_required
+def delete_monthly_expense(expense_id):
+    expense = MonthlyExpense.query.filter_by(id=expense_id, user_id=current_user.id).first_or_404()
+    month = expense.month.strftime("%Y-%m")
+    try:
+        db.session.delete(expense)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.exception("Aylık gider silinemedi user_id=%s expense_id=%s", current_user.id, expense_id)
+        flash("Aylık gider silinemedi. Lütfen tekrar deneyin.", "danger")
+        return redirect(url_for("dashboard.monthly_expenses", month=month))
+    flash("Aylık gider silindi.", "success")
+    return redirect(url_for("dashboard.monthly_expenses", month=month))
 
 
 @dashboard_bp.route("/maliyet-girisi", methods=["GET", "POST"])

@@ -137,6 +137,15 @@ class PackageExpensesTest(unittest.TestCase):
             self.client.get(f"/panel/maliyetler?start_date={month.isoformat()}&end_date={month.isoformat()}")
             expected = 3500.0 / monthrange(month.year, month.month)[1]
             self.assertAlmostEqual(render.call_args.kwargs["monthly_expense_total"], expected)
+        expense_id = MonthlyExpense.query.first().id
+        edit_page = self.client.get(f"/panel/aylik-giderler?month={month.strftime('%Y-%m')}&edit_id={expense_id}")
+        self.assertEqual(edit_page.status_code, 200)
+        payload["expense_id"] = str(expense_id)
+        payload["expense_amount"] = "3600"
+        self.assertEqual(self.client.post("/panel/aylik-giderler", data=payload).status_code, 302)
+        self.assertEqual(MonthlyExpense.query.first().amount, 3600.0)
+        self.assertEqual(self.client.post(f"/panel/aylik-giderler/{expense_id}/sil", data={"_csrf_token": "test"}).status_code, 302)
+        self.assertEqual(MonthlyExpense.query.count(), 0)
 
 
 if __name__ == "__main__":
