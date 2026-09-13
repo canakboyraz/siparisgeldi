@@ -512,6 +512,14 @@ def _normalized_status(status: str) -> str:
     return (status or "").replace("_", "").replace("-", "").replace(" ", "").lower()
 
 
+def _order_payload(order: Order) -> dict:
+    try:
+        payload = json.loads(order.raw_json) if order.raw_json else {}
+    except (TypeError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def _is_cancelled_order(order: Order) -> bool:
     status = order.status or ""
     normalized = _normalized_status(status)
@@ -527,12 +535,16 @@ def _is_cancelled_order(order: Order) -> bool:
 def _is_refunded_order(order: Order) -> bool:
     status = order.status or ""
     normalized = _normalized_status(status)
-    return (
+    if (
         status in REFUNDED_ORDER_STATUSES
         or "refund" in normalized
         or "iade" in normalized
         or "return" in normalized
-    )
+    ):
+        return True
+    if order.platform == tmp.PLATFORM:
+        return tmp.is_refunded(_order_payload(order))
+    return False
 
 
 def _send_period_report(intg, kind: str, period_label: str, orders):
@@ -540,9 +552,13 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
     refunded  = [o for o in orders if _is_refunded_order(o)]
     cancelled = [o for o in orders if _is_cancelled_order(o) and o not in refunded]
     active    = [o for o in orders if o not in cancelled and o not in refunded]
-    revenue   = sum(o.total_price for o in active)
+    gross_revenue = sum(o.total_price for o in orders)
     cancelled_total = sum(o.total_price for o in cancelled)
     refunded_total = sum(o.total_price for o in refunded)
+    # Ciro, brüt toplamdan iptal ve iadeler çıkarılarak hesaplanır. `active`
+    # listesi ürün özetinde kullanılmaya devam eder; tutar hesabı bu formülle
+    # raporun iade toplamını kesin olarak yansıtmasını sağlar.
+    revenue = max(0.0, gross_revenue - cancelled_total - refunded_total)
     products  = _aggregate_products(active)
     label = {
         TGO_FOOD_PLATFORM: "Trendyol Go",
@@ -578,7 +594,9 @@ def _send_period_report(intg, kind: str, period_label: str, orders):
     sent = send_to_user(user, msg, wa=wa, wa_template=wa_template)
     print(
         f"[RAPOR/{kind}] user={intg.user_id} platform={intg.platform} "
-        f"whatsapp_template={wa_template} sent={sent} params={len(wa)}"
+        f"whatsapp_template={wa_template} sent={sent} params={len(wa)} "
+        f"gross={gross_revenue:.2f} refunded={refunded_total:.2f} "
+        f"cancelled={cancelled_total:.2f} revenue={revenue:.2f}"
     )
 
 

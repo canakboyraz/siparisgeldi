@@ -21,6 +21,7 @@ STATUS_NOTIFY = {
     "UnSupplied",
     "Returned",
     "Refunded",
+    "PartiallyRefunded",
     "AtCollectionPoint",
     "UnPacked",
 }
@@ -35,11 +36,35 @@ STATUS_ALIASES = {
     "UNDELIVERED": "UnDelivered",
     "RETURNED": "Returned",
     "UNSUPPLIED": "UnSupplied",
+    "REFUND": "Refunded",
+    "REFUNDED": "Refunded",
+    "RETURN": "Returned",
+    "PARTIAL_REFUND": "PartiallyRefunded",
+    "PARTIAL_REFUNDED": "PartiallyRefunded",
+    "PARTIALLY_REFUNDED": "PartiallyRefunded",
     "AWAITING": "Awaiting",
     "UNPACKED": "UnPacked",
     "AT_COLLECTION_POINT": "AtCollectionPoint",
     "VERIFIED": "Verified",
 }
+
+REFUND_STATUSES = {"Returned", "Refunded", "PartiallyRefunded"}
+
+
+def _status_key(value) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").casefold())
+
+
+def _canonical_status(value) -> str:
+    raw = str(value or "").strip()
+    compact = _status_key(raw)
+    if compact in {"return", "returned"}:
+        return "Returned"
+    if compact in {"refund", "refunded"}:
+        return "Refunded"
+    if compact in {"partialrefund", "partialrefunded", "partiallyrefunded"}:
+        return "PartiallyRefunded"
+    return STATUS_ALIASES.get(raw.upper(), raw)
 
 
 def auth_token(api_key: str, api_secret: str) -> str:
@@ -110,8 +135,27 @@ def order_number(order: dict) -> str:
 
 
 def status(order: dict) -> str:
-    raw = str(order.get("status") or order.get("packageStatus") or "Created").strip()
-    return STATUS_ALIASES.get(raw.upper(), raw)
+    # Trendyol bazı yanıtlarda ana status alanını korurken iade bilgisini
+    # packageStatus/shipmentPackageStatus alanında döndürebiliyor. İade,
+    # normal teslimat durumuna göre öncelikli olmalıdır.
+    values = [
+        order.get("status"),
+        order.get("packageStatus"),
+        order.get("shipmentPackageStatus"),
+        order.get("orderStatus"),
+        order.get("returnStatus"),
+        order.get("refundStatus"),
+    ]
+    statuses = [_canonical_status(value) for value in values if str(value or "").strip()]
+    for candidate in statuses:
+        if candidate in REFUND_STATUSES:
+            return candidate
+    return statuses[0] if statuses else "Created"
+
+
+def is_refunded(order: dict) -> bool:
+    """Return whether any known Trendyol status field marks an order as returned."""
+    return status(order) in REFUND_STATUSES
 
 
 def total_price(order: dict) -> float:
