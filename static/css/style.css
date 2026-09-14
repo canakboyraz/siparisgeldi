@@ -192,11 +192,13 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .cost-period{display:flex;align-items:center;gap:.55rem;flex:0 0 auto}
 .cost-period label{font-size:.82rem;font-weight:700;color:var(--muted)}
 .cost-period select{min-width:130px}
-.cost-filters{display:grid;grid-template-columns:minmax(240px,420px);gap:.8rem;align-items:stretch;margin-top:1rem;max-width:420px}
+.cost-filters{display:grid;grid-template-columns:minmax(350px,2fr) minmax(150px,.9fr) minmax(145px,1fr) minmax(145px,1fr) auto;gap:.8rem;align-items:end;margin-top:1rem;max-width:none}
 .cost-filters .field{margin:0;min-width:0}
 .cost-filters label{display:block;margin-bottom:.35rem}
 .cost-filters select,.cost-filters input{width:100%;min-height:42px}
-.cost-filters .btn{white-space:nowrap;width:100%}
+.cost-filter-actions{display:flex;gap:.5rem;align-items:end}
+.cost-filter-actions .btn{white-space:nowrap;min-height:42px}
+.cost-filter-actions .btn-primary{min-width:92px}
 .platform-checks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.4rem;max-width:620px}
 .platform-checks label{display:flex;align-items:center;gap:.4rem;padding:.45rem .55rem;border:1px solid var(--line);border-radius:7px;background:var(--surface);cursor:pointer;font-size:.84rem;font-weight:600;white-space:nowrap}
 .platform-checks label:has(input:checked){border-color:var(--brand);background:var(--surface-2)}
@@ -405,6 +407,11 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .raw-details pre{white-space:pre-wrap;word-break:break-word;background:var(--gray-soft);border-radius:10px;padding:1rem;max-height:420px;overflow:auto}
 .receipt-print-head{display:none}
 
+@media(max-width:1100px) and (min-width:861px){
+  .cost-filters{grid-template-columns:minmax(280px,1.7fr) minmax(135px,1fr) minmax(135px,1fr) auto}
+  .cost-platform-field{grid-column:1 / -1}
+}
+
 @media(max-width:860px){
   .layout{grid-template-columns:1fr}
   .sidebar{
@@ -496,7 +503,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .cost-period select{flex:1}
   .cost-filters{grid-template-columns:1fr}
   .cost-filters .field:first-child{grid-column:auto}
-  .cost-filters .btn{width:100%}
+  .cost-filter-actions{display:grid;grid-template-columns:1fr 1fr}
+  .cost-filter-actions .btn{width:100%}
   .cost-card{overflow:visible}
   .cost-table{border:1px solid var(--line);border-radius:9px}
   .expense-form{grid-template-columns:1fr 1fr}

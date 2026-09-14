@@ -1301,7 +1301,7 @@ def product_costs():
         return redirect(url_for("dashboard.product_costs", days=request.form.get("days", "30")))
 
     days = request.args.get("days", "30", type=int)
-    days = days if days in (7, 30, 90, 365) else 30
+    days = days if days in (1, 7, 30, 90, 365) else 30
     start_date = request.args.get("start_date", "").strip()
     end_date = request.args.get("end_date", "").strip()
     try:
@@ -1313,8 +1313,20 @@ def product_costs():
     selected_platforms = [value.strip() for value in request.args.getlist("platform") if value.strip()]
     platform_filter = set(selected_platforms)
     search = request.args.get("q", "").strip().casefold()
-    since = custom_start or (datetime.utcnow() - timedelta(days=days))
-    until = custom_end or datetime.utcnow() + timedelta(seconds=1)
+    if custom_start or custom_end:
+        since = custom_start
+        until = custom_end
+    elif days == 1:
+        # "Dün" tam takvim gününü ifade eder; UTC-naive sipariş tarihleriyle
+        # karşılaştırmak için Türkiye saatindeki sınırları UTC'ye çeviriyoruz.
+        today = datetime.now(TURKEY_TZ).date()
+        yesterday = TURKEY_TZ.localize(datetime.combine(today - timedelta(days=1), datetime.min.time()))
+        today_start = TURKEY_TZ.localize(datetime.combine(today, datetime.min.time()))
+        since = yesterday.astimezone(pytz.utc).replace(tzinfo=None)
+        until = today_start.astimezone(pytz.utc).replace(tzinfo=None)
+    else:
+        since = datetime.utcnow() - timedelta(days=days)
+        until = datetime.utcnow() + timedelta(seconds=1)
     if until <= since:
         since = datetime.utcnow() - timedelta(days=days)
         until = datetime.utcnow() + timedelta(seconds=1)
