@@ -2759,10 +2759,33 @@ def _cost_product_lines(platform, data):
     if platform == "migros":
         source = data.get("items") or []
         for item in source:
+            if not isinstance(item, dict):
+                continue
             qty = float(item.get("amount") or item.get("quantity") or 1)
             name = str(item.get("name") or "Ürün")
-            revenue = float(item.get("totalPrice") or item.get("price") or item.get("unitPrice") or 0) * qty
+            # Migros price is a line total in pennies, not a unit price in TL.
+            price = item.get("totalPrice")
+            if price is None:
+                price = item.get("price")
+            if price is not None:
+                revenue = _migros_price_amount({"amountAsPenny": price}) or 0.0
+                if item.get("totalPrice") is None:
+                    revenue *= qty
+            else:
+                revenue = (_migros_price_amount({"amountAsPenny": item.get("unitPrice")}) or 0.0) * qty
             lines.append({"key": name, "name": name, "quantity": qty, "revenue": revenue})
+        # Allocate the authoritative gross order total across products, so paid
+        # options are included once. Keep the existing gross-revenue policy.
+        total = _migros_price_amount((data.get("prices") or {}).get("total"))
+        if lines and total is not None:
+            line_total = sum(line["revenue"] for line in lines)
+            quantity_total = sum(line["quantity"] for line in lines)
+            if line_total > 0:
+                for line in lines:
+                    line["revenue"] = total * line["revenue"] / line_total
+            elif quantity_total > 0:
+                for line in lines:
+                    line["revenue"] = total * line["quantity"] / quantity_total
     elif platform in (tmp.PLATFORM, hb.PLATFORM):
         source = tmp.lines(data) if platform == tmp.PLATFORM else hb.lines(data)
         getter = tmp if platform == tmp.PLATFORM else hb
