@@ -83,6 +83,12 @@
       </div>
     </div>
     <div class="inline">
+      {% if filters.durum == 'aktif' %}
+      <form method="post" action="{{ url_for('dashboard.clear_active_orders') }}" onsubmit="return confirm('Aktif siparişler bu ekrandan kaldırılacak. Sipariş geçmişi ve raporlar korunur. Devam edilsin mi?');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-ghost btn-sm" type="submit" {% if not rows %}disabled{% endif %}>Aktifleri temizle</button>
+      </form>
+      {% endif %}
       {% if counts.warning %}
       <span class="badge red">Acil kontrol gerekli</span>
       {% endif %}

@@ -2018,6 +2018,27 @@ def active_orders():
     )
 
 
+@dashboard_bp.route("/aktif-siparisler/temizle", methods=["POST"])
+@login_required
+def clear_active_orders():
+    """Aktif listedeki eski kayıtları gizler; sipariş geçmişinden silmez."""
+    orders = (
+        Order.query
+        .filter(Order.user_id == current_user.id)
+        .filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(ACTIVE_EXCLUDED_STATUSES))))
+        .filter(Order.active_hidden_at.is_(None))
+        .all()
+    )
+    cleared_count = len(orders)
+    if orders:
+        cleared_at = datetime.utcnow()
+        for order in orders:
+            order.active_hidden_at = cleared_at
+        db.session.commit()
+    flash(f"{cleared_count} aktif sipariş listeden kaldırıldı. Sipariş geçmişinde duruyor.", "success")
+    return redirect(url_for("dashboard.active_orders"))
+
+
 @dashboard_bp.route("/aktif-siparisler/yeni-kontrol")
 @login_required
 def active_orders_check():
@@ -2043,6 +2064,7 @@ def active_orders_check():
     new_orders = (
         Order.query
         .filter(Order.user_id == current_user.id, Order.id > since_id)
+        .filter(Order.active_hidden_at.is_(None))
         .filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(ACTIVE_EXCLUDED_STATUSES))))
         .order_by(Order.id.asc())
         .limit(20)
@@ -2068,6 +2090,7 @@ def active_orders_check():
 
 
 def _apply_active_common_filters(query, platform: str, search: str, date_from: str, date_to: str):
+    query = query.filter(Order.active_hidden_at.is_(None))
     if platform:
         query = query.filter_by(platform=platform)
     if search:
