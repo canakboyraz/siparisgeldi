@@ -1,6 +1,20 @@
 {% extends "dashboard/_layout.html" %}
 {% block title %}Sipariş #{{ order.order_number or order.external_id }} · SiparişGeldi{% endblock %}
 {% block panel %}
+<style class="no-print">
+  @media print {
+    {% if receipt_width == '58mm' %}
+    @page { size: 58mm auto; margin: 3mm; }
+    html, body { width: 58mm; max-width: 58mm; }
+    {% elif receipt_width == 'A4' %}
+    @page { size: A4; margin: 12mm; }
+    html, body { width: auto; max-width: none; }
+    {% else %}
+    @page { size: 80mm auto; margin: 4mm; }
+    html, body { width: 80mm; max-width: 80mm; }
+    {% endif %}
+  }
+</style>
 <div class="page-head">
   <div>
     <h1>Sipariş #{{ order.order_number or order.external_id }}</h1>
@@ -114,14 +128,16 @@
       <form method="post" action="{{ url_for('dashboard.update_yemeksepeti_order', order_id=order.id) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="{{ action.action }}">
-        {% if action.action == 'cancel' %}
-        <select name="cancel_reason" aria-label="İptal nedeni">
-          <option value="TOO_BUSY">Çok yoğun</option>
-          <option value="ITEM_UNAVAILABLE">Ürün yok</option>
-          <option value="CLOSED">Restoran kapalı</option>
+        {% if action.action == 'reject' %}
+        <select name="rejection_reason" aria-label="Reddetme nedeni">
+          <option value="TOO_BUSY">Restoran çok yoğun</option>
+          <option value="PRODUCT_UNAVAILABLE">Ürün mevcut değil</option>
+          <option value="RESTAURANT_CLOSED">Restoran kapalı</option>
+          <option value="OUTSIDE_DELIVERY_AREA">Teslimat bölgesi dışında</option>
+          <option value="OTHER">Diğer</option>
         </select>
         {% endif %}
-        <button class="btn {{ 'btn-danger' if action.action == 'cancel' else 'btn-primary' }}" type="submit" {% if action.disabled %}disabled title="{{ action.disabled_reason }}"{% endif %}>
+        <button class="btn {{ 'btn-danger' if action.action == 'reject' else 'btn-primary' }}" type="submit" {% if action.disabled %}disabled title="{{ action.disabled_reason }}"{% endif %}>
           {{ action.label }}
         </button>
       </form>

@@ -36,6 +36,11 @@ ORDER_POPUP_SOUND_OPTIONS = [
     ("short", "Kısa uyarı"),
     ("bell", "Zil tonu"),
 ]
+RECEIPT_WIDTH_OPTIONS = [
+    ("58mm", "58 mm termal yazıcı"),
+    ("80mm", "80 mm termal yazıcı"),
+    ("A4", "A4 yazıcı / normal kâğıt"),
+]
 
 
 def _is_pro_user(user=None) -> bool:
@@ -1191,6 +1196,7 @@ def order_detail(order_id):
         getir_actions=getir_actions,
         yemeksepeti_actions=yemeksepeti_actions,
         trendyolgo_actions=trendyolgo_actions,
+        receipt_width=current_user.receipt_width if current_user.receipt_width in {value for value, _ in RECEIPT_WIDTH_OPTIONS} else "80mm",
     )
 
 
@@ -3267,6 +3273,7 @@ def _tgo_address(raw: dict) -> str:
 @login_required
 def profile():
     sound_options = ORDER_POPUP_SOUND_OPTIONS
+    receipt_width_options = RECEIPT_WIDTH_OPTIONS
     if request.method == "POST":
         name       = request.form.get("name", "").strip()
         current_pw = request.form.get("current_password", "")
@@ -3290,23 +3297,27 @@ def profile():
             popup_sound = "classic"
         current_user.order_popup_sound_enabled = "order_popup_sound_enabled" in request.form
         current_user.order_popup_sound = popup_sound
+        receipt_width = request.form.get("receipt_width", "80mm").strip()
+        if receipt_width not in {value for value, _ in receipt_width_options}:
+            receipt_width = "80mm"
+        current_user.receipt_width = receipt_width
 
         if current_pw or new_pw:
             if not current_user.check_password(current_pw):
                 flash("Mevcut şifre hatalı.", "danger")
-                return render_template("dashboard/profile.html", sound_options=sound_options)
+                return render_template("dashboard/profile.html", sound_options=sound_options, receipt_width_options=receipt_width_options)
             if new_pw != confirm_pw:
                 flash("Yeni şifreler eşleşmiyor.", "danger")
-                return render_template("dashboard/profile.html", sound_options=sound_options)
+                return render_template("dashboard/profile.html", sound_options=sound_options, receipt_width_options=receipt_width_options)
             if len(new_pw) < 6:
                 flash("Şifre en az 6 karakter olmalı.", "danger")
-                return render_template("dashboard/profile.html", sound_options=sound_options)
+                return render_template("dashboard/profile.html", sound_options=sound_options, receipt_width_options=receipt_width_options)
             current_user.set_password(new_pw)
 
         db.session.commit()
         flash("Profil güncellendi.", "success")
 
-    return render_template("dashboard/profile.html", sound_options=sound_options)
+    return render_template("dashboard/profile.html", sound_options=sound_options, receipt_width_options=receipt_width_options)
 
 
 @dashboard_bp.route("/test-bildirim", methods=["POST"])

@@ -27,6 +27,7 @@ def _ensure_schema():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_last_error VARCHAR(300)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS order_popup_sound_enabled BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS order_popup_sound VARCHAR(20) DEFAULT 'classic'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS receipt_width VARCHAR(10) DEFAULT '80mm'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_whatsapp BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_multi_platform BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_started_at TIMESTAMP",
@@ -83,6 +84,8 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE users ADD COLUMN order_popup_sound_enabled BOOLEAN DEFAULT FALSE")
             if "order_popup_sound" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN order_popup_sound VARCHAR(20) DEFAULT 'classic'")
+            if "receipt_width" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN receipt_width VARCHAR(10) DEFAULT '80mm'")
             if "feature_whatsapp" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN feature_whatsapp BOOLEAN DEFAULT FALSE")
             if "feature_multi_platform" not in user_cols:

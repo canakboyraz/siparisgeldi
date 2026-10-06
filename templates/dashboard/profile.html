@@ -59,6 +59,18 @@
       </div>
     </div>
 
+    <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
+    <div class="card-title" style="font-size:.95rem">Fiş yazdırma</div>
+    <div class="field">
+      <label for="receipt-width">Yazıcı kâğıt boyutu</label>
+      <select id="receipt-width" name="receipt_width">
+        {% for value, label in receipt_width_options %}
+        <option value="{{ value }}" {{ 'selected' if (current_user.receipt_width or '80mm') == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="hint">Fiş yazdırırken seçilen genişlik ve yazı düzeni uygulanır.</p>
+    </div>
+
     <button class="btn btn-primary btn-lg" type="submit">Kaydet</button>
   </form>
 </div>

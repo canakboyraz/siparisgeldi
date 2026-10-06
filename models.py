@@ -41,6 +41,7 @@ class User(UserMixin, db.Model):
     whatsapp_last_error = db.Column(db.String(300))
     order_popup_sound_enabled = db.Column(db.Boolean, default=False)
     order_popup_sound = db.Column(db.String(20), default="classic")
+    receipt_width = db.Column(db.String(10), default="80mm")
 
     integrations = db.relationship("Integration", backref="user", lazy=True, cascade="all, delete-orphan")
     orders       = db.relationship("Order", backref="user", lazy=True, cascade="all, delete-orphan")
