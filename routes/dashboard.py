@@ -1699,9 +1699,11 @@ def product_cost_entry():
         except (TypeError, ValueError):
             pass
     order_counts["genel"] = sum(order_counts.values())
-    advertising_expenses = DailyAdvertisingExpense.query.filter_by(
-        user_id=current_user.id
-    ).order_by(DailyAdvertisingExpense.day.desc()).limit(90).all()
+    advertising_page = request.args.get("advertising_page", 1, type=int)
+    advertising_expenses = (DailyAdvertisingExpense.query
+                            .filter_by(user_id=current_user.id)
+                            .order_by(DailyAdvertisingExpense.day.desc())
+                            .paginate(page=advertising_page, per_page=15, error_out=False))
     commissions = {row.platform: row.percentage for row in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
     return render_template("dashboard/product_cost_entry.html", products=missing,
                            platform_expenses=platform_expenses, order_counts=order_counts,

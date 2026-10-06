@@ -252,6 +252,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .bulk-cost-form table{min-width:520px}
 .bulk-cost-form input[type=number]{width:150px}
 .bulk-cost-actions{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.1rem;border-top:1px solid var(--line)}
+.advertising-pagination{justify-content:flex-start;margin-top:.75rem}
 .cost-daily-card .table-wrap{overflow-x:auto}
 .mini-check{display:inline-flex;align-items:center;gap:.25rem;margin:0;font-size:.82rem;color:var(--muted);white-space:nowrap}
 .mini-check input{width:auto}
@@ -532,6 +533,20 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .monthly-filter-form{width:100%;margin-top:.75rem}
   .monthly-filter-form .field{flex:1}
   .monthly-filter-form .btn{width:100%}
+  .bulk-cost-form{overflow:visible}
+  .bulk-cost-form .table-wrap{overflow:visible}
+  .bulk-cost-table{display:block;min-width:0!important;width:100%;white-space:normal}
+  .bulk-cost-table thead{display:none}
+  .bulk-cost-table tbody{display:grid;gap:.7rem}
+  .bulk-cost-table tr{display:block;border:1px solid var(--line);border-radius:10px;padding:.7rem;background:var(--surface-1)}
+  .bulk-cost-table td{display:block;border:0;padding:.35rem 0;white-space:normal}
+  .bulk-cost-table td:first-child{border-bottom:1px solid var(--line);padding-bottom:.65rem;margin-bottom:.25rem}
+  .bulk-cost-table td::before{display:block;content:attr(data-label);margin-bottom:.25rem;color:var(--muted);font-size:.76rem;font-weight:800}
+  .bulk-cost-table td strong{display:block;overflow-wrap:anywhere;line-height:1.35}
+  .bulk-cost-form input[type=number]{width:100%;min-height:44px;box-sizing:border-box}
+  .bulk-cost-actions{align-items:stretch;flex-direction:column;gap:.7rem}
+  .bulk-cost-actions .btn{width:100%}
+  .advertising-pagination{justify-content:center}
   .commission-form{grid-template-columns:1fr 1fr}
   .commission-form .btn{grid-column:1 / -1;width:100%}
   .analytics-row-meta{align-items:flex-start;flex-direction:column;gap:.1rem}
