@@ -2776,7 +2776,7 @@ def _report_products(orders: list, max_items: int = 15) -> list:
                 counts[name] = counts.get(name, 0) + ys.item_quantity(item)
         else:
             for line in data.get("lines") or []:
-                name = line.get("name") or line.get("productName") or "Ürün"
+                name = tgo.line_name(line) or "Ürün"
                 counts[name] = counts.get(name, 0) + tgo._line_quantity(line)
     return [
         {"name": name, "quantity": qty}
@@ -2834,7 +2834,7 @@ def _cost_product_lines(platform, data):
     else:
         for item in data.get("lines") or []:
             qty = tgo._line_quantity(item)
-            name = str(item.get("name") or item.get("productName") or "Ürün")
+            name = tgo.line_name(item) or "Ürün"
             revenue = float(item.get("totalPrice") or item.get("total") or item.get("price") or 0)
             lines.append({"key": str(item.get("barcode") or item.get("productId") or name), "name": name,
                           "quantity": qty, "revenue": revenue if revenue and qty <= 1 else revenue * qty})
@@ -2930,7 +2930,7 @@ def _tgo_detail_items(raw: dict) -> list:
             continue
         details = [_display_detail_text(part) for part in tgo._line_detail_parts(line)]
         items.append({
-            "name": line.get("name") or line.get("productName") or "?",
+            "name": tgo.line_name(line),
             "quantity": tgo._line_quantity(line),
             "price": _tgo_line_price_text(line),
             "note": "",

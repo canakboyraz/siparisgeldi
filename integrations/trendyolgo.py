@@ -251,7 +251,7 @@ def summarize_items(order: dict, max_items: int = 4) -> str:
     parts = []
     for ln in lines[:max_items]:
         qty = _line_quantity(ln)
-        item = f"{ln.get('name', '?')} x{qty}"
+        item = f"{line_name(ln)} x{qty}"
         details = _line_detail_parts(ln)
         if details:
             item += " (" + "; ".join(details) + ")"
@@ -288,11 +288,24 @@ def _line_quantity(line: dict) -> int:
 
 
 def _name_from_dict(data: dict) -> str:
+    if not isinstance(data, dict):
+        return ""
     for key in ("name", "productName", "itemName", "title"):
         value = _clean_text(data.get(key))
         if value:
             return value
+    product = data.get("product") or data.get("productInfo") or data.get("productDetail")
+    if isinstance(product, dict):
+        for key in ("productSaleName", "name", "productName", "itemName", "title"):
+            value = _clean_text(product.get(key))
+            if value:
+                return value
     return ""
+
+
+def line_name(line: dict) -> str:
+    """Yemek ve Market payload'larında ürün adını ortak şekilde okur."""
+    return _name_from_dict(line) or _clean_text(line.get("barcode")) or "?"
 
 
 def _note_parts(data: dict) -> list:
@@ -407,7 +420,7 @@ def format_new_order_message(order: dict) -> str:
     items_text = ""
     for ln in order.get("lines", []):
         qty = _line_quantity(ln)
-        items_text += f"  • {ln.get('name', '?')} x{qty}\n"
+        items_text += f"  • {line_name(ln)} x{qty}\n"
         for detail in _line_detail_parts(ln):
             if detail.startswith("Cikarilacak:"):
                 items_text += f"    ❌ {detail.replace('Cikarilacak:', 'Çıkarılacak:', 1)}\n"
