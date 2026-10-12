@@ -1527,6 +1527,10 @@ def product_costs():
     daily_rows = sorted(daily.values(), key=lambda row: row["date"], reverse=True)
     for row in daily_rows:
         row["profit"] = row["revenue"] - row["cost"] - row["commission"] - row["expense"]
+        # Aylık sabit gideri ilgili ayın günlerine eşit paylaştır.
+        expense_month = row["date"].replace(day=1)
+        monthly_amount = monthly_allocations.get(expense_month, 0.0)
+        row["monthly_expense"] = monthly_amount / monthrange(expense_month.year, expense_month.month)[1]
         general_expenses = row["advertising_expense"] + row["monthly_expense"]
         row["estimated_profit"] = row["profit"] + general_expenses
         row["margin"] = row["profit"] / row["revenue"] * 100 if row["revenue"] else 0
