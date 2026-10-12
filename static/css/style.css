@@ -248,6 +248,13 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .monthly-filter-form .field{margin:0}
 .daily-products{margin:0 1rem 1rem;padding:.8rem 1rem;border-left:3px solid var(--accent);background:var(--surface-2);overflow-x:auto}
 .daily-products table{min-width:560px;margin-top:.55rem}
+.daily-breakdown{margin:0 1rem .8rem;padding:.8rem 1rem;border-left:3px solid var(--brand);background:var(--surface-2);overflow-x:auto}
+.daily-breakdown-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:.55rem;margin:.55rem 0 .8rem}
+.daily-breakdown-grid>div{display:flex;flex-direction:column;gap:.15rem;padding:.55rem .65rem;border:1px solid var(--line);background:#fff;border-radius:8px}
+.daily-breakdown-grid span{color:var(--muted);font-size:.78rem;font-weight:700}
+.daily-breakdown-grid strong{font-size:.92rem}
+.daily-subtitle{margin:.8rem 0 .35rem;font-weight:800}
+.daily-breakdown table{min-width:560px}
 .bulk-cost-form{padding:0;overflow:hidden}
 .bulk-cost-form table{min-width:520px}
 .bulk-cost-form input[type=number]{width:150px}
@@ -636,6 +643,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .card table.mobile-active-table td:empty::after{content:"-";color:var(--muted)}
   .note-cell{max-width:none;text-align:right;white-space:normal;overflow:visible;text-overflow:clip}
   .pagination{justify-content:center}
+  .daily-breakdown-grid{grid-template-columns:1fr 1fr}
+  .daily-breakdown,.daily-products{margin-left:.5rem;margin-right:.5rem;padding:.7rem .75rem}
   .total-box{min-width:0}
   .detail-item{padding:.85rem}
   .item-main{align-items:flex-start}

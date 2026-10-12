@@ -36,6 +36,17 @@ ORDER_POPUP_SOUND_OPTIONS = [
     ("short", "Kısa uyarı"),
     ("bell", "Zil tonu"),
 ]
+
+
+def _turkey_calendar_date(value):
+    """Return the Turkey calendar date for a stored UTC/aware datetime."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = pytz.utc.localize(value)
+    return value.astimezone(TURKEY_TZ).date()
+
+
 RECEIPT_WIDTH_OPTIONS = [
     ("58mm", "58 mm termal yazıcı"),
     ("80mm", "80 mm termal yazıcı"),
@@ -1399,7 +1410,10 @@ def product_costs():
             except (TypeError, ValueError):
                 pass
     order_counts["genel"] = sum(order_counts.values())
-    expense_total = sum(e.amount * order_counts.get(e.platform, 0) if e.expense_type == "per_order" else e.amount for e in expenses)
+    other_expense_total = sum(
+        e.amount * order_counts.get(e.platform, 0) if e.expense_type == "per_order" else e.amount
+        for e in expenses
+    )
     period_end_date = (until - timedelta(microseconds=1)).date()
     month_start = since.date().replace(day=1)
     last_month_start = period_end_date.replace(day=1)
@@ -1409,17 +1423,18 @@ def product_costs():
         MonthlyExpense.month <= last_month_start,
     ).order_by(MonthlyExpense.month.desc(), MonthlyExpense.name.asc()).all()
     monthly_expense_total = 0.0
-    monthly_allocations = {}
+    monthly_daily_allocations = {}
     for expense in monthly_expenses:
         month_days = monthrange(expense.month.year, expense.month.month)[1]
         month_end = expense.month + timedelta(days=month_days)
         overlap_start = max(since.date(), expense.month)
-        overlap_end = min(until.date(), month_end)
+        # The daily table is inclusive of period_end_date, so the monthly
+        # total must count that final calendar day as well.
+        overlap_end = min(period_end_date + timedelta(days=1), month_end)
         overlap_days = max(0, (overlap_end - overlap_start).days)
-        prorated = expense.amount * overlap_days / month_days
-        monthly_expense_total += prorated
-        monthly_allocations[expense.month] = monthly_allocations.get(expense.month, 0.0) + prorated
-    expense_total += monthly_expense_total
+        daily_amount = expense.amount / month_days
+        monthly_expense_total += daily_amount * overlap_days
+        monthly_daily_allocations.setdefault(expense.month, []).append((expense.name, daily_amount))
     commissions = {r.platform: r.percentage for r in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
     commission_total = sum(r["revenue"] * commissions.get(r["platform"], 0) / 100 for r in products.values())
     revenue_total = sum(r["revenue"] for r in products.values())
@@ -1431,8 +1446,8 @@ def product_costs():
             continue
         if _is_cancelled_order(order) or _is_refunded_order(order):
             continue
-        day = order.created_at.date()
-        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0, "advertising_expense": 0.0})
+        day = _turkey_calendar_date(order.created_at)
+        row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0, "other_expense": 0.0, "other_expense_details": [], "advertising_expense": 0.0, "advertising_expense_details": [], "monthly_expense": 0.0, "monthly_expense_details": []})
         row["orders"] += 1
         row["platform_orders"][order.platform] = row["platform_orders"].get(order.platform, 0) + 1
         data = _parse_raw_json(order.raw_json)
@@ -1455,7 +1470,7 @@ def product_costs():
             except (TypeError, ValueError):
                 continue
             day = report.day
-            row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0, "advertising_expense": 0.0})
+            row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0, "other_expense": 0.0, "other_expense_details": [], "advertising_expense": 0.0, "advertising_expense_details": [], "monthly_expense": 0.0, "monthly_expense_details": []})
             valid_orders = max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
             row["orders"] += valid_orders
             row["platform_orders"]["adisyo"] = row["platform_orders"].get("adisyo", 0) + valid_orders
@@ -1486,26 +1501,41 @@ def product_costs():
         advertising_expenses = []
         flash("Reklam giderleri şu an okunamadı. Sayfa diğer bilgilerle açıldı.", "warning")
     advertising_total = sum(expense.amount for expense in advertising_expenses)
-    expense_total += advertising_total
     for expense in advertising_expenses:
         row = daily.setdefault(expense.day, {"date": expense.day, "orders": 0,
                                              "platform_orders": {}, "platform_revenue": {},
                                              "products": {}, "revenue": 0.0, "cost": 0.0,
                                              "commission": 0.0, "expense": 0.0,
-                                             "advertising_expense": 0.0})
+                                             "other_expense": 0.0, "other_expense_details": [],
+                                             "advertising_expense": 0.0, "advertising_expense_details": [],
+                                             "monthly_expense": 0.0, "monthly_expense_details": []})
         row["advertising_expense"] += expense.amount
-        row["expense"] += expense.amount
+        row["advertising_expense_details"].append({"name": "Günlük reklam", "amount": expense.amount})
     for row in daily.values():
+        row.setdefault("other_expense", 0.0)
+        row.setdefault("other_expense_details", [])
+        row.setdefault("advertising_expense_details", [])
         row.setdefault("monthly_expense", 0.0)
-    for expense_month, amount in monthly_allocations.items():
+        row.setdefault("monthly_expense_details", [])
+    for expense_month, allocations in monthly_daily_allocations.items():
+        month_days = monthrange(expense_month.year, expense_month.month)[1]
+        first_day = max(since.date(), expense_month)
+        last_day = min(period_end_date, expense_month + timedelta(days=month_days - 1))
+        day = first_day
+        while day <= last_day:
+            daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {},
+                                    "platform_revenue": {}, "products": {}, "revenue": 0.0,
+                                    "cost": 0.0, "commission": 0.0, "expense": 0.0,
+                                    "other_expense": 0.0, "other_expense_details": [],
+                                    "advertising_expense": 0.0, "advertising_expense_details": [],
+                                    "monthly_expense": 0.0, "monthly_expense_details": []})
+            day += timedelta(days=1)
         rows_in_month = [row for row in daily.values()
                          if row["date"].year == expense_month.year and row["date"].month == expense_month.month]
-        month_revenue = sum(row["revenue"] for row in rows_in_month)
         for row in rows_in_month:
-            share = row["revenue"] / month_revenue if month_revenue else 1 / len(rows_in_month)
-            allocated = amount * share
-            row["monthly_expense"] += allocated
-            row["expense"] += allocated
+            for _name, daily_amount in allocations:
+                row["monthly_expense"] += daily_amount
+                row["monthly_expense_details"].append({"name": _name, "amount": daily_amount})
     # Komisyonu günlük/platform cirosu tamamlandıktan sonra bir kez hesapla.
     for row in daily.values():
         row.setdefault("advertising_expense", 0.0)
@@ -1513,24 +1543,49 @@ def product_costs():
             revenue * commissions.get(platform, 0) / 100
             for platform, revenue in row["platform_revenue"].items()
         )
-    fixed_expenses = 0.0
     for expense in expenses:
         if expense.expense_type == "per_order":
             for row in daily.values():
                 count = row["orders"] if expense.platform == "genel" else row["platform_orders"].get(expense.platform, 0)
-                row["expense"] += expense.amount * count
-        else:
-            fixed_expenses += expense.amount
-    if daily and fixed_expenses:
-        for row in daily.values():
-            row["expense"] += fixed_expenses * row["revenue"] / revenue_total if revenue_total else fixed_expenses / len(daily)
+                allocated = expense.amount * count
+                row["other_expense"] += allocated
+                if allocated:
+                    row["other_expense_details"].append({
+                        "name": expense.name,
+                        "amount": allocated,
+                        "description": f"{count} sipariş x {expense.amount:.2f} TL",
+                    })
+    if daily:
+        for expense in expenses:
+            if expense.expense_type == "per_order":
+                continue
+            matching_rows = [
+                row for row in daily.values()
+                if expense.platform == "genel" or row["platform_revenue"].get(expense.platform, 0) > 0
+            ]
+            matching_revenue = sum(
+                row["revenue"] if expense.platform == "genel" else row["platform_revenue"].get(expense.platform, 0)
+                for row in matching_rows
+            )
+            for row in matching_rows:
+                if matching_revenue:
+                    base = row["revenue"] if expense.platform == "genel" else row["platform_revenue"].get(expense.platform, 0)
+                    allocated = expense.amount * base / matching_revenue
+                else:
+                    allocated = expense.amount / len(matching_rows) if matching_rows else 0.0
+                row["other_expense"] += allocated
+                if allocated:
+                    row["other_expense_details"].append({
+                        "name": expense.name,
+                        "amount": allocated,
+                        "description": "Ciro oranına göre dağıtıldı",
+                    })
+    expense_total = other_expense_total + monthly_expense_total + advertising_total
     daily_rows = sorted(daily.values(), key=lambda row: row["date"], reverse=True)
     for row in daily_rows:
+        # Keep the displayed expense columns and profit calculation in sync.
+        row["expense"] = row["other_expense"] + row["advertising_expense"] + row["monthly_expense"]
         row["profit"] = row["revenue"] - row["cost"] - row["commission"] - row["expense"]
-        # Aylık sabit gideri ilgili ayın günlerine eşit paylaştır.
-        expense_month = row["date"].replace(day=1)
-        monthly_amount = monthly_allocations.get(expense_month, 0.0)
-        row["monthly_expense"] = monthly_amount / monthrange(expense_month.year, expense_month.month)[1]
         general_expenses = row["advertising_expense"] + row["monthly_expense"]
         row["estimated_profit"] = row["profit"] + general_expenses
         row["margin"] = row["profit"] / row["revenue"] * 100 if row["revenue"] else 0
