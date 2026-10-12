@@ -23,6 +23,7 @@ class User(UserMixin, db.Model):
     plan          = db.Column(db.String(20), default="free")   # free | pro
     pro_started_at = db.Column(db.DateTime)
     pro_expires_at = db.Column(db.DateTime)
+    pro_expiry_notice_sent_on = db.Column(db.Date)
     feature_whatsapp = db.Column(db.Boolean, default=False)
     feature_multi_platform = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)

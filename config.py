@@ -67,8 +67,13 @@ class Config:
     GETIR_APP_SECRET_KEY = os.environ.get("GETIR_APP_SECRET_KEY", "")
     GETIR_WEBHOOK_API_KEY = os.environ.get("GETIR_WEBHOOK_API_KEY", "")
 
-    # Yemeksepeti webhook
+    # Yemeksepeti Partner API (geriye donuk) ve POS Integration Middleware
     YEMEKSEPETI_WEBHOOK_TOKEN = os.environ.get("YEMEKSEPETI_WEBHOOK_TOKEN", "")
+    YEMEKSEPETI_POS_USERNAME = os.environ.get("YEMEKSEPETI_POS_USERNAME", "")
+    YEMEKSEPETI_POS_PASSWORD = os.environ.get("YEMEKSEPETI_POS_PASSWORD", "")
+    YEMEKSEPETI_POS_JWT_SECRET = os.environ.get("YEMEKSEPETI_POS_JWT_SECRET", "")
+    YEMEKSEPETI_POS_CHAIN_CODE = os.environ.get("YEMEKSEPETI_POS_CHAIN_CODE", "")
+    YEMEKSEPETI_POS_API_BASE = os.environ.get("YEMEKSEPETI_POS_API_BASE", "")
 
     # Adisyo (rapor amaçlı, webhook kullanılmadan okuma)
     ADISYO_API_BASE = os.environ.get("ADISYO_API_BASE", "https://ext.adisyo.com/api/External/v2")
@@ -101,6 +106,9 @@ class Config:
     WHATSAPP_TEMPLATE_LANG  = os.environ.get("WHATSAPP_TEMPLATE_LANG", "tr")
     # Günlük/haftalık/aylık rapor için AYRI Meta onaylı şablon (3 değişken)
     WHATSAPP_REPORT_TEMPLATE_NAME = os.environ.get("WHATSAPP_REPORT_TEMPLATE_NAME", "gunluk_raporr")
+    # Pro bitiş uyarısı için Meta onaylı utility şablonu (3 değişken)
+    WHATSAPP_SUBSCRIPTION_TEMPLATE_NAME = os.environ.get("WHATSAPP_SUBSCRIPTION_TEMPLATE_NAME", "abonelik_uyarisi")
+    WHATSAPP_SUBSCRIPTION_TEMPLATE_LANG = os.environ.get("WHATSAPP_SUBSCRIPTION_TEMPLATE_LANG", "tr")
 
     # Scheduler'ı web süreci içinde başlat (tek instance dev için). Prod'da
     # ayrı worker süreci öneririz → RUN_SCHEDULER=0 yapıp worker.py'yi ayrı çalıştır.

@@ -52,6 +52,14 @@ REFUNDED_ORDER_STATUSES = {
 }
 
 
+def _turkey_calendar_date(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = pytz.utc.localize(value)
+    return value.astimezone(TURKEY_TZ).date()
+
+
 def _hb_api_base(environment: str) -> str:
     if environment == "test":
         return current_app.config.get("HEPSIBURADA_API_BASE_TEST")
@@ -653,6 +661,69 @@ def send_monthly_reports(app):
                 print(f"[RAPOR] Aylık hata user={intg.user_id}: {e}")
 
 
+def send_subscription_expiry_warnings(app):
+    """Pro bitimine 7 gün veya daha az kalanlara günde bir kez WhatsApp gönder."""
+    with app.app_context():
+        today = datetime.now(TURKEY_TZ).date()
+        now = datetime.utcnow()
+        template = current_app.config.get(
+            "WHATSAPP_SUBSCRIPTION_TEMPLATE_NAME", "abonelik_uyarisi"
+        )
+        lang = current_app.config.get("WHATSAPP_SUBSCRIPTION_TEMPLATE_LANG", "tr")
+        domain = (current_app.config.get("APP_DOMAIN") or "siparisgeldi.net").strip()
+        domain = domain.removeprefix("https://").removeprefix("http://").rstrip("/")
+        subscription_url = f"https://{domain}/panel/abonelik"
+
+        users = User.query.filter(
+            User.plan == "pro",
+            User.pro_expires_at.isnot(None),
+            User.pro_expires_at > now,
+        ).all()
+        for user in users:
+            expiry_date = _turkey_calendar_date(user.pro_expires_at)
+            days_left = (expiry_date - today).days if expiry_date else None
+            channel = (user.notification_channel or "telegram").lower()
+            if not (expiry_date and 0 <= days_left <= 7):
+                continue
+            if user.pro_expiry_notice_sent_on == today:
+                continue
+            if channel not in ("whatsapp", "both") or not user.whatsapp_number:
+                continue
+            if not user.has_whatsapp_access:
+                continue
+
+            previous_status_at = user.whatsapp_last_status_at
+            try:
+                sent = send_to_user(
+                    user,
+                    f"🔔 Pro aboneliğinizin bitmesine {days_left} gün kaldı. "
+                    f"Bitiş tarihi: {expiry_date.strftime('%d.%m.%Y')}. "
+                    f"Yenilemek için: {subscription_url}",
+                    wa=[days_left, expiry_date.strftime("%d.%m.%Y"), subscription_url],
+                    wa_template=template,
+                    source="abonelik",
+                )
+                # Both kanalında Telegram başarılı olsa bile WhatsApp başarısız
+                # olabilir; yalnızca WhatsApp'ın Meta'ya kabulü sonrası günü işaretle.
+                whatsapp_accepted = (
+                    channel == "whatsapp" and sent
+                ) or (
+                    channel == "both"
+                    and user.whatsapp_last_status == "accepted"
+                    and user.whatsapp_last_status_at != previous_status_at
+                )
+                if whatsapp_accepted:
+                    user.pro_expiry_notice_sent_on = today
+                    db.session.commit()
+                    print(
+                        f"[ABONELİK] WhatsApp uyarısı gönderildi user={user.id} "
+                        f"days_left={days_left}"
+                    )
+            except Exception as exc:
+                db.session.rollback()
+                print(f"[ABONELİK] Uyarı hatası user={user.id}: {exc}")
+
+
 # ── Scheduler kurulumu ──────────────────────────────────────────────────────
 
 def _process_tgo(intg):
@@ -937,6 +1008,9 @@ def start_scheduler(app):
     # Aylık — ayın 1'i 08:00 (önceki ay)
     scheduler.add_job(send_monthly_reports, "cron", day=1, hour=8, minute=0,
                       args=[app], id="monthly_report", replace_existing=True)
+
+    scheduler.add_job(send_subscription_expiry_warnings, "cron", hour=9, minute=0,
+                      args=[app], id="subscription_expiry_warning", replace_existing=True)
 
     scheduler.start()
     print(f"[SCHEDULER] Başlatıldı ✅ (polling: {interval}s)")

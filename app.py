@@ -32,6 +32,7 @@ def _ensure_schema():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_multi_platform BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_started_at TIMESTAMP",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expiry_notice_sent_on DATE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tgo_store_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_warehouse_id VARCHAR(50)",
@@ -94,6 +95,8 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE users ADD COLUMN pro_started_at DATETIME")
             if "pro_expires_at" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN pro_expires_at DATETIME")
+            if "pro_expiry_notice_sent_on" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN pro_expiry_notice_sent_on DATE")
             if "tgo_store_id" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN tgo_store_id VARCHAR(50)")
             if "migros_group_id" not in intg_cols:
