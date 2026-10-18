@@ -1,7 +1,7 @@
 {% extends "dashboard/_layout.html" %}
 {% block title %}WhatsApp · SiparişGeldi{% endblock %}
 {% block panel %}
-<div class="page-head"><h1>🟢 WhatsApp bağlantısı</h1></div>
+<div class="page-head"><h1>WhatsApp bağlantısı</h1></div>
 
 <div class="card" style="max-width:560px">
   <div class="card-title">WhatsApp numaran</div>
@@ -37,16 +37,16 @@
 
 {% if current_user.whatsapp_number %}
 <div class="card" style="max-width:560px;margin-top:1rem">
-  <div class="card-title" style="font-size:.95rem">✅ WhatsApp numaran kayıtlı</div>
+  <div class="card-title" style="font-size:.95rem">WhatsApp numaran kayıtlı</div>
   <p class="muted" style="margin:.2rem 0 1rem"><b>{{ current_user.whatsapp_number }}</b> numarasına
      test mesajı gönderip kurulumu doğrulayabilirsin.</p>
   <form method="post" action="{{ url_for('dashboard.test_whatsapp') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-ghost" type="submit" {{ 'disabled' if not can_use_whatsapp }}>🔔 WhatsApp test mesajı gönder</button>
+    <button class="btn btn-ghost" type="submit" {{ 'disabled' if not can_use_whatsapp }}>WhatsApp test mesajı gönder</button>
   </form>
   <form method="post" action="{{ url_for('dashboard.test_whatsapp_report') }}" style="margin-top:.6rem">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-ghost" type="submit" {{ 'disabled' if not can_use_whatsapp }}>📊 WhatsApp rapor test mesajı gönder</button>
+    <button class="btn btn-ghost" type="submit" {{ 'disabled' if not can_use_whatsapp }}>WhatsApp rapor test mesajı gönder</button>
   </form>
   {% if not can_use_whatsapp %}
   <p class="hint">Test mesajı ve WhatsApp bildirimi Pro planda kullanılabilir.</p>

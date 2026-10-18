@@ -2,7 +2,7 @@
 {% set active = 'profile' %}
 {% block title %}Profil · SiparişGeldi{% endblock %}
 {% block panel %}
-<div class="page-head"><h1>⚙️ Profil</h1></div>
+<div class="page-head"><h1>Profil</h1></div>
 
 <div class="card" style="max-width:520px">
   <form method="post">
@@ -20,8 +20,8 @@
     <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
     <div class="card-title" style="font-size:.95rem">Bildirim kanalları</div>
     <p class="hint" style="margin-bottom:0">Bildirimlerini nereden alacağını sol menüdeki
-       <a href="{{ url_for('dashboard.connect_telegram') }}" style="color:var(--brand);font-weight:700">💬 Telegram</a>
-       ve <a href="{{ url_for('dashboard.connect_whatsapp') }}" style="color:var(--brand);font-weight:700">🟢 WhatsApp</a>
+       <a href="{{ url_for('dashboard.connect_telegram') }}" style="color:var(--brand);font-weight:700">Telegram</a>
+       ve <a href="{{ url_for('dashboard.connect_whatsapp') }}" style="color:var(--brand);font-weight:700">WhatsApp</a>
        sayfalarından ayarlayabilirsin.</p>
 
     <hr style="border:none;border-top:1px solid var(--line);margin:1.2rem 0">
@@ -81,7 +81,7 @@
      kurulumunu doğrula. Önce yukarıdaki ayarları kaydettiğinden emin ol.</p>
   <form method="post" action="{{ url_for('dashboard.send_test_notification') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-ghost" type="submit">🔔 Test bildirimi gönder</button>
+    <button class="btn btn-ghost" type="submit">Test bildirimi gönder</button>
   </form>
 </div>
 <script>

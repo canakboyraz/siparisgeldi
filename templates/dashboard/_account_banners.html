@@ -1,17 +1,18 @@
+{% from "_icons.html" import icon %}
 {% if current_user.is_authenticated %}
   {% if current_user.is_trial_active and current_user.pro_expires_at %}
   {% set trial_left = [((current_user.pro_expires_at.date() - now().date()).days), 0]|max %}
   <div class="account-banner {{ 'warn' if trial_left <= 3 else '' }}">
-    <span>🎁 <strong>Pro deneme:</strong> {{ trial_left }} gün kaldı ({{ current_user.pro_expires_at.strftime('%d.%m.%Y') }}). Deneme bitince ücretsiz plana geçersin: Telegram + 1 platform açık kalır.</span>
-    {% if request.endpoint != 'dashboard.subscription' %}<a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.subscription') }}">Pro'ya geç</a>{% endif %}
+    <span>{{ icon('gift', 17) }}<strong>Pro deneme: {{ trial_left }} gün kaldı.</strong> <span class="banner-more">Bitince Telegram ve 1 platform açık kalır.</span></span>
+    {% if request.endpoint != 'dashboard.subscription' %}<a class="btn btn-accent btn-sm" href="{{ url_for('dashboard.subscription') }}">Pro'ya geç</a>{% endif %}
   </div>
   {% endif %}
   {% if mail_configured and not current_user.email_verified and request.endpoint != 'dashboard.index' %}
   <div class="account-banner">
-    <span>✉️ E-posta adresin (<strong>{{ current_user.email }}</strong>) henüz doğrulanmadı.</span>
+    <span>{{ icon('mail', 17) }}E-posta adresin doğrulanmadı.</span>
     <form method="post" action="{{ url_for('auth.resend_verification') }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-ghost btn-sm" type="submit">Bağlantıyı tekrar gönder</button>
+      <button class="btn btn-ghost btn-sm" type="submit">Tekrar gönder</button>
     </form>
   </div>
   {% endif %}

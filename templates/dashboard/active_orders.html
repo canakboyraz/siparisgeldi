@@ -1,44 +1,41 @@
 {% extends "dashboard/_layout.html" %}
 {% block title %}Aktif Siparişler · SiparişGeldi{% endblock %}
 {% block panel %}
-<div class="order-sound-bar">
-  <button class="btn btn-ghost order-sound-toggle" id="order-sound-toggle" type="button" aria-pressed="false">Sesi a&#231;</button>
-</div>
+{% from "_icons.html" import icon %}
+{% set fargs = dict(platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) %}
 <div class="page-head">
-  <h1>Aktif Siparişler</h1>
-  <a class="btn btn-ghost" href="{{ url_for('dashboard.orders') }}">Sipariş arşivi</a>
+  <div>
+    <h1>Aktif siparişler</h1>
+    <p class="muted page-sub">{{ orders.total }} sipariş{% if filtered_total %} · toplam {{ tl_amount(filtered_total) }}{% endif %}</p>
+  </div>
+  <div class="inline">
+    <button class="icon-btn order-sound-toggle" id="order-sound-toggle" type="button" aria-pressed="false" title="Yeni sipariş sesi">
+      <span class="sound-on">{{ icon('bell', 18) }}</span><span class="sound-off">{{ icon('bell-off', 18) }}</span><span class="sound-label">Ses kapalı</span>
+    </button>
+    <a class="btn btn-ghost" href="{{ url_for('dashboard.orders') }}">{{ icon('list', 16) }}Arşiv</a>
+  </div>
 </div>
 
-<div class="stats">
-  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='aktif', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
-    <div class="v">{{ counts.active }}</div><div class="l">Aktif sipariş</div>
+<nav class="status-tabs" aria-label="Durum">
+  {% set tabs = [('aktif','Aktif',counts.active,''),('bekleyen','Kabul bekleyen',counts.pending,''),('geciken','2 dk+ bekleyen',counts.warning,'hot'),('sorunlu','İptal / sorunlu',counts.problem,''),('iptal','İptal',counts.cancelled,''),('iade','İade',counts.refunded,'')] %}
+  {% for key, label, count, tone in tabs %}
+  <a href="{{ url_for('dashboard.active_orders', durum=key, **fargs) }}" class="status-tab {{ 'active' if filters.durum == key }} {{ 'is-hot' if tone == 'hot' and count }}" {% if filters.durum == key %}aria-current="page"{% endif %}>
+    <span>{{ label }}</span><b>{{ count }}</b>
   </a>
-  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='bekleyen', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
-    <div class="v">{{ counts.pending }}</div><div class="l">Kabul bekleyen</div>
-  </a>
-  <a class="stat stat-link {{ 'danger' if counts.warning else '' }}" href="{{ url_for('dashboard.active_orders', durum='geciken', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
-    <div class="v">{{ counts.warning }}</div><div class="l">2 dk üstü bekleyen</div>
-  </a>
-  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='sorunlu', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
-    <div class="v">{{ counts.problem }}</div><div class="l">İptal / sorunlu</div>
-  </a>
-  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='iptal', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
-    <div class="v">{{ counts.cancelled }}</div><div class="l">İptal</div>
-  </a>
-  <a class="stat stat-link" href="{{ url_for('dashboard.active_orders', durum='iade', platform=filters.platform, q=filters.q, date_from=filters.date_from, date_to=filters.date_to) }}">
-    <div class="v">{{ counts.refunded }}</div><div class="l">İade</div>
-  </a>
-</div>
+  {% endfor %}
+</nav>
 
-<div class="card">
+<details class="filter-panel" {{ 'open' if filters.q or filters.platform or filters.date_from or filters.date_to }}>
+  <summary>{{ icon('filter', 16) }}Filtrele{% if filters.q or filters.platform or filters.date_from or filters.date_to %}<span class="badge green">açık</span>{% endif %}</summary>
   <form method="get" class="filters active-filters">
+    <input type="hidden" name="durum" value="{{ filters.durum }}">
     <div class="field">
-      <label>Arama</label>
-      <input type="text" name="q" value="{{ filters.q }}" placeholder="Sipariş no veya not">
+      <label for="f-q">Arama</label>
+      <input id="f-q" type="text" name="q" value="{{ filters.q }}" placeholder="Sipariş no veya not">
     </div>
     <div class="field">
-      <label>Platform</label>
-      <select name="platform">
+      <label for="f-platform">Platform</label>
+      <select id="f-platform" name="platform">
         <option value="">Tüm platformlar</option>
         <option value="trendyolgo" {{ 'selected' if filters.platform == 'trendyolgo' }}>Trendyol Go</option>
         <option value="trendyolgo_market" {{ 'selected' if filters.platform == 'trendyolgo_market' }}>Trendyol Go Market</option>
@@ -49,105 +46,65 @@
       </select>
     </div>
     <div class="field">
-      <label>Durum</label>
-      <select name="durum">
-        {% for value, label in groups %}
-        <option value="{{ value }}" {{ 'selected' if filters.durum == value }}>{{ label }}</option>
-        {% endfor %}
-      </select>
+      <label for="f-from">Başlangıç</label>
+      <input id="f-from" type="date" name="date_from" value="{{ filters.date_from }}">
     </div>
     <div class="field">
-      <label>Başlangıç</label>
-      <input type="date" name="date_from" value="{{ filters.date_from }}">
-    </div>
-    <div class="field">
-      <label>Bitiş</label>
-      <input type="date" name="date_to" value="{{ filters.date_to }}">
+      <label for="f-to">Bitiş</label>
+      <input id="f-to" type="date" name="date_to" value="{{ filters.date_to }}">
     </div>
     <div class="field actions">
-      <button class="btn btn-primary" type="submit">Filtrele</button>
+      <button class="btn btn-primary" type="submit">Uygula</button>
       <a class="btn btn-ghost" href="{{ url_for('dashboard.active_orders') }}">Temizle</a>
     </div>
   </form>
-</div>
+</details>
 
-<div class="card">
-  <div class="section-head">
-    <div>
-      <div class="card-title">Operasyon listesi</div>
-      <div class="muted">
-        {{ orders.total }} kayıt gösteriliyor
-        {% if filters.date_from or filters.date_to %}
-        · {{ filters.date_from or 'ilk kayıt' }} - {{ filters.date_to or 'bugün' }}
-        {% endif %}
-      </div>
-    </div>
-    <div class="inline">
-      {% if filters.durum == 'aktif' %}
-      <form method="post" action="{{ url_for('dashboard.clear_active_orders') }}" onsubmit="return confirm('Aktif siparişler bu ekrandan kaldırılacak. Sipariş geçmişi ve raporlar korunur. Devam edilsin mi?');">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-ghost btn-sm" type="submit" {% if not rows %}disabled{% endif %}>Aktifleri temizle</button>
-      </form>
-      {% endif %}
-      {% if counts.warning %}
-      <span class="badge red">Acil kontrol gerekli</span>
-      {% endif %}
-      <div class="total-box">
-        <span>Toplam tutar</span>
-        <strong>{{ '%.2f'|format(filtered_total or 0) }} ₺</strong>
-      </div>
-    </div>
+<section class="ticket-board">
+  {% if filters.durum == 'aktif' and rows %}
+  <div class="ticket-board-head">
+    <form method="post" action="{{ url_for('dashboard.clear_active_orders') }}" onsubmit="return confirm('Aktif siparişler bu ekrandan kaldırılacak. Sipariş geçmişi ve raporlar korunur. Devam edilsin mi?');">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-ghost btn-sm" type="submit">Ekranı temizle</button>
+    </form>
   </div>
+  {% endif %}
 
   {% if rows %}
   <div class="active-order-grid">
     {% for row in rows %}
     {% set o = row.order %}
-    <article class="active-order-card {{ 'active-order-card-alert' if row.is_unaccepted_warning else '' }}">
-      <div class="active-order-card-head">
+    <article class="ticket {{ 'ticket-alert' if row.is_unaccepted_warning else '' }} {{ 'ticket-pending' if row.quick_action else '' }}">
+      <header class="ticket-head">
         <div>
-          <a class="table-link active-order-number" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">#{{ o.order_number or o.external_id }}</a>
-          <div class="active-order-meta">
-            <span>{{ platform_label(o.platform) }}</span>
-            <span>{{ o.created_at.strftime('%d.%m.%Y %H:%M') if o.created_at else '—' }}</span>
-          </div>
+          <a class="ticket-no" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">#{{ o.order_number or o.external_id }}</a>
+          <div class="ticket-meta">{{ platform_label(o.platform) }}</div>
         </div>
-        <span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span>
-      </div>
-
-      {% if row.is_unaccepted_warning %}<div class="active-order-warning"><span class="status-dot off"></span>Kabul gecikti</div>{% endif %}
-
-      <div class="active-order-items">
-        <div class="active-order-label">Ürünler</div>
-        <div>{{ row.items_summary or 'Ürün bilgisi yok' }}</div>
-      </div>
-
-      {% if o.customer_note %}
-      <div class="active-order-note"><span class="active-order-label">Not</span><span>{{ o.customer_note }}</span></div>
-      {% endif %}
-
-      <div class="active-order-card-foot">
-        <div>
-          <span class="active-order-label">Toplam</span>
-          <strong class="active-order-total">{{ '%.2f'|format(o.total_price or 0) }} ₺</strong>
+        <div class="ticket-time {{ 'is-late' if row.is_unaccepted_warning }}" title="{{ o.created_at.strftime('%d.%m.%Y %H:%M') if o.created_at else '' }}">
+          {{ icon('clock', 15) }}<span>{% if row.age_minutes < 60 %}{{ row.age_minutes }} dk{% else %}{{ o.created_at.strftime('%H:%M') if o.created_at else '—' }}{% endif %}</span>
         </div>
-        <div class="active-order-actions">
+      </header>
+      <div class="ticket-status"><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span>{% if row.is_unaccepted_warning %}<span class="ticket-late">{{ icon('alert', 14) }}Kabul gecikti</span>{% endif %}</div>
+      <div class="ticket-items">{{ row.items_summary or 'Ürün bilgisi yok' }}</div>
+      {% if o.customer_note %}<div class="ticket-note"><b>Not:</b> {{ o.customer_note }}</div>{% endif %}
+      <footer class="ticket-foot">
+        <strong class="ticket-total">{{ tl_amount(o.total_price or 0) }}</strong>
+        <div class="ticket-actions">
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">Detay</a>
           {% if row.quick_action %}
           <form method="post" action="{{ url_for(row.quick_action.endpoint, order_id=o.id) }}" onsubmit="this.querySelector('button').disabled=true;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="{{ row.quick_action.action }}">
             <input type="hidden" name="return_to" value="active_orders">
             <input type="hidden" name="return_path" value="{{ request.full_path }}">
-            <button class="btn btn-primary btn-sm" type="submit">{{ row.quick_action.label }}</button>
+            <button class="btn btn-accent" type="submit">{{ icon('check', 17) }}{{ row.quick_action.label }}</button>
           </form>
           {% endif %}
-          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">Detay</a>
         </div>
-      </div>
+      </footer>
     </article>
     {% endfor %}
   </div>
-
   {% if orders.pages > 1 %}
   <div class="pagination">
     {% if orders.has_prev %}
@@ -160,9 +117,13 @@
   </div>
   {% endif %}
   {% else %}
-  <div class="empty">Bu filtreye uygun aktif sipariş yok.</div>
+  <div class="empty-state">
+    <div class="empty-icon">{{ icon('receipt', 26) }}</div>
+    <strong>{{ 'Şu an bekleyen sipariş yok' if filters.durum == 'aktif' else 'Bu filtrede sipariş yok' }}</strong>
+    <p class="muted">Yeni sipariş geldiğinde burada fiş olarak belirir{% if current_user.order_popup_sound_enabled %} ve sesli uyarı çalar{% endif %}.</p>
+  </div>
   {% endif %}
-</div>
+</section>
 
 <div class="order-alert-backdrop" id="order-alert-backdrop" hidden>
   <div class="order-alert" role="alertdialog" aria-modal="true" aria-labelledby="order-alert-title">
@@ -204,7 +165,9 @@
 
     function updateSoundButton() {
       if (!soundButton) return;
-      soundButton.textContent = soundEnabled ? "Ses a\u00e7\u0131k" : "Sesi a\u00e7";
+      soundButton.classList.toggle("is-on", soundEnabled);
+      var label = soundButton.querySelector(".sound-label");
+      if (label) label.textContent = soundEnabled ? "Ses a\u00e7\u0131k" : "Ses kapal\u0131";
       soundButton.setAttribute("aria-pressed", soundEnabled ? "true" : "false");
     }
 

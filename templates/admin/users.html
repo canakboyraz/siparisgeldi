@@ -2,7 +2,7 @@
 {% block title %}Kullanıcılar · Admin{% endblock %}
 {% block panel %}
 <div class="page-head">
-  <h1>👥 Kullanıcılar</h1>
+  <h1>Kullanıcılar</h1>
   <a class="btn btn-ghost" href="{{ url_for('admin.index') }}">Admin özeti</a>
 </div>
 
@@ -68,8 +68,8 @@
         <td>{{ platforms_by_user.get(u.id, '—') }}</td>
         <td>{{ order_counts.get(u.id, 0) }}</td>
         <td><span class="badge gray">{{ u.notification_channel or 'telegram' }}</span></td>
-        <td>{{ '✅' if u.telegram_chat_id else '—' }}</td>
-        <td>{{ '✅' if u.whatsapp_number else '—' }}</td>
+        <td>{{ '' if u.telegram_chat_id else '—' }}</td>
+        <td>{{ '' if u.whatsapp_number else '—' }}</td>
       </tr>
       {% endfor %}
     </tbody>

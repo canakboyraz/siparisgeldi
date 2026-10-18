@@ -2,7 +2,7 @@
 {% set active = 'tgo' %}
 {% block title %}Trendyol Go · SiparişGeldi{% endblock %}
 {% block panel %}
-<div class="page-head"><h1>🛵 Trendyol Go bağlantısı</h1></div>
+<div class="page-head"><h1>Trendyol Go bağlantısı</h1></div>
 
 <div class="grid-2">
   <div class="card">
@@ -58,11 +58,11 @@
     <form method="post" action="{{ url_for('dashboard.update_notifications', intg_id=intg.id) }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="toggle-line"><input type="checkbox" name="notify_new_order" {{ 'checked' if intg.notify_new_order }}> <span>🆕 Yeni sipariş bildirimi</span></div>
-      <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>🔄 Durum değişikliği bildirimi</span></div>
-      <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>❌ İptal bildirimi</span></div>
-      <div class="toggle-line"><input type="checkbox" name="notify_daily_report" {{ 'checked' if intg.notify_daily_report }}> <span>📊 Günlük özet raporu</span></div>
-      <div class="toggle-line"><input type="checkbox" name="notify_weekly_report" {{ 'checked' if intg.notify_weekly_report }}> <span>📅 Haftalık özet raporu</span></div>
-      <div class="toggle-line"><input type="checkbox" name="notify_monthly_report" {{ 'checked' if intg.notify_monthly_report }}> <span>🗓️ Aylık özet raporu</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_status_change" {{ 'checked' if intg.notify_status_change }}> <span>Durum değişikliği bildirimi</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_cancel" {{ 'checked' if intg.notify_cancel }}> <span>İptal bildirimi</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_daily_report" {{ 'checked' if intg.notify_daily_report }}> <span>Günlük özet raporu</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_weekly_report" {{ 'checked' if intg.notify_weekly_report }}> <span>Haftalık özet raporu</span></div>
+      <div class="toggle-line"><input type="checkbox" name="notify_monthly_report" {{ 'checked' if intg.notify_monthly_report }}> <span>Aylık özet raporu</span></div>
       <button class="btn btn-ghost" style="margin-top:1rem" type="submit">Tercihleri kaydet</button>
     </form>
 
@@ -85,7 +85,7 @@
     <div class="card-title">ℹ️ Bilgi</div>
     <p class="muted">API bilgilerini kaydettikten sonra sistem her {{ 30 }} saniyede bir yeni sipariş kontrolü yapar.
        Telegram'ı bağlamayı unutma — bildirimler oraya gider.</p>
-    <a class="btn btn-ghost" href="{{ url_for('dashboard.connect_telegram') }}">💬 Telegram'ı bağla</a>
+    <a class="btn btn-ghost" href="{{ url_for('dashboard.connect_telegram') }}">Telegram'ı bağla</a>
   </div>
   {% endif %}
 </div>

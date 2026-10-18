@@ -3,9 +3,13 @@
 {% block title %}Siparişler · SiparişGeldi{% endblock %}
 {% block panel %}
 <div class="page-head">
-  <h1>🧾 Siparişler</h1>
+  <div>
+    <h1>Tüm siparişler</h1>
+    <p class="muted page-sub">{{ orders.total }} sipariş</p>
+  </div>
   <form method="get" class="inline">
-    <select name="platform" onchange="this.form.submit()">
+    <label class="sr-only" for="orders-platform">Platform</label>
+    <select id="orders-platform" name="platform" onchange="this.form.submit()">
       <option value="">Tüm platformlar</option>
       <option value="trendyolgo" {{ 'selected' if platform=='trendyolgo' }}>Trendyol Go</option>
       <option value="trendyolgo_market" {{ 'selected' if platform=='trendyolgo_market' }}>Trendyol Go Market</option>
@@ -17,32 +21,30 @@
   </form>
 </div>
 
-<div class="card">
+<div class="card order-list-card">
   {% if orders.items %}
-  <table class="mobile-orders-table">
-    <thead><tr><th>Sipariş</th><th>Platform</th><th>Durum</th><th>Tutar</th><th>Tarih</th></tr></thead>
-    <tbody>
-      {% for o in orders.items %}
-      <tr>
-        <td><a class="table-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}"><strong>#{{ o.order_number or o.external_id }}</strong></a></td>
-        <td>{{ platform_label(o.platform) }}</td>
-        <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>
-        <td>{{ '%.2f'|format(o.total_price) }} ₺</td>
-        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="order-list" role="list">
+    {% for o in orders.items %}
+    <a class="order-list-row" role="listitem" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">
+      <div class="olr-main">
+        <strong>#{{ o.order_number or o.external_id }}</strong>
+        <span class="muted">{{ platform_label(o.platform) }} · {{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</span>
+      </div>
+      <span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span>
+      <strong class="num olr-total">{{ tl_amount(o.total_price or 0) }}</strong>
+    </a>
+    {% endfor %}
+  </div>
 
   {% if orders.pages > 1 %}
-  <div class="inline" style="justify-content:center;margin-top:1.2rem;gap:.8rem">
-    {% if orders.has_prev %}<a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.orders', page=orders.prev_num, platform=platform) }}">← Önceki</a>{% endif %}
+  <div class="pagination">
+    {% if orders.has_prev %}<a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.orders', page=orders.prev_num, platform=platform) }}">Önceki</a>{% endif %}
     <span class="muted">Sayfa {{ orders.page }} / {{ orders.pages }}</span>
-    {% if orders.has_next %}<a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.orders', page=orders.next_num, platform=platform) }}">Sonraki →</a>{% endif %}
+    {% if orders.has_next %}<a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.orders', page=orders.next_num, platform=platform) }}">Sonraki</a>{% endif %}
   </div>
   {% endif %}
   {% else %}
-  <div class="empty">Bu filtreye uygun sipariş yok.</div>
+  <div class="empty">Bu filtrede sipariş yok.</div>
   {% endif %}
 </div>
 {% endblock %}

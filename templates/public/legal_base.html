@@ -2,7 +2,7 @@
 {% block body %}
 <div class="container">
   <div class="nav">
-    <a href="{{ url_for('public.landing') }}" class="brand"><span class="dot"></span> {{ company.brand_name }}</a>
+    <a href="{{ url_for('public.landing') }}" class="brand"><span class="brand-mark" aria-hidden="true"></span> {{ company.brand_name }}</a>
     <div class="inline">
       <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.login') }}">Giriş</a>
       <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">Ücretsiz başla</a>

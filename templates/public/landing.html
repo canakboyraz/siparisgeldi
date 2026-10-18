@@ -7,9 +7,10 @@
   <meta property="og:type" content="website">
 {% endblock %}
 {% block body %}
+{% from "_icons.html" import icon %}
 <div class="lp">
   <header class="container nav lp-nav">
-    <a class="brand" href="{{ url_for('public.landing') }}"><span class="dot"></span> SiparişGeldi</a>
+    <a class="brand" href="{{ url_for('public.landing') }}"><span class="brand-mark" aria-hidden="true"></span> SiparişGeldi</a>
     <nav class="lp-links" aria-label="Sayfa bölümleri">
       <a href="#ozellikler">Özellikler</a>
       <a href="#karlilik">Kârlılık</a>
@@ -25,8 +26,7 @@
 
   <section class="container lp-hero">
     <div class="lp-hero-text">
-      <span class="pill">Paket servis yapan restoranlar için</span>
-      <h1>Siparişi kaçırma,<br><span class="lp-accent">gerçek kârını</span> gör.</h1>
+      <h1>Siparişi kaçırma,<br>gerçek kârını gör.</h1>
       <p class="lp-lead">Trendyol Go, Migros Yemek ve diğer kanallardan gelen siparişler tek ekranda ve telefonunda.
         Gün sonunda komisyon, ürün maliyeti ve paket giderinden sonra ne kazandığını gör.</p>
       <div class="lp-cta">
@@ -40,13 +40,13 @@
       <div class="lp-phone">
         <div class="lp-notif">
           <div class="lp-notif-head"><span class="lp-dot-live"></span> SiparişGeldi · şimdi</div>
-          <strong>🛵 Yeni sipariş · Trendyol Go</strong>
+          <strong>Yeni sipariş · Trendyol Go</strong>
           <div class="lp-notif-line">#48213 · 2× Tavuk Dürüm, 1× Ayran</div>
           <div class="lp-notif-line">Not: Soğan olmasın</div>
           <div class="lp-notif-total">Toplam <b>385,00 TL</b> · Online ödeme</div>
         </div>
         <div class="lp-notif lp-notif-muted">
-          <strong>⏰ 2 dakikadır kabul edilmedi</strong>
+          <strong>2 dakikadır kabul edilmedi</strong>
           <div class="lp-notif-line">Trendyol Go #48207 · hâlâ bekliyor</div>
         </div>
       </div>
@@ -103,32 +103,32 @@
     </div>
     <div class="features lp-features">
       <div class="feature">
-        <div class="ic">⚡</div>
+        <div class="feature-ic">{{ icon('bell', 22) }}</div>
         <h3>Anında bildirim</h3>
         <p>Yeni sipariş, durum değişikliği, iptal ve iade Telegram'a ya da WhatsApp'a ürünler, notlar ve tutarla birlikte düşer.</p>
       </div>
       <div class="feature">
-        <div class="ic">🖥️</div>
+        <div class="feature-ic">{{ icon('bolt', 22) }}</div>
         <h3>Aktif sipariş ekranı</h3>
         <p>Tek tıkla kabul et, hazırlanıyor, yolda, teslim edildi olarak ilerlet. Gerektiğinde iptal nedenini seçerek reddet.</p>
       </div>
       <div class="feature">
-        <div class="ic">🧾</div>
+        <div class="feature-ic">{{ icon('printer', 22) }}</div>
         <h3>Fiş yazdırma</h3>
         <p>Opsiyonlar, çıkarılacak malzemeler ve müşteri notu dahil mutfak fişi. Yazıcı genişliği ayarlanabilir.</p>
       </div>
       <div class="feature">
-        <div class="ic">🏪</div>
+        <div class="feature-ic">{{ icon('store', 22) }}</div>
         <h3>Restoranı aç / kapat</h3>
         <p>Yoğun anda Trendyol Go ve Migros Yemek'te restoranı panelden satışa kapat, sonra tekrar aç.</p>
       </div>
       <div class="feature">
-        <div class="ic">📊</div>
+        <div class="feature-ic">{{ icon('chart', 22) }}</div>
         <h3>İstatistik ve raporlar</h3>
         <p>Platform bazında sipariş ve ciro, saatlik yoğunluk, en çok satan ürünler, geçen haftayla karşılaştırma.</p>
       </div>
       <div class="feature">
-        <div class="ic">🔒</div>
+        <div class="feature-ic">{{ icon('lock', 22) }}</div>
         <h3>Güvenli bağlantı</h3>
         <p>Platform API anahtarların şifrelenerek saklanır. Kart bilgilerin bizde tutulmaz, ödeme PayTR ile alınır.</p>
       </div>
@@ -137,7 +137,6 @@
 
   <section class="container lp-profit-section" id="karlilik">
     <div class="lp-profit-copy">
-      <span class="pill">Kârlılık paneli</span>
       <h2>Komisyondan sonra gerçekten ne kazanıyorsun?</h2>
       <p class="muted">Ürün maliyetini bir kez gir; gerisini SiparişGeldi her gün hesaplar.</p>
       <ul class="lp-checks">

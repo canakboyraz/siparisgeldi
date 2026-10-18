@@ -2,25 +2,44 @@
 {% set active = 'home' %}
 {% block title %}Panel · SiparişGeldi{% endblock %}
 {% block panel %}
+{% from "_icons.html" import icon %}
+{% macro platform_links(cls='') %}
+  <a class="{{ cls }}" href="{{ url_for('dashboard.trendyolgo_setup') }}">Trendyol Go Yemek{{ icon('chevron', 16) }}</a>
+  <a class="{{ cls }}" href="{{ url_for('dashboard.trendyolgo_market_setup') }}">Trendyol Go Market{{ icon('chevron', 16) }}</a>
+  <a class="{{ cls }}" href="{{ url_for('dashboard.migros_setup') }}">Migros Yemek{{ icon('chevron', 16) }}</a>
+  <a class="{{ cls }}" href="{{ url_for('adisyo.setup') }}">Adisyo{{ icon('chevron', 16) }}</a>
+  <a class="{{ cls }}" href="{{ url_for('dashboard.trendyol_marketplace_setup') }}">Trendyol Pazaryeri{{ icon('chevron', 16) }}</a>
+  <a class="{{ cls }}" href="{{ url_for('dashboard.hepsiburada_setup') }}">Hepsiburada{{ icon('chevron', 16) }}</a>
+{% endmacro %}
+
 <div class="page-head">
-  <h1>Merhaba, {{ current_user.name }} 👋</h1>
+  <div>
+    <h1>Merhaba, {{ current_user.name }}</h1>
+    <p class="muted page-sub">Bugünün özeti</p>
+  </div>
   <div class="inline">
     {% if integrations %}
-    <form method="post" action="{{ url_for('dashboard.test_report') }}">
+    <form method="post" action="{{ url_for('dashboard.test_report') }}" class="hide-sm">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-ghost" type="submit">📊 Test rapor gönder</button>
+      <button class="btn btn-ghost" type="submit">{{ icon('send', 16) }}Test raporu gönder</button>
     </form>
-    <a class="btn btn-ghost" href="{{ url_for('dashboard.reports') }}">Raporlar</a>
     {% endif %}
-    <a class="btn btn-primary" href="{{ url_for('dashboard.trendyol_marketplace_setup') }}">+ Platform bağla</a>
+    <a class="btn btn-primary" href="#platformlar">{{ icon('plus', 16) }}Platform bağla</a>
   </div>
+</div>
+
+<div class="stats today-stats">
+  <div class="stat"><div class="v">{{ today_stats.orders }}</div><div class="l">Bugün sipariş</div></div>
+  <div class="stat"><div class="v">{{ tl_amount(today_stats.revenue) }}</div><div class="l">Bugün ciro</div></div>
+  <a class="stat stat-link {{ 'is-hot' if today_stats.active else '' }}" href="{{ url_for('dashboard.active_orders') }}"><div class="v">{{ today_stats.active }}</div><div class="l">Aktif sipariş</div></a>
+  <a class="stat stat-link" href="{{ url_for('dashboard.subscription') }}"><div class="v">{{ ('Deneme' if current_user.is_trial_active else 'Pro') if is_pro_user() else 'Ücretsiz' }}</div><div class="l">Plan · {{ integrations|selectattr('is_active')|list|length }} aktif platform</div></a>
 </div>
 
 {% if loss_alert %}
 <div class="card loss-alert">
   <div class="section-head" style="margin-bottom:0">
     <div>
-      <div class="card-title">⚠️ Son 7 günde {{ loss_alert.count }} ürün zararına satıldı</div>
+      <div class="card-title">{{ icon('alert', 18) }}Son 7 günde {{ loss_alert.count }} ürün zararına satıldı</div>
       <div class="muted">
         {% if show_loss_details %}{{ loss_alert.names|join(', ') }}{% if loss_alert.count > 3 %} ve diğerleri{% endif %} · toplam {{ tl_amount(loss_alert.total) }}
         {% else %}Komisyon ve maliyet sonrası eksiye düşen ürünlerin listesi Pro'da.{% endif %}
@@ -36,15 +55,15 @@
   <div class="section-head">
     <div>
       <div class="card-title">Kurulumu tamamla</div>
-      <div class="muted">{{ onboarding.done }}/{{ onboarding.total }} adım tamam · Kalan adımlar bittiğinde siparişler ve gerçek kârın tek panelde.</div>
+      <div class="muted">{{ onboarding.done }} / {{ onboarding.total }} adım tamam. Bitince siparişlerin ve gerçek kârın tek ekranda.</div>
     </div>
     <strong class="onboarding-percent">%{{ onboarding.percent }}</strong>
   </div>
-  <div class="onboarding-bar"><span style="width:{{ onboarding.percent }}%"></span></div>
+  <div class="onboarding-bar" role="progressbar" aria-valuenow="{{ onboarding.percent }}" aria-valuemin="0" aria-valuemax="100"><span style="width:{{ onboarding.percent }}%"></span></div>
   <ol class="onboarding-steps">
     {% for step in onboarding.steps %}
     <li class="{{ 'done' if step.done else '' }}">
-      <span class="onboarding-check" aria-hidden="true">{{ '✓' if step.done else loop.index }}</span>
+      <span class="onboarding-check" aria-hidden="true">{% if step.done %}{{ icon('check', 15) }}{% else %}{{ loop.index }}{% endif %}</span>
       <div class="onboarding-body">
         <strong>{{ step.title }}</strong>
         {% if not step.done %}
@@ -60,104 +79,87 @@
         </div>
         {% elif step.channels %}
         <div class="onboarding-platforms">
-          <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.connect_telegram') }}">Telegram'ı bağla</a>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.connect_telegram') }}">{{ icon('send', 15) }}Telegram'ı bağla</a>
           {% if step.whatsapp_allowed %}
-          <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.connect_whatsapp') }}">WhatsApp'ı bağla</a>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.connect_whatsapp') }}">{{ icon('message', 15) }}WhatsApp'ı bağla</a>
           {% else %}
-          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.subscription') }}">WhatsApp'ı bağla <span class="badge violet">Pro</span></a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.subscription') }}">{{ icon('message', 15) }}WhatsApp'ı bağla <span class="badge violet">Pro</span></a>
           {% endif %}
         </div>
         {% elif step.action == 'resend_verification' %}
-        <form method="post" action="{{ url_for('auth.resend_verification') }}" style="margin-top:.4rem">
+        <form method="post" action="{{ url_for('auth.resend_verification') }}" style="margin-top:.5rem">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-ghost btn-sm" type="submit">Doğrulama e-postasını tekrar gönder</button>
         </form>
         {% elif step.url %}
-        <a class="btn btn-primary btn-sm" style="margin-top:.4rem" href="{{ step.url }}">{{ step.cta }}</a>
+        <a class="btn btn-primary btn-sm" style="margin-top:.5rem" href="{{ step.url }}">{{ step.cta }}</a>
         {% endif %}
         {% endif %}
       </div>
     </li>
     {% endfor %}
   </ol>
-  <p class="hint" style="margin:.6rem 0 0">Takıldığın adım olursa <a href="{{ url_for('public.contact') }}" style="color:var(--brand);font-weight:600">bize yaz</a>, kurulumu birlikte yapalım.</p>
+  <p class="hint" style="margin:.7rem 0 0">Takıldığın bir adım olursa <a class="text-link" href="{{ url_for('public.contact') }}">bize yaz</a>, kurulumu birlikte yapalım.</p>
 </div>
 {% endif %}
 
 {% if not current_user.telegram_connected and (not onboarding or onboarding.complete) %}
-<div class="card" style="border-color:var(--brand);background:var(--brand-soft);margin-bottom:1rem">
-  <div class="row" style="border:none;padding:0">
-    <div>
-      <div class="card-title">📲 Telegram'ı bağla</div>
-      <div class="muted">Bildirim alabilmek için önce Telegram hesabını bağlaman gerekiyor.</div>
-    </div>
-    <a class="btn btn-primary" href="{{ url_for('dashboard.connect_telegram') }}">Bağla</a>
-  </div>
+<div class="account-banner">
+  <span>{{ icon('send', 17) }}Bildirim alabilmek için Telegram hesabını bağla.</span>
+  <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.connect_telegram') }}">Bağla</a>
 </div>
 {% endif %}
 
-<div class="stats">
-  <div class="stat"><div class="v">{{ recent_orders|length }}</div><div class="l">Son siparişler</div></div>
-  <div class="stat"><div class="v">{{ integrations|selectattr('is_active')|list|length }}</div><div class="l">Aktif platform</div></div>
-  <div class="stat"><div class="v">{{ '✓' if current_user.telegram_connected else '—' }}</div><div class="l">Telegram</div></div>
-  <div class="stat">
-    <div class="v">{{ 'Pro' if is_pro_user() else 'Ücretsiz' }}</div>
-    <div class="l">{{ 'WhatsApp + çoklu platform' if is_pro_user() else 'Telegram + 1 platform + raporlar' }}</div>
-  </div>
-</div>
-
-<div class="grid-2">
-  <div class="card">
-    <div class="card-title">Platformların</div>
+<div class="grid-2 home-grid">
+  <div class="card" id="platformlar">
+    <div class="section-head">
+      <div class="card-title">Platformların</div>
+    </div>
     {% if integrations %}
       {% for intg in integrations %}
       <div class="row">
         <div class="inline">
-          <span class="status-dot {{ 'on' if intg.is_active else 'off' }}"></span>
+          <span class="status-dot {{ 'on' if intg.is_active else 'off' }}" aria-hidden="true"></span>
           <strong>{{ platform_label(intg.platform) }}</strong>
-          {% if intg.last_error %}<span class="badge red">hata</span>{% endif %}
+          {% if intg.last_error %}<span class="badge red">Bağlantı hatası</span>{% elif not intg.is_active %}<span class="badge gray">Duraklatıldı</span>{% endif %}
         </div>
-        <div class="inline">
-          <form method="post" action="{{ url_for('dashboard.toggle_integration', intg_id=intg.id) }}">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-ghost btn-sm">{{ 'Duraklat' if intg.is_active else 'Aktifleştir' }}</button>
-          </form>
-        </div>
+        <form method="post" action="{{ url_for('dashboard.toggle_integration', intg_id=intg.id) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-ghost btn-sm">{{ 'Duraklat' if intg.is_active else 'Aktifleştir' }}</button>
+        </form>
       </div>
       {% endfor %}
+      <details class="platform-more">
+        <summary>Başka platform ekle</summary>
+        <div class="platform-picker">{{ platform_links() }}</div>
+      </details>
     {% else %}
-      <div class="empty">Henüz platform bağlamadın.<br>
-        <a href="{{ url_for('dashboard.trendyolgo_setup') }}" style="color:var(--brand);font-weight:700">Trendyol Go bağla →</a>
-        &nbsp;·&nbsp;
-        <a href="{{ url_for('dashboard.trendyolgo_market_setup') }}" style="color:var(--brand);font-weight:700">Trendyol Go Market bağla →</a>
-        &nbsp;·&nbsp;
-        <a href="{{ url_for('dashboard.migros_setup') }}" style="color:var(--brand);font-weight:700">Migros Yemek bağla →</a>
-        &nbsp;·&nbsp;
-        <a href="{{ url_for('dashboard.trendyol_marketplace_setup') }}" style="color:var(--brand);font-weight:700">Trendyol Pazaryeri bağla →</a>
-        &nbsp;·&nbsp;
-        <a href="{{ url_for('dashboard.hepsiburada_setup') }}" style="color:var(--brand);font-weight:700">Hepsiburada bağla →</a>
-      </div>
+      <p class="muted" style="margin:.1rem 0 .7rem">Henüz platform bağlamadın. Satış yaptığın platformu seç:</p>
+      <div class="platform-picker">{{ platform_links() }}</div>
     {% endif %}
   </div>
 
   <div class="card">
     <div class="section-head">
       <div class="card-title">Son siparişler</div>
-      <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.active_orders') }}">Aktif ekran</a>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.active_orders') }}">{{ icon('bolt', 15) }}Aktif ekran</a>
     </div>
     {% if recent_orders %}
       {% for o in recent_orders %}
-      <div class="row">
-        <div><a class="table-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">#{{ o.order_number or o.external_id }}</a> <span class="muted">· {{ platform_label(o.platform) }}</span></div>
+      <a class="row row-link" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">
+        <div class="row-main">
+          <strong>#{{ o.order_number or o.external_id }}</strong>
+          <span class="muted">{{ platform_label(o.platform) }}{% if o.created_at %} · {{ o.created_at.strftime('%H:%M') }}{% endif %}</span>
+        </div>
         <div class="inline">
           <span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span>
-          <strong>{{ '%.2f'|format(o.total_price) }} ₺</strong>
+          <strong class="num">{{ tl_amount(o.total_price or 0) }}</strong>
         </div>
-      </div>
+      </a>
       {% endfor %}
-      <div style="margin-top:.8rem"><a href="{{ url_for('dashboard.orders') }}" style="color:var(--brand);font-weight:700">Tümünü gör →</a></div>
+      <div style="margin-top:.9rem"><a class="text-link" href="{{ url_for('dashboard.orders') }}">Tüm siparişleri gör</a></div>
     {% else %}
-      <div class="empty">Henüz sipariş yok. Platform bağlanınca burada görünecek.</div>
+      <div class="empty">Henüz sipariş yok. Platformunu bağladığında yeni siparişler burada ve telefonunda görünür.</div>
     {% endif %}
   </div>
 </div>

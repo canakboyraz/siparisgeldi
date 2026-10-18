@@ -3,7 +3,7 @@
 {% block body %}
 <div class="auth-wrap">
   <div class="auth-card">
-    <a href="{{ url_for('public.landing') }}" class="brand"><span class="dot"></span> SiparişGeldi</a>
+    <a href="{{ url_for('public.landing') }}" class="brand"><span class="brand-mark" aria-hidden="true"></span> SiparişGeldi</a>
     <div class="card">
       <h2 style="text-align:center">Ücretsiz hesap oluştur</h2>
       {% if trial_days %}<p class="muted" style="text-align:center;margin:-.2rem 0 1rem">{{ trial_days }} gün tüm Pro özellikler açık. Kart bilgisi istenmez.</p>{% endif %}

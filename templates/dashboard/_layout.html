@@ -1,19 +1,22 @@
 {% extends "base.html" %}
 {% block body %}
+{% from "_icons.html" import icon %}
 <div class="layout">
-  <aside class="sidebar">
-    <div class="brand"><span class="dot"></span> SiparişGeldi</div>
+  {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.trendyolgo_market_setup', 'dashboard.migros_setup', 'dashboard.yemeksepeti_setup', 'adisyo.setup'] %}
+  {% set ecommerce_endpoints = ['dashboard.trendyol_marketplace_setup', 'dashboard.hepsiburada_setup'] %}
+  {% set contact_endpoints = ['dashboard.connect_telegram', 'dashboard.reset_telegram', 'dashboard.connect_whatsapp'] %}
+  {% set cost_endpoints = ['dashboard.profit_card', 'dashboard.product_costs', 'dashboard.product_cost_entry', 'dashboard.monthly_expenses', 'dashboard.reports', 'dashboard.analytics'] %}
+  <aside class="sidebar" id="app-nav" aria-label="Menü">
+    <div class="sidebar-head">
+      <a class="brand" href="{{ url_for('dashboard.index') }}"><span class="brand-mark" aria-hidden="true"></span>SiparişGeldi</a>
+      <button class="sheet-close" type="button" data-nav-close aria-label="Menüyü kapat">{{ icon('x', 20) }}</button>
+    </div>
     <nav>
-      {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.trendyolgo_market_setup', 'dashboard.migros_setup', 'dashboard.yemeksepeti_setup', 'adisyo.setup'] %}
-      {% set ecommerce_endpoints = ['dashboard.trendyol_marketplace_setup', 'dashboard.hepsiburada_setup'] %}
-      {% set contact_endpoints = ['dashboard.connect_telegram', 'dashboard.reset_telegram', 'dashboard.connect_whatsapp'] %}
-      {% set cost_endpoints = ['dashboard.profit_card', 'dashboard.product_costs', 'dashboard.product_cost_entry', 'dashboard.monthly_expenses', 'dashboard.reports', 'dashboard.analytics'] %}
-
-      <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint=='dashboard.index' }}">Panel</a>
-      <a href="{{ url_for('dashboard.active_orders') }}" class="{{ 'active' if request.endpoint=='dashboard.active_orders' }}">Aktif</a>
-      <a href="{{ url_for('dashboard.orders') }}" class="{{ 'active' if request.endpoint=='dashboard.orders' }}">Tüm Siparişler</a>
-      <details class="nav-group" data-mobile-nav="cost" {{ 'open' if request.endpoint in cost_endpoints }}>
-        <summary class="{{ 'active' if request.endpoint in cost_endpoints }}">Maliyet</summary>
+      <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint=='dashboard.index' }}">{{ icon('home') }}<span>Panel</span></a>
+      <a href="{{ url_for('dashboard.active_orders') }}" class="{{ 'active' if request.endpoint=='dashboard.active_orders' }}">{{ icon('bolt') }}<span>Aktif siparişler</span></a>
+      <a href="{{ url_for('dashboard.orders') }}" class="{{ 'active' if request.endpoint=='dashboard.orders' }}">{{ icon('list') }}<span>Tüm siparişler</span></a>
+      <details class="nav-group" {{ 'open' if request.endpoint in cost_endpoints }}>
+        <summary class="{{ 'active' if request.endpoint in cost_endpoints }}">{{ icon('trend') }}<span>Kâr ve maliyet</span></summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.profit_card') }}" class="{{ 'active' if request.endpoint=='dashboard.profit_card' }}">Kâr karnesi</a>
           <a href="{{ url_for('dashboard.product_costs') }}" class="{{ 'active' if request.endpoint=='dashboard.product_costs' }}">Kârlılık</a>
@@ -23,9 +26,8 @@
           <a href="{{ url_for('dashboard.analytics') }}" class="{{ 'active' if request.endpoint=='dashboard.analytics' }}">İstatistikler</a>
         </div>
       </details>
-
-      <details class="nav-group" data-mobile-nav="food" {{ 'open' if request.endpoint in platform_endpoints }}>
-        <summary class="{{ 'active' if request.endpoint in platform_endpoints }}">Yemek Platformları</summary>
+      <details class="nav-group" {{ 'open' if request.endpoint in platform_endpoints }}>
+        <summary class="{{ 'active' if request.endpoint in platform_endpoints }}">{{ icon('store') }}<span>Yemek platformları</span></summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.trendyolgo_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyolgo_setup' }}">Trendyol Go</a>
           <a href="{{ url_for('dashboard.trendyolgo_market_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyolgo_market_setup' }}">Trendyol Go Market</a>
@@ -34,58 +36,64 @@
           <a href="{{ url_for('adisyo.setup') }}" class="{{ 'active' if request.endpoint=='adisyo.setup' }}">Adisyo</a>
         </div>
       </details>
-
-      <details class="nav-group" data-mobile-nav="ecommerce" {{ 'open' if request.endpoint in ecommerce_endpoints }}>
-        <summary class="{{ 'active' if request.endpoint in ecommerce_endpoints }}">E-Ticaret Platformları</summary>
+      <details class="nav-group" {{ 'open' if request.endpoint in ecommerce_endpoints }}>
+        <summary class="{{ 'active' if request.endpoint in ecommerce_endpoints }}">{{ icon('plug') }}<span>E-ticaret</span></summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.trendyol_marketplace_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.trendyol_marketplace_setup' }}">Trendyol Pazaryeri</a>
           <a href="{{ url_for('dashboard.hepsiburada_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.hepsiburada_setup' }}">Hepsiburada</a>
         </div>
       </details>
-
-      <details class="nav-group" data-mobile-nav="contact" {{ 'open' if request.endpoint in contact_endpoints }}>
-        <summary class="{{ 'active' if request.endpoint in contact_endpoints }}">İletişim</summary>
+      <details class="nav-group" {{ 'open' if request.endpoint in contact_endpoints }}>
+        <summary class="{{ 'active' if request.endpoint in contact_endpoints }}">{{ icon('message') }}<span>Bildirim kanalları</span></summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.connect_telegram') }}" class="{{ 'active' if request.endpoint in ['dashboard.connect_telegram','dashboard.reset_telegram'] }}">Telegram</a>
           <a href="{{ url_for('dashboard.connect_whatsapp') }}" class="{{ 'active' if request.endpoint=='dashboard.connect_whatsapp' }}">WhatsApp</a>
         </div>
       </details>
-
-      <a href="{{ url_for('dashboard.subscription') }}" class="{{ 'active' if request.endpoint=='dashboard.subscription' }}">Abonelik</a>
-      <a href="{{ url_for('dashboard.profile') }}" class="{{ 'active' if request.endpoint=='dashboard.profile' }}">Profil</a>
+      <a href="{{ url_for('dashboard.subscription') }}" class="{{ 'active' if request.endpoint=='dashboard.subscription' }}">{{ icon('card') }}<span>Abonelik</span></a>
+      <a href="{{ url_for('dashboard.profile') }}" class="{{ 'active' if request.endpoint=='dashboard.profile' }}">{{ icon('user') }}<span>Profil</span></a>
       {% if user_is_admin %}
-      <a href="{{ url_for('admin.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.') }}">Admin</a>
+      <a href="{{ url_for('admin.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.') }}">{{ icon('shield') }}<span>Admin</span></a>
       {% endif %}
     </nav>
     <div class="foot">
-      <div class="muted" style="padding:.4rem .8rem;color:#8b909b">{{ current_user.email }}</div>
+      <div class="sidebar-user" title="{{ current_user.email }}">{{ current_user.email }}</div>
       <form method="post" action="{{ url_for('auth.logout') }}" class="sidebar-logout">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button type="submit">Çıkış yap</button>
+        <button type="submit">{{ icon('logout', 16) }}<span>Çıkış yap</span></button>
       </form>
     </div>
   </aside>
-  <div class="mobile-nav-popover" id="mobile-nav-popover" hidden>
-    <div class="mobile-nav-popover-title" id="mobile-nav-popover-title"></div>
-    <div class="mobile-nav-popover-links" id="mobile-nav-popover-links"></div>
-  </div>
+  <div class="nav-backdrop" data-nav-close hidden></div>
   <main class="main">
-    {% if request.endpoint != 'dashboard.active_orders' %}
-    <div class="dashboard-alert-tools">
-      <button class="btn btn-ghost order-sound-toggle" id="global-order-sound-toggle" type="button" aria-pressed="false">Sesi a&#231;</button>
-      <a class="btn btn-ghost" href="{{ url_for('dashboard.profile') }}#order-alert-settings">Ses ayarlar&#305;</a>
-      <span class="muted" id="global-order-alert-status">Yeni sipari&#351; kontrol&#252; a&#231;&#305;k</span>
+    <div class="topbar {{ 'topbar-bare' if request.endpoint == 'dashboard.active_orders' }}">
+      <a class="brand topbar-brand" href="{{ url_for('dashboard.index') }}"><span class="brand-mark" aria-hidden="true"></span>SiparişGeldi</a>
+      {% if request.endpoint != 'dashboard.active_orders' %}
+      <div class="dashboard-alert-tools">
+        <span class="alert-status" id="global-order-alert-status"><span class="live-dot" aria-hidden="true"></span><span class="alert-status-text">Sipariş takibi açık</span></span>
+        <button class="icon-btn order-sound-toggle" id="global-order-sound-toggle" type="button" aria-pressed="false" title="Yeni sipariş sesi">
+          <span class="sound-on">{{ icon('bell', 18) }}</span><span class="sound-off">{{ icon('bell-off', 18) }}</span><span class="sound-label">Ses kapalı</span>
+        </button>
+        <a class="icon-btn" href="{{ url_for('dashboard.profile') }}#order-alert-settings" title="Ses ayarları" aria-label="Ses ayarları">{{ icon('settings', 18) }}</a>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
     {% include "_flashes.html" %}
     {% if request.endpoint != 'dashboard.active_orders' %}{% include "dashboard/_account_banners.html" %}{% endif %}
     {% block panel %}{% endblock %}
   </main>
+  <nav class="tabbar" aria-label="Hızlı menü">
+    <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint=='dashboard.index' }}">{{ icon('home', 22) }}<span>Panel</span></a>
+    <a href="{{ url_for('dashboard.active_orders') }}" class="{{ 'active' if request.endpoint=='dashboard.active_orders' }}">{{ icon('bolt', 22) }}<span>Aktif</span></a>
+    <a href="{{ url_for('dashboard.orders') }}" class="{{ 'active' if request.endpoint=='dashboard.orders' }}">{{ icon('list', 22) }}<span>Siparişler</span></a>
+    <a href="{{ url_for('dashboard.profit_card') }}" class="{{ 'active' if request.endpoint in cost_endpoints }}">{{ icon('trend', 22) }}<span>Kâr</span></a>
+    <button type="button" data-nav-open class="{{ 'active' if request.endpoint not in cost_endpoints and request.endpoint not in ['dashboard.index','dashboard.active_orders','dashboard.orders'] }}" aria-controls="app-nav" aria-expanded="false">{{ icon('menu', 22) }}<span>Menü</span></button>
+  </nav>
   {% if request.endpoint != 'dashboard.active_orders' %}
   <div class="order-alert-backdrop" id="global-order-alert-backdrop" hidden>
     <div class="order-alert" role="alertdialog" aria-modal="true" aria-labelledby="global-order-alert-title">
       <button class="order-alert-close" id="global-order-alert-close" type="button" aria-label="Kapat">&#215;</button>
-      <div class="order-alert-kicker">Yeni sipari&#351;</div>
+      <div class="order-alert-kicker">{{ icon('bolt', 16) }} Yeni sipari&#351;</div>
       <h2 id="global-order-alert-title">Sipari&#351; geldi</h2>
       <div class="order-alert-meta" id="global-order-alert-meta"></div>
       <div class="order-alert-items" id="global-order-alert-items"></div>
@@ -122,7 +130,9 @@
 
       function updateSoundButton() {
         if (!soundButton) return;
-        soundButton.textContent = soundEnabled ? "Ses a\u00e7\u0131k" : "Sesi a\u00e7";
+        soundButton.classList.toggle("is-on", soundEnabled);
+        var label = soundButton.querySelector(".sound-label");
+        if (label) label.textContent = soundEnabled ? "Ses a\u00e7\u0131k" : "Ses kapal\u0131";
         soundButton.setAttribute("aria-pressed", soundEnabled ? "true" : "false");
       }
 
@@ -195,7 +205,7 @@
             headers: {"Accept": "application/json"}
           });
           if (!response.ok) {
-            if (statusText) statusText.textContent = "Sipari\u015f kontrol\u00fc ba\u015far\u0131s\u0131z";
+            if (statusText) { statusText.classList.add("is-error"); statusText.title = "Sipari\u015f kontrol\u00fc ba\u015far\u0131s\u0131z"; }
             return;
           }
           var data = await response.json();
@@ -203,14 +213,14 @@
           if (data.pending_by_id) {
             queue = queue.filter(function (order) { return data.pending_by_id[String(order.id)] !== false; });
           }
-          if (statusText) statusText.textContent = "Son kontrol: " + new Date().toLocaleTimeString("tr-TR");
+          if (statusText) { statusText.classList.remove("is-error"); statusText.title = "Son kontrol: " + new Date().toLocaleTimeString("tr-TR"); }
           if (alertOrderId && data.watch_pending === false) stopAlarm();
           if (Array.isArray(data.orders) && data.orders.length) {
             queue = queue.concat(data.orders);
             if (backdrop.hidden) showNextAlert();
           }
         } catch (error) {
-          if (statusText) statusText.textContent = "Sipari\u015f kontrol\u00fc beklemede";
+          if (statusText) { statusText.classList.add("is-error"); statusText.title = "Sipari\u015f kontrol\u00fc beklemede"; }
         } finally {
           polling = false;
         }
@@ -242,50 +252,17 @@
 </div>
 <script>
   (function () {
-    var popover = document.getElementById("mobile-nav-popover");
-    var title = document.getElementById("mobile-nav-popover-title");
-    var links = document.getElementById("mobile-nav-popover-links");
-    var mobileQuery = window.matchMedia("(max-width: 860px)");
-
-    function closePopover() {
-      if (!popover) return;
-      popover.hidden = true;
-      document.querySelectorAll(".nav-group.is-mobile-open").forEach(function (group) {
-        group.classList.remove("is-mobile-open");
-      });
+    var body = document.body;
+    var backdrop = document.querySelector(".nav-backdrop");
+    var openers = document.querySelectorAll("[data-nav-open]");
+    function setOpen(open) {
+      body.classList.toggle("nav-open", open);
+      if (backdrop) backdrop.hidden = !open;
+      openers.forEach(function (b) { b.setAttribute("aria-expanded", open ? "true" : "false"); });
     }
-
-    document.querySelectorAll(".nav-group > summary").forEach(function (summary) {
-      summary.addEventListener("click", function (event) {
-        if (!mobileQuery.matches || !popover || !title || !links) return;
-        event.preventDefault();
-        event.stopPropagation();
-
-        var group = summary.closest(".nav-group");
-        var source = group ? group.querySelector(".nav-sub") : null;
-        if (!group || !source) return;
-
-        var wasOpen = group.classList.contains("is-mobile-open") && !popover.hidden;
-        closePopover();
-        if (wasOpen) return;
-
-        title.textContent = summary.textContent.trim();
-        links.innerHTML = source.innerHTML;
-        links.querySelectorAll("a").forEach(function (link) {
-          link.addEventListener("click", closePopover);
-        });
-        group.classList.add("is-mobile-open");
-        popover.hidden = false;
-      });
-    });
-
-    document.addEventListener("click", function (event) {
-      if (!mobileQuery.matches || !popover || popover.hidden) return;
-      if (popover.contains(event.target) || event.target.closest(".nav-group")) return;
-      closePopover();
-    });
-
-    window.addEventListener("resize", closePopover);
+    openers.forEach(function (b) { b.addEventListener("click", function () { setOpen(!body.classList.contains("nav-open")); }); });
+    document.querySelectorAll("[data-nav-close]").forEach(function (el) { el.addEventListener("click", function () { setOpen(false); }); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") setOpen(false); });
   })();
 </script>
 {% endblock %}

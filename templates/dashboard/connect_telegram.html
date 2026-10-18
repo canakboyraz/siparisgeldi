@@ -2,11 +2,11 @@
 {% set active = 'telegram' %}
 {% block title %}Telegram · SiparişGeldi{% endblock %}
 {% block panel %}
-<div class="page-head"><h1>💬 Telegram bağlantısı</h1></div>
+<div class="page-head"><h1>Telegram bağlantısı</h1></div>
 
 {% if current_user.telegram_connected %}
 <div class="card" style="border-color:var(--green);background:var(--green-soft)">
-  <div class="card-title">✅ Telegram bağlı</div>
+  <div class="card-title">Telegram bağlı</div>
   <p class="muted" style="margin:.2rem 0 1rem">Bildirimlerin bağlı Telegram hesabına gönderiliyor.</p>
   <form method="post" action="{{ url_for('dashboard.reset_telegram') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -20,7 +20,7 @@
      Birkaç saniye içinde "Bağlantı başarılı" mesajı gelir.</p>
 
   {% if deep_link %}
-    <a class="btn btn-primary btn-lg" href="{{ deep_link }}" target="_blank" rel="noopener">📲 Telegram'da botu aç</a>
+    <a class="btn btn-primary btn-lg" href="{{ deep_link }}" target="_blank" rel="noopener">Telegram'da botu aç</a>
     <p class="hint">Buton çalışmazsa bu linki telefonunda aç:</p>
     <div class="code">{{ deep_link }}</div>
   {% else %}

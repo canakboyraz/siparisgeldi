@@ -100,6 +100,17 @@ def index():
               .order_by(Order.created_at.desc()).limit(10).all())
     today_count = None
     onboarding = _onboarding_steps(integrations, has_order=bool(recent))
+    today_local = datetime.now(TURKEY_TZ).date()
+    day_start = TURKEY_TZ.localize(datetime.combine(today_local, datetime.min.time())).astimezone(pytz.utc).replace(tzinfo=None)
+    todays = Order.query.filter(Order.user_id == current_user.id, Order.created_at >= day_start).all()
+    todays_valid = [o for o in todays if not _is_cancelled_order(o) and not _is_refunded_order(o)]
+    today_stats = {
+        "orders": len(todays_valid),
+        "revenue": sum(o.total_price or 0 for o in todays_valid),
+        "active": (Order.query.filter(Order.user_id == current_user.id, Order.active_hidden_at.is_(None))
+                   .filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(ACTIVE_EXCLUDED_STATUSES))))
+                   .count()),
+    }
     loss_alert = None
     if recent:
         try:
@@ -116,7 +127,7 @@ def index():
     return render_template("dashboard/index.html",
                            integrations=integrations, recent_orders=recent,
                            today_count=today_count, onboarding=onboarding,
-                           loss_alert=loss_alert,
+                           loss_alert=loss_alert, today_stats=today_stats,
                            show_loss_details=_is_pro_user() or _can_use_multi_platform())
 
 

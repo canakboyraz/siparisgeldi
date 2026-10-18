@@ -2,6 +2,7 @@
 {% set active = 'profit_card' %}
 {% block title %}Kâr karnesi · SiparişGeldi{% endblock %}
 {% block panel %}
+{% from "_icons.html" import icon %}
 <div class="page-head">
   <div>
     <h1>Kâr karnesi</h1>
@@ -16,7 +17,7 @@
     <form method="post">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="hafta" value="{{ selected_week }}">
-      <button class="btn btn-ghost" type="submit">Telegram'a gönder</button>
+      <button class="btn btn-ghost" type="submit">{{ icon('send', 16) }}Telegram'a gönder</button>
     </form>
   </div>
 </div>
@@ -51,16 +52,16 @@
 
 {% if report.uncosted_count %}
 <div class="account-banner warn">
-  <span>ℹ️ {{ report.uncosted_count }} ürünün maliyeti girilmemiş (cironun %{{ '%.0f'|format(report.uncosted_revenue_share) }}'i). Bu ürünler kâra maliyetsiz yansıyor.</span>
+  <span>{{ icon('alert', 17) }}{{ report.uncosted_count }} ürünün maliyeti girilmemiş (cironun %{{ '%.0f'|format(report.uncosted_revenue_share) }}'i). Bu ürünler kâra maliyetsiz yansıyor.</span>
   <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.product_cost_entry') }}">Maliyet gir</a>
 </div>
 {% endif %}
 
 <div class="grid-2 pc-grid">
   <div class="card">
-    <div class="card-title">⚠️ Zararına satılan ürünler</div>
+    <div class="card-title title-ic">{{ icon('alert', 18) }}Zararına satılan ürünler</div>
     {% if not report.loss_products %}
-      <div class="empty">Bu hafta zararına satılan ürün yok. 👍</div>
+      <div class="empty">Bu hafta zararına satılan ürün yok.</div>
     {% elif show_details %}
       <div class="table-wrap"><table>
         <thead><tr><th>Ürün</th><th>Adet</th><th>Adet başı</th><th>Toplam</th></tr></thead>
@@ -81,7 +82,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">💪 En çok kazandıran ürünler</div>
+    <div class="card-title title-ic">{{ icon('trend', 18) }}En çok kazandıran ürünler</div>
     {% if report.top_products %}
       <div class="table-wrap"><table>
         <thead><tr><th>Ürün</th><th>Adet</th><th>Adet başı</th><th>Toplam kâr</th></tr></thead>
