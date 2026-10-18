@@ -18,7 +18,7 @@
     <p class="muted page-sub">Bugünün özeti</p>
   </div>
   <div class="inline">
-    {% if integrations %}
+    {% if integrations and not current_user.is_demo %}
     <form method="post" action="{{ url_for('dashboard.test_report') }}" class="hide-sm">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-ghost" type="submit">{{ icon('send', 16) }}Test raporu gönder</button>
@@ -103,7 +103,7 @@
 </div>
 {% endif %}
 
-{% if not current_user.telegram_connected and (not onboarding or onboarding.complete) %}
+{% if not current_user.is_demo and not current_user.telegram_connected and (not onboarding or onboarding.complete) %}
 <div class="account-banner">
   <span>{{ icon('send', 17) }}Bildirim alabilmek için Telegram hesabını bağla.</span>
   <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.connect_telegram') }}">Bağla</a>

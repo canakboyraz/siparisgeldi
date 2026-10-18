@@ -22,6 +22,10 @@
       </form>
     </div>
     <p class="auth-alt">Hesabın yok mu? <a href="{{ url_for('auth.register') }}" style="color:var(--brand);font-weight:700">Kayıt ol</a></p>
+    <form method="post" action="{{ url_for('auth.start_demo') }}" class="auth-alt">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="link-button">Hesap açmadan demoyu gör</button>
+    </form>
   </div>
 </div>
 {% endblock %}

@@ -35,6 +35,7 @@ def _ensure_schema():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expiry_notice_sent_on DATE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_trial BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tgo_store_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_warehouse_id VARCHAR(50)",
@@ -103,6 +104,8 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE users ADD COLUMN email_verified_at DATETIME")
             if "is_trial" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN is_trial BOOLEAN DEFAULT 0")
+            if "is_demo" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT 0")
             if "tgo_store_id" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN tgo_store_id VARCHAR(50)")
             if "migros_group_id" not in intg_cols:
@@ -231,6 +234,35 @@ def create_app(config_class=Config, start_scheduler=None):
         if not secrets.compare_digest(str(session.get("_csrf_token", "")), str(sent)):
             abort(400)
         return None
+
+    # Demo hesapta platformlara giden ve hesabı değiştiren işlemler kapalı.
+    DEMO_ALLOWED_POST = {
+        "auth.logout", "dashboard.product_costs", "dashboard.product_cost_entry",
+        "dashboard.monthly_expenses", "dashboard.delete_monthly_expense",
+    }
+    DEMO_ACCEPT_ENDPOINTS = {"dashboard.update_trendyolgo_order", "dashboard.update_migros_order"}
+
+    @app.before_request
+    def demo_guard():
+        from flask import flash, redirect, url_for
+        if request.method != "POST" or not getattr(current_user, "is_authenticated", False):
+            return None
+        if not getattr(current_user, "is_demo", False):
+            return None
+        endpoint = request.endpoint or ""
+        if endpoint in DEMO_ALLOWED_POST:
+            return None
+        if endpoint in DEMO_ACCEPT_ENDPOINTS:
+            import demo
+            from models import Order
+            order = db.session.get(Order, (request.view_args or {}).get("order_id"))
+            if order and order.user_id == current_user.id:
+                order.status = demo.DEMO_ACCEPT_STATUS.get(order.platform, "Approved")
+                db.session.commit()
+                flash(f"#{order.order_number} kabul edildi. (Demo: gerçek hesapta bu işlem platforma iletilir.)", "success")
+            return redirect(request.form.get("return_path") or url_for("dashboard.active_orders"))
+        flash("Demo hesapta bu işlem kapalı. Kendi hesabını açarak tüm özellikleri kullanabilirsin.", "info")
+        return redirect(request.referrer or url_for("dashboard.index"))
 
     @app.after_request
     def add_security_headers(response):

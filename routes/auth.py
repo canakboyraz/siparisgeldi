@@ -136,7 +136,9 @@ def _password_problem(password: str, confirm: str):
 
 @auth_bp.route("/giris", methods=["GET", "POST"])
 def login():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and getattr(current_user, "is_demo", False):
+        logout_user()
+    elif current_user.is_authenticated:
         return redirect(url_for("dashboard.index"))
 
     if request.method == "POST":
@@ -161,7 +163,9 @@ def login():
 
 @auth_bp.route("/kayit", methods=["GET", "POST"])
 def register():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and getattr(current_user, "is_demo", False):
+        logout_user()  # demodan gerçek hesaba geçiş
+    elif current_user.is_authenticated:
         return redirect(url_for("dashboard.index"))
 
     if request.method == "POST":
@@ -283,3 +287,30 @@ def resend_verification():
     else:
         flash("E-posta şu an gönderilemedi. Lütfen daha sonra tekrar dene.", "danger")
     return redirect(request.referrer or url_for("dashboard.index"))
+
+
+# ── Demo hesabı ─────────────────────────────────────────────────────────────
+
+_demo_requests = {}
+_DEMO_WINDOW_SECONDS = 60 * 60
+_DEMO_MAX_PER_IP = 10
+
+
+@auth_bp.route("/demo", methods=["POST"])
+def start_demo():
+    """Ziyaretçiye özel, örnek verilerle dolu geçici bir hesap açar ve giriş yapar."""
+    import demo
+    if current_user.is_authenticated and not getattr(current_user, "is_demo", False):
+        return redirect(url_for("dashboard.index"))
+    now = time.time()
+    ip = request.remote_addr or "unknown"
+    recent = [ts for ts in _demo_requests.get(ip, []) if now - ts < _DEMO_WINDOW_SECONDS]
+    if len(recent) >= _DEMO_MAX_PER_IP:
+        flash("Çok fazla demo isteği geldi. Biraz sonra tekrar dene.", "warning")
+        return redirect(url_for("public.landing"))
+    _demo_requests[ip] = recent + [now]
+    if current_user.is_authenticated:
+        logout_user()
+    user = demo.create_demo_user()
+    login_user(user)
+    return redirect(url_for("dashboard.index"))

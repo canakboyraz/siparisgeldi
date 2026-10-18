@@ -35,16 +35,23 @@ def is_admin(user) -> bool:
     return (user.email or "").lower() in admins
 
 
+def _real_users():
+    """Demo hesaplarını yönetici listelerinden ve istatistiklerden ayırır."""
+    return or_(User.is_demo.is_(False), User.is_demo.is_(None))
+
+
 @admin_bp.route("/")
 @admin_required
 def index():
-    users = User.query.order_by(User.created_at.desc()).all()
+    users = User.query.filter(_real_users()).order_by(User.created_at.desc()).all()
+    real_intg = Integration.query.join(User).filter(_real_users())
+    real_orders = Order.query.join(User).filter(_real_users())
 
     total_users        = len(users)
-    total_integrations = Integration.query.count()
-    active_integrations = Integration.query.filter_by(is_active=True).count()
-    total_orders       = Order.query.count()
-    error_integrations = Integration.query.filter(Integration.last_error.isnot(None)).count()
+    total_integrations = real_intg.count()
+    active_integrations = real_intg.filter(Integration.is_active.is_(True)).count()
+    total_orders       = real_orders.count()
+    error_integrations = real_intg.filter(Integration.last_error.isnot(None)).count()
     telegram_connected = sum(1 for u in users if u.telegram_chat_id)
     whatsapp_connected = sum(1 for u in users if u.whatsapp_number)
 
@@ -72,19 +79,19 @@ def index():
     }
 
     recent_orders = (
-        Order.query
+        real_orders
         .order_by(Order.created_at.desc())
         .limit(5)
         .all()
     )
     recent_integrations = (
-        Integration.query
+        Integration.query.join(User).filter(_real_users())
         .order_by(Integration.updated_at.desc())
         .limit(5)
         .all()
     )
     problem_integrations = (
-        Integration.query
+        Integration.query.join(User).filter(_real_users())
         .filter(Integration.last_error.isnot(None))
         .order_by(Integration.updated_at.desc())
         .limit(5)
@@ -108,7 +115,7 @@ def users():
     q = request.args.get("q", "").strip()
     channel = request.args.get("channel", "").strip()
 
-    query = User.query
+    query = User.query.filter(_real_users())
     if q:
         like = f"%{q}%"
         query = query.filter(or_(User.name.ilike(like), User.email.ilike(like)))
@@ -244,7 +251,7 @@ def orders():
     platform = request.args.get("platform", "").strip()
     status = request.args.get("status", "").strip()
 
-    query = Order.query.join(User)
+    query = Order.query.join(User).filter(_real_users())
     if q:
         like = f"%{q}%"
         query = query.filter(or_(
@@ -283,7 +290,7 @@ def integrations():
     platform = request.args.get("platform", "").strip()
     state = request.args.get("state", "").strip()
 
-    query = Integration.query.join(User)
+    query = Integration.query.join(User).filter(_real_users())
     if q:
         like = f"%{q}%"
         query = query.filter(or_(

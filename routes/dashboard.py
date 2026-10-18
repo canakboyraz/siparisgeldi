@@ -99,7 +99,7 @@ def index():
     recent = (Order.query.filter_by(user_id=current_user.id)
               .order_by(Order.created_at.desc()).limit(10).all())
     today_count = None
-    onboarding = _onboarding_steps(integrations, has_order=bool(recent))
+    onboarding = None if current_user.is_demo else _onboarding_steps(integrations, has_order=bool(recent))
     today_local = datetime.now(TURKEY_TZ).date()
     day_start = TURKEY_TZ.localize(datetime.combine(today_local, datetime.min.time())).astimezone(pytz.utc).replace(tzinfo=None)
     todays = Order.query.filter(Order.user_id == current_user.id, Order.created_at >= day_start).all()

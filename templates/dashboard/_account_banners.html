@@ -1,5 +1,11 @@
 {% from "_icons.html" import icon %}
 {% if current_user.is_authenticated %}
+  {% if current_user.is_demo %}
+  <div class="account-banner demo-banner">
+    <span>{{ icon('store', 17) }}<strong>Demo hesap.</strong> <span class="banner-more">Örnek bir restoranın son 30 günü; dilediğin gibi gez, maliyet gir, sipariş kabul et.</span></span>
+    <a class="btn btn-accent btn-sm" href="{{ url_for('auth.register') }}">Kendi hesabını aç</a>
+  </div>
+  {% endif %}
   {% if current_user.is_trial_active and current_user.pro_expires_at %}
   {% set trial_left = [((current_user.pro_expires_at.date() - now().date()).days), 0]|max %}
   <div class="account-banner {{ 'warn' if trial_left <= 3 else '' }}">

@@ -31,9 +31,12 @@
         Gün sonunda komisyon, ürün maliyeti ve paket giderinden sonra ne kazandığını gör.</p>
       <div class="lp-cta">
         <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">{% if trial_days %}{{ trial_days }} gün ücretsiz dene{% else %}Ücretsiz başla{% endif %}</a>
-        <a class="btn btn-ghost btn-lg" href="#nasil">Nasıl çalışır?</a>
+        <form method="post" action="{{ url_for('auth.start_demo') }}" class="inline-form">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-ghost btn-lg" type="submit">Demoyu gör</button>
+        </form>
       </div>
-      <p class="lp-note">Kart bilgisi istenmez · Kurulum yaklaşık 5 dakika · Telegram veya WhatsApp</p>
+      <p class="lp-note">Demo için kayıt gerekmez · Kart bilgisi istenmez · Kurulum yaklaşık 5 dakika</p>
     </div>
 
     <div class="lp-hero-visual" aria-label="Örnek ekran görünümü">
