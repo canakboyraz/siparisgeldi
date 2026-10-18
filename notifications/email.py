@@ -1,7 +1,15 @@
-"""SMTP üzerinden e-posta gönderimi (şifre sıfırlama, e-posta doğrulama)."""
+"""E-posta gönderimi (şifre sıfırlama, e-posta doğrulama).
+
+Resend kullanılıyorsa (SMTP_HOST=smtp.resend.com veya RESEND_API_KEY tanımlı)
+mail Resend'in HTTPS API'si ile gönderilir: Railway Hobby planı giden SMTP
+portlarını (25/465/587) engellediği için SMTP bağlantısı zaman aşımına düşer.
+Diğer sağlayıcılarda klasik SMTP kullanılır.
+"""
 import logging
 import smtplib
 import ssl
+
+import requests
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
 
@@ -10,9 +18,37 @@ from flask import current_app
 log = logging.getLogger(__name__)
 
 
+RESEND_API_URL = "https://api.resend.com/emails"
+
+
+def _resend_api_key() -> str:
+    cfg = current_app.config
+    key = cfg.get("RESEND_API_KEY") or ""
+    if not key and "resend" in (cfg.get("SMTP_HOST") or "").lower():
+        key = cfg.get("SMTP_PASSWORD") or ""
+    return key
+
+
 def is_configured() -> bool:
     cfg = current_app.config
-    return bool(cfg.get("SMTP_HOST") and (cfg.get("SMTP_FROM") or cfg.get("SMTP_USER")))
+    has_sender = bool(cfg.get("SMTP_FROM") or cfg.get("SMTP_USER"))
+    return bool((cfg.get("SMTP_HOST") or _resend_api_key()) and has_sender)
+
+
+def _send_via_resend(api_key: str, sender: str, to: str, subject: str, text: str, html: str = None) -> bool:
+    payload = {"from": sender, "to": [to], "subject": subject, "text": text}
+    if html:
+        payload["html"] = html
+    try:
+        r = requests.post(RESEND_API_URL, json=payload, timeout=15,
+                          headers={"Authorization": f"Bearer {api_key}"})
+        if r.status_code in (200, 201, 202):
+            log.info("[EMAIL] gönderildi (resend api) to=%s subject=%s", to, subject)
+            return True
+        log.error("[EMAIL] gönderilemedi (resend api) to=%s status=%s body=%s", to, r.status_code, r.text[:300])
+    except requests.RequestException as e:
+        log.error("[EMAIL] gönderilemedi (resend api) to=%s: %s", to, e)
+    return False
 
 
 def send_email(to: str, subject: str, text: str, html: str = None) -> bool:
@@ -24,6 +60,11 @@ def send_email(to: str, subject: str, text: str, html: str = None) -> bool:
 
     sender = cfg.get("SMTP_FROM") or cfg.get("SMTP_USER")
     name, addr = parseaddr(sender)
+    api_key = _resend_api_key()
+    if api_key:
+        display = formataddr((name or cfg.get("COMPANY_BRAND_NAME", "SiparişGeldi"), addr))
+        return _send_via_resend(api_key, display, to, subject, text, html)
+
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = formataddr((name or cfg.get("COMPANY_BRAND_NAME", "SiparişGeldi"), addr))

@@ -212,3 +212,25 @@ class PagesRenderTest(AuthBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResendApiTest(unittest.TestCase):
+    def test_resend_host_uses_https_api(self):
+        class C(TestConfig):
+            SMTP_HOST = "smtp.resend.com"
+            SMTP_USER = "resend"
+            SMTP_PASSWORD = "re_test_key"
+            SMTP_FROM = "SiparişGeldi <destek@siparisgeldi.net>"
+        app = create_app(C, start_scheduler=False)
+        with app.app_context():
+            from notifications import email as mailer
+            with patch("notifications.email.requests.post") as post, patch("smtplib.SMTP") as smtp:
+                post.return_value.status_code = 200
+                self.assertTrue(mailer.send_email("a@example.invalid", "Konu", "metin"))
+                smtp.assert_not_called()
+                args, kwargs = post.call_args
+                self.assertEqual(args[0], "https://api.resend.com/emails")
+                self.assertEqual(kwargs["headers"]["Authorization"], "Bearer re_test_key")
+                self.assertEqual(kwargs["json"]["to"], ["a@example.invalid"])
+                self.assertIn("destek@siparisgeldi.net", kwargs["json"]["from"])
+            db.drop_all()

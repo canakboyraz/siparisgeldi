@@ -125,6 +125,9 @@ class Config:
     SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
     SMTP_FROM = os.environ.get("SMTP_FROM", "")  # ör. "SiparişGeldi <destek@siparisgeldi.net>"
     SMTP_USE_SSL = os.environ.get("SMTP_USE_SSL", "0") == "1"  # 465 portu için 1
+    # Resend HTTPS API anahtarı (opsiyonel). SMTP_HOST=smtp.resend.com ise
+    # SMTP_PASSWORD'deki anahtar otomatik kullanılır.
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 
     # --- Deneme süresi ---
     # Yeni kayıtlara verilen ücretsiz Pro deneme günü (0 = kapalı).
