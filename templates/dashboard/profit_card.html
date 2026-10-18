@@ -1,0 +1,126 @@
+{% extends "dashboard/_layout.html" %}
+{% set active = 'profit_card' %}
+{% block title %}Kâr karnesi · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div>
+    <h1>Kâr karnesi</h1>
+    <p class="muted" style="margin:0">{{ report.start.strftime('%d.%m.%Y') }} – {{ report.end.strftime('%d.%m.%Y') }}{% if partial_week %} · hafta devam ediyor{% endif %}</p>
+  </div>
+  <div class="inline">
+    <form method="get" class="inline">
+      <select name="hafta" onchange="this.form.submit()" aria-label="Hafta seç">
+        {% for w in weeks %}<option value="{{ w.value }}" {{ 'selected' if w.value == selected_week }}>{{ w.label }}</option>{% endfor %}
+      </select>
+    </form>
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="hafta" value="{{ selected_week }}">
+      <button class="btn btn-ghost" type="submit">Telegram'a gönder</button>
+    </form>
+  </div>
+</div>
+
+{% macro change(value) -%}
+  {%- if value is not none -%}<span class="pc-change {{ 'up' if value >= 0 else 'down' }}">{{ '▲' if value >= 0 else '▼' }} %{{ '%.0f'|format(value|abs) }}</span>{%- endif -%}
+{%- endmacro %}
+
+{% if report.orders == 0 %}
+<div class="card"><div class="empty">Bu hafta için sipariş yok. Başka bir hafta seç ya da platform bağlantılarını kontrol et.</div></div>
+{% else %}
+
+<div class="stats">
+  <div class="stat"><div class="v">{{ report.orders }}</div><div class="l">Sipariş</div></div>
+  <div class="stat"><div class="v">{{ tl(report.revenue) }}</div><div class="l">Ciro {{ change(report.revenue_change) }}</div></div>
+  <div class="stat"><div class="v pc-neg">{{ tl(report.commission) }}</div><div class="l">Komisyona giden</div></div>
+  <div class="stat"><div class="v {{ 'pc-pos' if report.profit >= 0 else 'pc-neg' }}">{{ tl(report.profit) }}</div><div class="l">Tahmini kâr · %{{ '%.0f'|format(report.margin) }} {{ change(report.profit_change) }}</div></div>
+</div>
+
+<div class="card pc-flow">
+  <div class="card-title">Ciro nereye gitti?</div>
+  <div class="pc-flow-rows">
+    <div><span>Ciro</span><b>{{ tl(report.revenue) }}</b></div>
+    <div class="minus"><span>Platform komisyonu</span><b>{{ tl(-report.commission) }}</b></div>
+    <div class="minus"><span>Ürün maliyeti</span><b>{{ tl(-report.cost) }}</b></div>
+    <div class="minus"><span>Paket ve sipariş başı giderler</span><b>{{ tl(-report.other) }}</b></div>
+    <div class="minus"><span>Reklam</span><b>{{ tl(-report.advertising) }}</b></div>
+    <div class="total {{ 'neg' if report.profit < 0 }}"><span>Tahmini kâr</span><b>{{ tl(report.profit) }}</b></div>
+  </div>
+  <p class="hint">Kira, personel gibi aylık sabit giderler dahil değildir; onları <a href="{{ url_for('dashboard.product_costs') }}" style="color:var(--brand);font-weight:600">Kârlılık</a> ekranında görebilirsin.</p>
+</div>
+
+{% if report.uncosted_count %}
+<div class="account-banner warn">
+  <span>ℹ️ {{ report.uncosted_count }} ürünün maliyeti girilmemiş (cironun %{{ '%.0f'|format(report.uncosted_revenue_share) }}'i). Bu ürünler kâra maliyetsiz yansıyor.</span>
+  <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.product_cost_entry') }}">Maliyet gir</a>
+</div>
+{% endif %}
+
+<div class="grid-2 pc-grid">
+  <div class="card">
+    <div class="card-title">⚠️ Zararına satılan ürünler</div>
+    {% if not report.loss_products %}
+      <div class="empty">Bu hafta zararına satılan ürün yok. 👍</div>
+    {% elif show_details %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>Ürün</th><th>Adet</th><th>Adet başı</th><th>Toplam</th></tr></thead>
+        <tbody>
+        {% for p in report.loss_products %}
+          <tr><td>{{ p.name }}</td><td>{{ '%.0f'|format(p.quantity) }}</td><td class="pc-neg">{{ tl(p.unit_profit) }}</td><td class="pc-neg">{{ tl(p.profit) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      <p class="hint">Komisyon ve ürün maliyeti sonrası. Bu ürünlerde fiyatı artırmayı ya da platformdan kaldırmayı düşünebilirsin.</p>
+    {% else %}
+      <div class="pc-locked">
+        <strong>{{ report.loss_products|length }} ürün</strong> komisyon ve maliyet sonrası zarar ettirdi.
+        <p class="muted">Hangi ürünler olduğunu ve adet başı zararı Pro planda görebilirsin.</p>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.subscription') }}">Pro'ya geç</a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">💪 En çok kazandıran ürünler</div>
+    {% if report.top_products %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>Ürün</th><th>Adet</th><th>Adet başı</th><th>Toplam kâr</th></tr></thead>
+        <tbody>
+        {% for p in report.top_products %}
+          <tr><td>{{ p.name }}</td><td>{{ '%.0f'|format(p.quantity) }}</td><td>{{ tl(p.unit_profit) }}</td><td class="pc-pos">{{ tl(p.profit) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    {% else %}
+      <div class="empty">Ürün kârı için önce maliyet gir.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% if report.platforms|length > 0 %}
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Platform karşılaştırması</div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Platform</th><th>Sipariş</th><th>Ciro</th><th>Komisyon</th><th>Maliyet</th><th>Paket/diğer</th><th>Kâr</th><th>Marj</th></tr></thead>
+    <tbody>
+    {% for p in report.platforms %}
+      <tr>
+        <td><strong>{{ platform_label(p.platform) }}</strong></td>
+        <td>{{ p.orders }}</td>
+        <td>{{ tl(p.revenue) }}</td>
+        <td>{{ tl(p.commission) }}</td>
+        <td>{{ tl(p.cost) }}</td>
+        <td>{{ tl(p.other) }}</td>
+        <td class="{{ 'pc-pos' if p.profit >= 0 else 'pc-neg' }}"><strong>{{ tl(p.profit) }}</strong></td>
+        <td>%{{ '%.0f'|format(p.margin) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if not report.commission %}<p class="hint">Komisyon oranı girilmemiş görünüyor. <a href="{{ url_for('dashboard.product_cost_entry') }}" style="color:var(--brand);font-weight:600">Komisyon gir</a></p>{% endif %}
+</div>
+{% endif %}
+
+{% endif %}
+<p class="hint" style="margin-top:1rem">Karne her pazartesi 09:30'da geçen haftanın özetiyle Telegram'ına otomatik gelir. Operasyonel tahmindir; muhasebe kaydı yerine geçmez.</p>
+{% endblock %}

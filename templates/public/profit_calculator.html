@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Paket Servis Kâr Hesaplayıcı · Komisyon sonrası gerçek kâr · SiparişGeldi{% endblock %}
+{% block head %}
+  <meta name="description" content="Ücretsiz paket servis kâr hesaplayıcı: satış fiyatı, ürün maliyeti, platform komisyonu ve ambalaj giderini gir; ürün başı gerçek kârını, marjını ve olması gereken satış fiyatını hemen gör.">
+  <meta property="og:title" content="Paket Servis Kâr Hesaplayıcı · SiparişGeldi">
+  <meta property="og:description" content="Komisyon ve ambalajdan sonra bir üründen gerçekte ne kazanıyorsun? 10 saniyede hesapla.">
+  <meta property="og:type" content="website">
+{% endblock %}
+{% block body %}
+<div class="lp">
+  <header class="container nav lp-nav">
+    <a class="brand" href="{{ url_for('public.landing') }}"><span class="dot"></span> SiparişGeldi</a>
+    <nav class="lp-links" aria-label="Sayfalar">
+      <a href="{{ url_for('public.landing') }}#ozellikler">Özellikler</a>
+      <a href="{{ url_for('public.landing') }}#fiyatlandirma">Fiyat</a>
+      <a href="{{ url_for('public.profit_calculator') }}">Kâr hesaplayıcı</a>
+    </nav>
+    <div class="inline">
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.login') }}">Giriş</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">{{ 'Ücretsiz dene' if trial_days else 'Ücretsiz başla' }}</a>
+    </div>
+  </header>
+
+  <section class="container calc-head">
+    <span class="pill">Ücretsiz araç · kayıt gerekmez</span>
+    <h1>Paket servis kâr hesaplayıcı</h1>
+    <p class="lp-lead">Komisyon ve ambalajdan sonra bir üründen gerçekte ne kazanıyorsun? Rakamları gir, sonuç anında hesaplansın.</p>
+  </section>
+
+  <section class="container calc-grid">
+    <form class="card calc-form" id="calc" onsubmit="return false" autocomplete="off">
+      <div class="field">
+        <label for="price">Platformdaki satış fiyatı (TL)</label>
+        <input type="number" id="price" inputmode="decimal" min="0" step="0.01" value="150">
+      </div>
+      <div class="field">
+        <label for="cost">Ürün maliyeti (TL)</label>
+        <input type="number" id="cost" inputmode="decimal" min="0" step="0.01" value="60">
+        <div class="hint">Malzeme maliyeti: et, ekmek, sos, içecek…</div>
+      </div>
+      <div class="field">
+        <label for="commission">Platform komisyonu (%)</label>
+        <input type="number" id="commission" inputmode="decimal" min="0" max="100" step="0.1" value="20">
+        <div class="hint">Kendi sözleşmendeki oranı yaz; platforma ve kategoriye göre değişir.</div>
+      </div>
+      <div class="calc-row">
+        <div class="field">
+          <label for="pack">Ambalaj / paket (TL)</label>
+          <input type="number" id="pack" inputmode="decimal" min="0" step="0.01" value="8">
+        </div>
+        <div class="field">
+          <label for="courier">Kurye / diğer (TL)</label>
+          <input type="number" id="courier" inputmode="decimal" min="0" step="0.01" value="0">
+        </div>
+      </div>
+      <div class="calc-row">
+        <div class="field">
+          <label for="qty">Aylık satış adedi</label>
+          <input type="number" id="qty" inputmode="numeric" min="0" step="1" value="300">
+        </div>
+        <div class="field">
+          <label for="target">Hedef kâr marjı (%)</label>
+          <input type="number" id="target" inputmode="decimal" min="0" max="90" step="1" value="25">
+        </div>
+      </div>
+    </form>
+
+    <div class="calc-result">
+      <div class="card calc-main" id="result-card">
+        <div class="muted">Ürün başı gerçek kâr</div>
+        <div class="calc-big" id="r-profit">—</div>
+        <div class="calc-margin" id="r-margin">—</div>
+        <div class="calc-breakdown">
+          <div><span>Satış fiyatı</span><b id="r-price">—</b></div>
+          <div class="minus"><span>Komisyon</span><b id="r-commission">—</b></div>
+          <div class="minus"><span>Ürün maliyeti</span><b id="r-cost">—</b></div>
+          <div class="minus"><span>Ambalaj + kurye</span><b id="r-extra">—</b></div>
+          <div class="total"><span>Elde kalan</span><b id="r-profit2">—</b></div>
+        </div>
+      </div>
+      <div class="card calc-side">
+        <div class="calc-side-row"><span>Aylık tahmini kâr</span><b id="r-monthly">—</b></div>
+        <div class="calc-side-row"><span>Aylık komisyona giden</span><b id="r-monthly-commission">—</b></div>
+        <div class="calc-side-row"><span>Başa baş satış fiyatı</span><b id="r-breakeven">—</b></div>
+        <div class="calc-side-row strong"><span id="r-target-label">Hedef marj için fiyat</span><b id="r-target">—</b></div>
+        <p class="hint" id="r-tip"></p>
+      </div>
+      <div class="card calc-cta">
+        <strong>Bunu tüm menün için her gün otomatik görmek ister misin?</strong>
+        <p class="muted">SiparişGeldi, Trendyol Go ve Migros Yemek siparişlerini kendisi çeker; komisyon, maliyet ve paket giderinden sonra kârını gün gün hesaplar, zararına satılan ürünü sana söyler.</p>
+        <a class="btn btn-primary" href="{{ url_for('auth.register') }}">{% if trial_days %}{{ trial_days }} gün ücretsiz dene{% else %}Ücretsiz başla{% endif %}</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="container lp-faq">
+    <div class="lp-section-head"><h2>Nasıl hesaplanıyor?</h2></div>
+    <details open>
+      <summary>Ürün başı kâr</summary>
+      <p>Satış fiyatı − (satış fiyatı × komisyon oranı) − ürün maliyeti − ambalaj − kurye/diğer. Komisyon platformda listelenen satış fiyatı üzerinden hesaplanır.</p>
+    </details>
+    <details>
+      <summary>Başa baş ve hedef fiyat</summary>
+      <p>Başa baş fiyat, kârın sıfır olduğu fiyattır: (maliyet + ambalaj + kurye) ÷ (1 − komisyon). Hedef marj için fiyat: (maliyet + ambalaj + kurye) ÷ (1 − komisyon − hedef marj).</p>
+    </details>
+    <details>
+      <summary>Neler dahil değil?</summary>
+      <p>Kira, personel, elektrik gibi sabit giderler ve vergiler bu hesaba dahil değildir. Sonuç operasyonel bir tahmindir; muhasebe hesabı yerine geçmez.</p>
+    </details>
+  </section>
+</div>
+{% include "public/_footer.html" %}
+<script>
+(function () {
+  var ids = ["price", "cost", "commission", "pack", "courier", "qty", "target"];
+  var el = function (id) { return document.getElementById(id); };
+  var num = function (id) { var v = parseFloat(String(el(id).value).replace(",", ".")); return isFinite(v) && v > 0 ? v : 0; };
+  var fmt = function (v) {
+    var sign = v < 0 ? "−" : "";
+    return sign + Math.abs(v).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
+  };
+  var pct = function (v) { return "%" + v.toLocaleString("tr-TR", { maximumFractionDigits: 1 }); };
+  function calc() {
+    var price = num("price"), cost = num("cost"), rate = Math.min(num("commission"), 100) / 100;
+    var extra = num("pack") + num("courier"), qty = num("qty"), target = Math.min(num("target"), 90) / 100;
+    var commission = price * rate;
+    var profit = price - commission - cost - extra;
+    var margin = price ? profit / price * 100 : 0;
+    el("r-price").textContent = fmt(price);
+    el("r-commission").textContent = fmt(-commission);
+    el("r-cost").textContent = fmt(-cost);
+    el("r-extra").textContent = fmt(-extra);
+    el("r-profit").textContent = fmt(profit);
+    el("r-profit2").textContent = fmt(profit);
+    el("r-margin").textContent = price ? pct(margin) + " kâr marjı" : "Satış fiyatını gir";
+    el("result-card").classList.toggle("loss", profit < 0);
+    el("r-monthly").textContent = fmt(profit * qty);
+    el("r-monthly-commission").textContent = fmt(commission * qty);
+    var base = cost + extra;
+    el("r-breakeven").textContent = rate < 1 ? fmt(base / (1 - rate)) : "—";
+    el("r-target-label").textContent = "%" + Math.round(target * 100) + " marj için fiyat";
+    el("r-target").textContent = (1 - rate - target) > 0 ? fmt(base / (1 - rate - target)) : "Mümkün değil";
+    var tip = "";
+    if (profit < 0) tip = "Bu fiyatla her satışta zarar ediyorsun. Fiyatı en az başa baş seviyesine çıkarman gerekiyor.";
+    else if (margin < target * 100) tip = "Kâr var ama hedefin altında. Fiyatı hedef seviyeye çekmek ya da ambalaj maliyetini düşürmek marjı artırır.";
+    else if (price) tip = "Hedef marjın üzerindesin. Bu ürün menünün kazandıranlarından.";
+    el("r-tip").textContent = tip;
+  }
+  ids.forEach(function (id) { el(id).addEventListener("input", calc); });
+  calc();
+})();
+</script>
+{% endblock %}

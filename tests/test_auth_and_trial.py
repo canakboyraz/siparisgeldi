@@ -199,7 +199,7 @@ class MonitoringTest(AuthBase):
 class PagesRenderTest(AuthBase):
     @patch("notifications.email.send_email", return_value=True)
     def test_public_and_dashboard_pages_render(self, _send):
-        for path in ("/", "/giris", "/kayit", "/sifremi-unuttum"):
+        for path in ("/", "/giris", "/kayit", "/sifremi-unuttum", "/kar-hesaplayici"):
             self.assertEqual(self.client.get(path).status_code, 200, path)
         self.register()
         for path in ("/panel/", "/panel/abonelik", "/panel/profil"):

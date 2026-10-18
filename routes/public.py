@@ -13,6 +13,11 @@ def landing():
     return render_template("public/landing.html")
 
 
+@public_bp.route("/kar-hesaplayici")
+def profit_calculator():
+    return render_template("public/profit_calculator.html")
+
+
 @public_bp.route("/iletisim")
 def contact():
     return render_template("public/contact.html")

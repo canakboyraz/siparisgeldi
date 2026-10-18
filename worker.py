@@ -1049,6 +1049,9 @@ def start_scheduler(app):
                       args=[app], id="plan_limits", replace_existing=True, max_instances=1)
     scheduler.add_job(monitoring.send_trial_reminders, "cron", hour=10, minute=0,
                       args=[app], id="trial_reminders", replace_existing=True)
+    # Haftalık Kâr Karnesi — her Pazartesi 09:30 (geçen Pazartesi–Pazar)
+    scheduler.add_job(monitoring.send_weekly_profit_cards, "cron", day_of_week="mon", hour=9, minute=30,
+                      args=[app], id="weekly_profit_card", replace_existing=True)
 
     scheduler.start()
     try:

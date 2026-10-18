@@ -100,9 +100,24 @@ def index():
               .order_by(Order.created_at.desc()).limit(10).all())
     today_count = None
     onboarding = _onboarding_steps(integrations, has_order=bool(recent))
+    loss_alert = None
+    if recent:
+        try:
+            import profit_report
+            today = datetime.now(TURKEY_TZ).date()
+            week = profit_report.compute(current_user.id, today - timedelta(days=6), today)
+            if week["loss_products"]:
+                loss_alert = {"count": len(week["loss_products"]),
+                              "total": sum(p["profit"] for p in week["loss_products"]),
+                              "names": [p["name"] for p in week["loss_products"][:3]],
+                              "week": (today - timedelta(days=today.weekday())).isoformat()}
+        except Exception:  # noqa: BLE001 — uyarı ana sayfayı asla bozmamalı
+            current_app.logger.exception("Zarar uyarısı hesaplanamadı user_id=%s", current_user.id)
     return render_template("dashboard/index.html",
                            integrations=integrations, recent_orders=recent,
-                           today_count=today_count, onboarding=onboarding)
+                           today_count=today_count, onboarding=onboarding,
+                           loss_alert=loss_alert,
+                           show_loss_details=_is_pro_user() or _can_use_multi_platform())
 
 
 def _onboarding_steps(integrations, has_order: bool) -> dict:
@@ -1653,6 +1668,46 @@ def product_costs():
                            monthly_expenses=monthly_expenses,
                            monthly_expense_total=monthly_expense_total,
                            today=datetime.now(TURKEY_TZ).date().isoformat())
+
+
+@dashboard_bp.route("/kar-karnesi", methods=["GET", "POST"])
+@login_required
+def profit_card():
+    """Haftalık Kâr Karnesi: haftanın ciro, komisyon, maliyet ve ürün bazlı kârı."""
+    import profit_report
+    today = datetime.now(TURKEY_TZ).date()
+    this_monday = today - timedelta(days=today.weekday())
+    raw = (request.values.get("hafta") or "").strip()
+    try:
+        start_day = datetime.strptime(raw, "%Y-%m-%d").date() if raw else this_monday - timedelta(days=7)
+    except ValueError:
+        start_day = this_monday - timedelta(days=7)
+    start_day = start_day - timedelta(days=start_day.weekday())
+    if start_day > this_monday:
+        start_day = this_monday
+    end_day = min(start_day + timedelta(days=6), today)
+
+    if request.method == "POST":
+        import monitoring
+        if not current_user.telegram_chat_id:
+            flash("Karneyi göndermek için önce Telegram'ı bağla.", "warning")
+        elif monitoring.send_profit_card(current_user, start_day, end_day, force=True):
+            flash("Kâr karnesi Telegram'a gönderildi.", "success")
+        else:
+            flash("Karne gönderilemedi. Telegram bağlantını kontrol et.", "danger")
+        return redirect(url_for("dashboard.profit_card", hafta=start_day.isoformat()))
+
+    report = profit_report.compute_with_previous(current_user.id, start_day, end_day)
+    weeks = []
+    for i in range(0, 9):
+        monday = this_monday - timedelta(days=7 * i)
+        label = "Bu hafta" if i == 0 else ("Geçen hafta" if i == 1 else
+                f"{monday.strftime('%d.%m')}–{(monday + timedelta(days=6)).strftime('%d.%m')}")
+        weeks.append({"value": monday.isoformat(), "label": label})
+    return render_template("dashboard/profit_card.html", report=report, weeks=weeks,
+                           selected_week=start_day.isoformat(), tl=profit_report.tl,
+                           show_details=_is_pro_user() or _can_use_multi_platform(),
+                           partial_week=end_day < start_day + timedelta(days=6))
 
 
 @dashboard_bp.route("/aylik-giderler", methods=["GET", "POST"])

@@ -16,6 +16,21 @@
   </div>
 </div>
 
+{% if loss_alert %}
+<div class="card loss-alert">
+  <div class="section-head" style="margin-bottom:0">
+    <div>
+      <div class="card-title">⚠️ Son 7 günde {{ loss_alert.count }} ürün zararına satıldı</div>
+      <div class="muted">
+        {% if show_loss_details %}{{ loss_alert.names|join(', ') }}{% if loss_alert.count > 3 %} ve diğerleri{% endif %} · toplam {{ tl_amount(loss_alert.total) }}
+        {% else %}Komisyon ve maliyet sonrası eksiye düşen ürünlerin listesi Pro'da.{% endif %}
+      </div>
+    </div>
+    <a class="btn {{ 'btn-primary' if show_loss_details else 'btn-ghost' }} btn-sm" href="{{ url_for('dashboard.profit_card', hafta=loss_alert.week) }}">{{ 'Kâr karnesini aç' if show_loss_details else "Pro'da gör" }}</a>
+  </div>
+</div>
+{% endif %}
+
 {% if onboarding and not onboarding.complete %}
 <div class="card onboarding-card">
   <div class="section-head">

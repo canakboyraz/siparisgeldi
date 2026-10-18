@@ -211,6 +211,7 @@ def create_app(config_class=Config, start_scheduler=None):
     # Şablonlarda kullanılacak yardımcılar
     from datetime import datetime
     import utils
+    import profit_report
 
     from routes.admin import is_admin
     from flask_login import current_user
@@ -274,6 +275,7 @@ def create_app(config_class=Config, start_scheduler=None):
             },
             "csrf_token": csrf_token,
             "trial_days": int(app.config.get("TRIAL_DAYS", 0) or 0),
+            "tl_amount": profit_report.tl,
             "mail_configured": bool(app.config.get("SMTP_HOST")),
             "dashboard_latest_order_id": dashboard_latest_order_id,
         }

@@ -260,3 +260,60 @@ def send_trial_reminders(app):
             )
             if telegram.send_message(token, user.telegram_chat_id, text):
                 AppState.set(key, today.isoformat())
+
+
+# ── Haftalık Kâr Karnesi ────────────────────────────────────────────────────
+
+def _panel_url(path: str) -> str:
+    domain = (current_app.config.get("APP_DOMAIN") or "siparisgeldi.net").strip()
+    domain = domain.removeprefix("https://").removeprefix("http://").rstrip("/")
+    return f"https://{domain}{path}"
+
+
+def send_profit_card(user, start_day, end_day, force: bool = False) -> bool:
+    """Bir kullanıcıya haftalık kâr karnesini Telegram'dan gönderir.
+    force=False iken aynı hafta için ikinci kez göndermez ve siparişsiz haftayı atlar."""
+    import profit_report
+    import utils
+    from models import AppState
+    from notifications import telegram
+    token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
+    if not token or not user.telegram_chat_id:
+        return False
+    key = f"profit_card:{user.id}:{start_day.isoformat()}"
+    if not force and AppState.get(key):
+        return False
+    report = profit_report.compute_with_previous(user.id, start_day, end_day)
+    if not force and report["orders"] == 0:
+        return False
+    text = profit_report.telegram_text(
+        report, utils.platform_label,
+        show_details=bool(user.is_pro_active or user.has_multi_platform_access),
+        panel_url=_panel_url(f"/panel/kar-karnesi?hafta={start_day.isoformat()}"),
+    )
+    sent = telegram.send_message(token, user.telegram_chat_id, text)
+    if sent and not force:
+        AppState.set(key, datetime.utcnow().isoformat(timespec="seconds"))
+    return sent
+
+
+def send_weekly_profit_cards(app):
+    """Her pazartesi: geçen haftanın kâr karnesi (Telegram bağlı ve haftalık
+    raporu açık en az bir aktif entegrasyonu olan kullanıcılara)."""
+    import profit_report
+    from models import Integration, User
+    with app.app_context():
+        start_day, end_day = profit_report.last_week_range()
+        users = (User.query.join(Integration, Integration.user_id == User.id)
+                 .filter(Integration.is_active.is_(True),
+                         Integration.notify_weekly_report.isnot(False),
+                         User.telegram_chat_id.isnot(None))
+                 .distinct().all())
+        sent = 0
+        for user in users:
+            try:
+                sent += 1 if send_profit_card(user, start_day, end_day) else 0
+            except Exception as e:  # noqa: BLE001
+                db.session.rollback()
+                log.warning("[KARNE] user=%s gönderilemedi: %s", user.id, e)
+        log.info("[KARNE] %s kullanıcıya gönderildi (%s–%s)", sent, start_day, end_day)

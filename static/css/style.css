@@ -805,3 +805,47 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
   .lp-cta .btn{width:100%}
   .lp-nav .btn-ghost{display:none}
 }
+
+/* Kâr karnesi */
+.pc-pos{color:var(--green)}
+.pc-neg{color:var(--red)}
+.pc-change{font-size:.78rem;font-weight:800;margin-left:.2rem}
+.pc-change.up{color:var(--green)}
+.pc-change.down{color:var(--red)}
+.pc-flow{margin-bottom:1rem}
+.pc-flow-rows{display:grid;gap:.1rem;max-width:520px;margin:.6rem 0}
+.pc-flow-rows div{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px dashed var(--line)}
+.pc-flow-rows .minus b{color:var(--red)}
+.pc-flow-rows .total{border-bottom:none;border-top:2px solid var(--ink);margin-top:.2rem;font-size:1.05rem}
+.pc-flow-rows .total b{color:var(--green)}
+.pc-locked{background:var(--gray-soft);border-radius:12px;padding:1rem;margin-top:.6rem}
+.pc-locked p{margin:.3rem 0 .7rem}
+.loss-alert{margin-bottom:1rem;border-color:#f3c4bf;background:var(--red-soft)}
+.pc-flow-rows .total.neg b{color:var(--red)}
+.pc-grid > .card + .card{margin-top:0}
+
+/* Kâr hesaplayıcı */
+.calc-head{text-align:center;padding-top:1.5rem}
+.calc-head .lp-lead{margin:1rem auto 0}
+.calc-head h1{font-size:clamp(1.9rem,4vw,2.8rem);font-weight:800;letter-spacing:-.03em}
+.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start;margin:2rem auto}
+.calc-form input{font-size:1.05rem}
+.calc-row{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+.calc-result{display:grid;gap:1rem}
+.calc-result .card + .card{margin-top:0}
+.calc-main{border-color:#bfe6d2}
+.calc-main.loss{border-color:#f3c4bf;background:var(--red-soft)}
+.calc-big{font-size:2.6rem;font-weight:800;letter-spacing:-.03em;color:var(--green);line-height:1.1;margin:.2rem 0}
+.calc-main.loss .calc-big{color:var(--red)}
+.calc-margin{font-weight:700;color:var(--muted);margin-bottom:.8rem}
+.calc-breakdown div{display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px dashed var(--line)}
+.calc-breakdown .minus b{color:var(--red)}
+.calc-breakdown .total{border-bottom:none;border-top:2px solid var(--ink);margin-top:.2rem}
+.calc-side-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px solid var(--line)}
+.calc-side-row.strong{border-bottom:none;font-size:1.05rem}
+.calc-side-row.strong b{color:var(--brand)}
+.calc-cta{background:var(--ink);color:#fff;border-color:var(--ink)}
+.calc-cta .muted{color:#c7cbd3}
+@media(max-width:860px){.calc-grid{grid-template-columns:1fr}}
+@media(max-width:420px){.calc-row{grid-template-columns:1fr}}
+.calc-form input[type=number]{width:100%;padding:.7rem .85rem;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:1.05rem;transition:.15s;box-sizing:border-box}
