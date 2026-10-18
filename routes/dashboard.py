@@ -126,8 +126,8 @@ def _onboarding_steps(integrations, has_order: bool) -> dict:
     steps += [
         {"key": "notify", "done": notify_ready,
          "title": "Bildirim kanalını bağla",
-         "desc": "Telegram'da tek tıkla bağlan; siparişler telefonuna düşsün.",
-         "url": url_for("dashboard.connect_telegram"), "cta": "Telegram'ı bağla"},
+         "desc": "Telegram'ı tek tıkla, WhatsApp'ı numaranla bağla; siparişler telefonuna düşsün.",
+         "channels": True, "whatsapp_allowed": _can_use_whatsapp()},
         {"key": "platform", "done": bool(integrations),
          "title": "İlk platformunu bağla",
          "desc": "API bilgilerini gir, bağlantıyı test edip kaydedelim.",

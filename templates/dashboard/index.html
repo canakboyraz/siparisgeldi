@@ -43,6 +43,15 @@
           <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.trendyol_marketplace_setup') }}">Trendyol Pazaryeri</a>
           <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.hepsiburada_setup') }}">Hepsiburada</a>
         </div>
+        {% elif step.channels %}
+        <div class="onboarding-platforms">
+          <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.connect_telegram') }}">Telegram'ı bağla</a>
+          {% if step.whatsapp_allowed %}
+          <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.connect_whatsapp') }}">WhatsApp'ı bağla</a>
+          {% else %}
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.subscription') }}">WhatsApp'ı bağla <span class="badge violet">Pro</span></a>
+          {% endif %}
+        </div>
         {% elif step.action == 'resend_verification' %}
         <form method="post" action="{{ url_for('auth.resend_verification') }}" style="margin-top:.4rem">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
