@@ -51,10 +51,10 @@ Aşağıdakileri gir (değerleri asistandan aldığın gizli anahtarlarla doldur
 | `TELEGRAM_BOT_USERNAME` | Botun kullanıcı adı (@ olmadan) |
 | `RUN_SCHEDULER` | `1` |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (Railway referansı) |
-| `MIGROS_API_BASE` | Test için `https://test.gourmet.migrosonline.com` |
+| `MIGROS_API_BASE` | Canlı için `https://gourmet.migrosone.com` |
 | `MIGROS_WEBHOOK_USER` | (asistanın verdiği) |
 | `MIGROS_WEBHOOK_PASS` | (asistanın verdiği) |
-| `MIGROS_SECRET_KEY` | (şimdilik boş — Migros sonra verecek) |
+| `MIGROS_SECRET_KEY` | Migros’un canlı ortam için verdiği Secret Key |
 
 > `PREFERRED_URL_SCHEME=https` ve `APP_DOMAIN=siparisgeldi.net` kodda varsayılan;
 > istersen değişken olarak da ekleyebilirsin.
@@ -102,3 +102,43 @@ panelden Migros Yemek sayfasına gir.
   gunicorn `--workers 1`). Ayrı worker servisine şimdilik gerek yok.
 - İleride yük artarsa: web'i `RUN_SCHEDULER=0` yapıp Procfile'daki `worker`
   sürecini ayrı bir Railway servisi olarak çalıştır (polling tek yerde olsun).
+
+---
+
+## 8) Ölçek ve izleme (yeni)
+
+### Worker'ı ayrı servise al (önerilen, 20+ restoranda şart)
+
+1. Railway → aynı projede **New → GitHub Repo** ile aynı repodan ikinci servis aç, adı `worker`.
+2. Worker servisi → Settings → **Custom Start Command**: `python worker.py`
+3. Worker servisine web servisiyle **aynı Variables**'ı gir (en kolayı: Shared Variables).
+4. Web servisinde `RUN_SCHEDULER=0` yap. Worker'da `RUN_SCHEDULER` önemsiz (kendisi başlatır).
+5. Worker **tek instance** kalmalı (Replicas = 1), yoksa bildirimler mükerrer olur.
+
+Polling artık entegrasyonları paralel işler (`POLL_MAX_WORKERS`, varsayılan 8);
+yavaş yanıt veren bir restoran diğerlerinin bildirimini geciktirmez.
+
+### Sağlık kontrolü
+
+- `https://siparisgeldi.net/healthz` → 200 ise DB ve worker çalışıyor; 503 ise
+  DB'ye ulaşılamıyor ya da worker 3 dakikadır sessiz.
+- UptimeRobot (ücretsiz) → New Monitor → HTTP(s) → bu adres, 5 dk aralık,
+  alarm: e-posta/Telegram.
+
+### Senkron alarmı
+
+Worker her 5 dakikada polling yapılan entegrasyonları kontrol eder;
+`SYNC_STALE_ALERT_MINUTES` (10 dk) boyunca senkron olmayan varsa yöneticiye
+Telegram mesajı gelir (aynı entegrasyon için saatte en fazla 1 kez). Alarmın
+gelmesi için `ADMIN_EMAILS` hesabının panelden Telegram'ı bağlamış olması
+ya da `ADMIN_ALERT_TELEGRAM_CHAT_IDS` girilmiş olması gerekir.
+
+### Sentry (hata takibi)
+
+sentry.io'da ücretsiz Flask projesi aç → DSN'i `SENTRY_DSN` olarak gir.
+
+### E-posta
+
+Şifre sıfırlama ve e-posta doğrulama için `SMTP_*` değişkenlerini gir
+(bkz. `.env.example`). SMTP girilmezse sıfırlama bağlantısı yalnızca
+kullanıcının bağlı Telegram'ına gider.

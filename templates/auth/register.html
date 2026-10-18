@@ -6,6 +6,7 @@
     <a href="{{ url_for('public.landing') }}" class="brand"><span class="dot"></span> SiparişGeldi</a>
     <div class="card">
       <h2 style="text-align:center">Ücretsiz hesap oluştur</h2>
+      {% if trial_days %}<p class="muted" style="text-align:center;margin:-.2rem 0 1rem">{{ trial_days }} gün tüm Pro özellikler açık. Kart bilgisi istenmez.</p>{% endif %}
       {% include "_flashes.html" %}
       <form method="post">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -19,11 +20,18 @@
         </div>
         <div class="field">
           <label>Şifre</label>
-          <input type="password" name="password" required placeholder="En az 6 karakter">
+          <input type="password" name="password" required minlength="{{ min_password_length or 8 }}" placeholder="En az {{ min_password_length or 8 }} karakter">
         </div>
         <div class="field">
           <label>Şifre (tekrar)</label>
           <input type="password" name="confirm_password" required placeholder="••••••••">
+        </div>
+        <div class="field">
+          <label class="check-label" style="display:flex;gap:.55rem;align-items:flex-start;font-weight:500">
+            <input type="checkbox" name="accept_terms" value="1" required style="margin-top:.25rem">
+            <span><a href="{{ url_for('public.privacy_policy') }}" target="_blank" style="color:var(--brand)">Gizlilik politikasını</a> ve
+            <a href="{{ url_for('public.kvkk_notice') }}" target="_blank" style="color:var(--brand)">KVKK aydınlatma metnini</a> okudum, kabul ediyorum.</span>
+          </label>
         </div>
         <button class="btn btn-primary btn-block btn-lg" type="submit">Hesabı oluştur</button>
       </form>

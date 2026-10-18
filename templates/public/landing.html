@@ -1,76 +1,238 @@
 {% extends "base.html" %}
+{% block title %}SiparişGeldi · Paket servis siparişleri ve gerçek kâr tek panelde{% endblock %}
+{% block head %}
+  <meta name="description" content="Trendyol Go, Migros Yemek, Adisyo, Trendyol ve Hepsiburada siparişlerini tek panelde yönetin. Anında Telegram/WhatsApp bildirimi, fiş yazdırma ve komisyon sonrası gerçek kâr raporu.">
+  <meta property="og:title" content="SiparişGeldi · Siparişi kaçırma, gerçek kârını gör">
+  <meta property="og:description" content="Paket servis siparişlerin tek ekranda, komisyon ve maliyet sonrası kârın her akşam telefonunda.">
+  <meta property="og:type" content="website">
+{% endblock %}
 {% block body %}
-<div class="container">
-  <div class="nav">
-    <div class="brand"><span class="dot"></span> SiparişGeldi</div>
+<div class="lp">
+  <header class="container nav lp-nav">
+    <a class="brand" href="{{ url_for('public.landing') }}"><span class="dot"></span> SiparişGeldi</a>
+    <nav class="lp-links" aria-label="Sayfa bölümleri">
+      <a href="#ozellikler">Özellikler</a>
+      <a href="#karlilik">Kârlılık</a>
+      <a href="#fiyatlandirma">Fiyat</a>
+      <a href="#sss">SSS</a>
+    </nav>
     <div class="inline">
       <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.login') }}">Giriş</a>
-      <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">Ücretsiz Başla</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">{{ 'Ücretsiz dene' if trial_days else 'Ücretsiz başla' }}</a>
     </div>
-  </div>
+  </header>
 
-  <section class="hero">
-    <span class="pill">Trendyol Go · Migros Yemek · Adisyo</span>
-    <h1>Siparişlerin anında<br>Telegram'ına düşsün</h1>
-    <p>Yemek platformlarından gelen her yeni sipariş, durum değişikliği ve günlük ciro
-       özetin doğrudan telefonuna gelir. Kurulum 2 dakika, ekran başında beklemek yok.</p>
-    <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Hemen başla — ücretsiz</a>
-    <a class="btn btn-ghost btn-lg" href="{{ url_for('auth.login') }}">Giriş yap</a>
+  <section class="container lp-hero">
+    <div class="lp-hero-text">
+      <span class="pill">Paket servis yapan restoranlar için</span>
+      <h1>Siparişi kaçırma,<br><span class="lp-accent">gerçek kârını</span> gör.</h1>
+      <p class="lp-lead">Trendyol Go, Migros Yemek ve diğer kanallardan gelen siparişler tek ekranda ve telefonunda.
+        Gün sonunda komisyon, ürün maliyeti ve paket giderinden sonra ne kazandığını gör.</p>
+      <div class="lp-cta">
+        <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">{% if trial_days %}{{ trial_days }} gün ücretsiz dene{% else %}Ücretsiz başla{% endif %}</a>
+        <a class="btn btn-ghost btn-lg" href="#nasil">Nasıl çalışır?</a>
+      </div>
+      <p class="lp-note">Kart bilgisi istenmez · Kurulum yaklaşık 5 dakika · Telegram veya WhatsApp</p>
+    </div>
+
+    <div class="lp-hero-visual" aria-label="Örnek ekran görünümü">
+      <div class="lp-phone">
+        <div class="lp-notif">
+          <div class="lp-notif-head"><span class="lp-dot-live"></span> SiparişGeldi · şimdi</div>
+          <strong>🛵 Yeni sipariş · Trendyol Go</strong>
+          <div class="lp-notif-line">#48213 · 2× Tavuk Dürüm, 1× Ayran</div>
+          <div class="lp-notif-line">Not: Soğan olmasın</div>
+          <div class="lp-notif-total">Toplam <b>385,00 TL</b> · Online ödeme</div>
+        </div>
+        <div class="lp-notif lp-notif-muted">
+          <strong>⏰ 2 dakikadır kabul edilmedi</strong>
+          <div class="lp-notif-line">Trendyol Go #48207 · hâlâ bekliyor</div>
+        </div>
+      </div>
+      <div class="lp-profit">
+        <div class="lp-profit-title">Bugün <span>örnek</span></div>
+        <div class="lp-profit-row"><span>Ciro</span><b>8.420 TL</b></div>
+        <div class="lp-profit-row neg"><span>Komisyon</span><b>−1.516 TL</b></div>
+        <div class="lp-profit-row neg"><span>Ürün maliyeti</span><b>−3.120 TL</b></div>
+        <div class="lp-profit-row neg"><span>Paket ve diğer</span><b>−410 TL</b></div>
+        <div class="lp-profit-row total"><span>Tahmini kâr</span><b>3.374 TL</b></div>
+      </div>
+    </div>
   </section>
 
-  <section class="features">
-    <div class="feature">
-      <div class="ic">⚡</div>
-      <h3>Anlık bildirim</h3>
-      <p>Yeni sipariş geldiği an Telegram'a tam detaylı mesaj: ürünler, tutar, ödeme, not.</p>
+  <section class="container lp-platforms" aria-label="Desteklenen platformlar">
+    <span class="lp-platforms-label">Bağlanan platformlar</span>
+    <span class="lp-chip">Trendyol Go Yemek</span>
+    <span class="lp-chip">Trendyol Go Market</span>
+    <span class="lp-chip">Migros Yemek</span>
+    <span class="lp-chip">Adisyo</span>
+    <span class="lp-chip">Trendyol Pazaryeri</span>
+    <span class="lp-chip">Hepsiburada</span>
+    <span class="lp-chip lp-chip-soon">Yemeksepeti · yakında</span>
+  </section>
+
+  <section class="container lp-problems">
+    <div class="lp-problem">
+      <span class="lp-problem-tag">Bugün</span>
+      <h3>Her platformun ayrı tableti, ayrı paneli</h3>
+      <p>Bir sipariş gözden kaçınca hem müşteri hem puan gidiyor.</p>
+      <span class="lp-problem-tag good">SiparişGeldi ile</span>
+      <p><b>Tek ekran ve anında bildirim.</b> Trendyol Go'da 2 dakika kabul edilmeyen sipariş için ayrıca uyarı.</p>
     </div>
-    <div class="feature">
-      <div class="ic">🔁</div>
-      <h3>Durum takibi</h3>
-      <p>Kabul, hazırlanıyor, yolda, teslim, iptal — her aşamada otomatik bildirim.</p>
+    <div class="lp-problem">
+      <span class="lp-problem-tag">Bugün</span>
+      <h3>Ciro belli, kâr belirsiz</h3>
+      <p>Komisyon, ambalaj ve reklamdan sonra elde ne kaldığını ay sonunda öğreniyorsun.</p>
+      <span class="lp-problem-tag good">SiparişGeldi ile</span>
+      <p><b>Gün gün tahmini kâr.</b> Hangi platform ve hangi ürün kazandırıyor, hangisi zarar ettiriyor gör.</p>
     </div>
-    <div class="feature">
-      <div class="ic">📊</div>
-      <h3>Günlük özet</h3>
-      <p>Her akşam sipariş adedi, iptaller ve toplam cironu özetleyen rapor.</p>
+    <div class="lp-problem">
+      <span class="lp-problem-tag">Bugün</span>
+      <h3>Gün sonu raporu Excel'de, elle</h3>
+      <p>Her akşam platform platform rakam toplamak saat alıyor.</p>
+      <span class="lp-problem-tag good">SiparişGeldi ile</span>
+      <p><b>Rapor her akşam telefonunda.</b> Günlük, haftalık ve aylık özet otomatik gelir.</p>
     </div>
   </section>
 
-  <section id="fiyatlandirma" class="pricing-section">
-    <h2>Fiyatlandırma</h2>
+  <section class="container" id="ozellikler">
+    <div class="lp-section-head">
+      <h2>Restoranın günlük işi için gereken her şey</h2>
+      <p class="muted">POS'unun yerine değil, yanında çalışır. Platformlardan gelen veriyi kendisi toplar.</p>
+    </div>
+    <div class="features lp-features">
+      <div class="feature">
+        <div class="ic">⚡</div>
+        <h3>Anında bildirim</h3>
+        <p>Yeni sipariş, durum değişikliği, iptal ve iade Telegram'a ya da WhatsApp'a ürünler, notlar ve tutarla birlikte düşer.</p>
+      </div>
+      <div class="feature">
+        <div class="ic">🖥️</div>
+        <h3>Aktif sipariş ekranı</h3>
+        <p>Tek tıkla kabul et, hazırlanıyor, yolda, teslim edildi olarak ilerlet. Gerektiğinde iptal nedenini seçerek reddet.</p>
+      </div>
+      <div class="feature">
+        <div class="ic">🧾</div>
+        <h3>Fiş yazdırma</h3>
+        <p>Opsiyonlar, çıkarılacak malzemeler ve müşteri notu dahil mutfak fişi. Yazıcı genişliği ayarlanabilir.</p>
+      </div>
+      <div class="feature">
+        <div class="ic">🏪</div>
+        <h3>Restoranı aç / kapat</h3>
+        <p>Yoğun anda Trendyol Go ve Migros Yemek'te restoranı panelden satışa kapat, sonra tekrar aç.</p>
+      </div>
+      <div class="feature">
+        <div class="ic">📊</div>
+        <h3>İstatistik ve raporlar</h3>
+        <p>Platform bazında sipariş ve ciro, saatlik yoğunluk, en çok satan ürünler, geçen haftayla karşılaştırma.</p>
+      </div>
+      <div class="feature">
+        <div class="ic">🔒</div>
+        <h3>Güvenli bağlantı</h3>
+        <p>Platform API anahtarların şifrelenerek saklanır. Kart bilgilerin bizde tutulmaz, ödeme PayTR ile alınır.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="container lp-profit-section" id="karlilik">
+    <div class="lp-profit-copy">
+      <span class="pill">Kârlılık paneli</span>
+      <h2>Komisyondan sonra gerçekten ne kazanıyorsun?</h2>
+      <p class="muted">Ürün maliyetini bir kez gir; gerisini SiparişGeldi her gün hesaplar.</p>
+      <ul class="lp-checks">
+        <li>Ürün başı maliyet, aynı ürünün platformlara göre farklı satış fiyatı</li>
+        <li>Platform komisyon oranı ve sipariş başı paket gideri</li>
+        <li>Günlük reklam harcaması, kira ve personel gibi aylık sabit giderler</li>
+        <li>Her güne tıkla: o gün satılan ürünler, maliyet ve ürün bazlı kâr</li>
+      </ul>
+      <p class="hint">Hesaplama operasyonel kâr tahminidir; muhasebe ve vergi beyanı yerine geçmez.</p>
+    </div>
+    <div class="lp-formula" aria-hidden="true">
+      <div><span>Toplam ciro</span></div>
+      <div class="minus"><span>Platform komisyonu</span></div>
+      <div class="minus"><span>Ürün maliyeti</span></div>
+      <div class="minus"><span>Paket, reklam ve sabit giderler</span></div>
+      <div class="eq"><span>Tahmini kâr</span></div>
+    </div>
+  </section>
+
+  <section class="container" id="nasil">
+    <div class="lp-section-head"><h2>3 adımda kurulum</h2></div>
+    <div class="steps">
+      <div class="step"><div class="n">ADIM 1</div><strong>Hesap aç</strong><p class="muted" style="margin:.3rem 0 0">E-posta ile kayıt ol. {% if trial_days %}{{ trial_days }} gün tüm Pro özellikler açık.{% endif %}</p></div>
+      <div class="step"><div class="n">ADIM 2</div><strong>Telegram'ı ve platformunu bağla</strong><p class="muted" style="margin:.3rem 0 0">Telegram'ı tek tıkla bağla, platform panelinden aldığın API bilgilerini gir. Bağlantıyı test edip kaydederiz.</p></div>
+      <div class="step"><div class="n">ADIM 3</div><strong>Siparişler ve kâr aksın</strong><p class="muted" style="margin:.3rem 0 0">Yeni siparişler telefonuna gelir, maliyetleri girdiğin an kâr raporun hazır.</p></div>
+    </div>
+    <p class="muted" style="text-align:center;margin-top:-1.6rem">Takılırsan kurulumu seninle birlikte yapıyoruz.</p>
+  </section>
+
+  <section id="fiyatlandirma" class="container pricing-section">
+    <div class="lp-section-head">
+      <h2>Fiyatlandırma</h2>
+      {% if trial_days %}<p class="muted">Her yeni hesap {{ trial_days }} gün Pro ile başlar. Deneme bitince istersen ücretsiz planda devam edersin.</p>{% endif %}
+    </div>
     <div class="pricing-grid">
       <div class="price-card">
         <div class="card-title">Ücretsiz</div>
         <div class="price">0 TL</div>
-        <p class="muted">Telegram ile 1 platformdan sipariş bildirimi al. Tüm raporlar dahil.</p>
+        <p class="muted">Tek platformla başlamak için.</p>
         <ul>
           <li>1 aktif platform</li>
           <li>Telegram bildirimi</li>
           <li>Günlük, haftalık ve aylık raporlar</li>
-          <li>Aktif sipariş ekranı</li>
+          <li>Aktif sipariş ekranı ve fiş</li>
         </ul>
         <a class="btn btn-ghost btn-block" href="{{ url_for('auth.register') }}">Ücretsiz başla</a>
       </div>
       <div class="price-card featured">
         <div class="card-title">Pro</div>
         <div class="price">250 TL <span>/ ay · KDV dahil</span></div>
-        <p class="muted">WhatsApp bildirimleri ve birden fazla platform bağlantısı.</p>
+        <p class="muted">Birden fazla platformda satış yapan işletmeler için.</p>
         <ul>
-          <li>WhatsApp bildirimi</li>
-          <li>Telegram + WhatsApp birlikte kullanım</li>
           <li>Çoklu platform bağlantısı</li>
-          <li>Tüm raporlar ve sipariş detayları</li>
+          <li>WhatsApp bildirimi</li>
+          <li>Telegram + WhatsApp birlikte</li>
+          <li>Kârlılık ve tüm raporlar</li>
         </ul>
-        <a class="btn btn-primary btn-block" href="{{ url_for('auth.register') }}">Pro için hesap aç</a>
+        <a class="btn btn-primary btn-block" href="{{ url_for('auth.register') }}">{% if trial_days %}{{ trial_days }} gün ücretsiz dene{% else %}Pro için hesap aç{% endif %}</a>
+        <p class="hint" style="text-align:center">Ödeme aylık yapılır, otomatik çekim yoktur.</p>
       </div>
     </div>
   </section>
 
-  <h2 style="text-align:center;margin-top:1rem">Nasıl çalışır?</h2>
-  <section class="steps">
-    <div class="step"><div class="n">ADIM 1</div><strong>Hesap aç</strong><p class="muted" style="margin:.3rem 0 0">E-posta ile saniyeler içinde kayıt ol.</p></div>
-    <div class="step"><div class="n">ADIM 2</div><strong>Platformunu bağla</strong><p class="muted" style="margin:.3rem 0 0">Trendyol Go API bilgilerini gir, Telegram'ı tek tıkla bağla.</p></div>
-    <div class="step"><div class="n">ADIM 3</div><strong>Bildirimler aksın</strong><p class="muted" style="margin:.3rem 0 0">Gerisini biz hallederiz — siparişler telefonuna gelir.</p></div>
+  <section class="container lp-faq" id="sss">
+    <div class="lp-section-head"><h2>Sık sorulanlar</h2></div>
+    <details>
+      <summary>API bilgilerini nereden bulacağım?</summary>
+      <p>Her platformun satıcı/restoran panelinde entegrasyon bölümünde yer alır. Panelimizdeki kurulum sayfasında hangi bilgilerin gerektiği yazıyor; bulamazsan bize yaz, birlikte bulalım.</p>
+    </details>
+    <details>
+      <summary>Platformların kendi panelini bırakmam gerekiyor mu?</summary>
+      <p>Hayır. SiparişGeldi platformların resmi API'lerine bağlanır; kendi panellerin aynen çalışmaya devam eder. Siparişleri tek yerde görür, kâr hesabını ek olarak alırsın.</p>
+    </details>
+    <details>
+      <summary>Bilgilerim güvende mi?</summary>
+      <p>Platform API anahtarların şifrelenerek saklanır ve yalnızca siparişlerini çekmek için kullanılır. Kart bilgilerin sunucumuza gelmez; ödeme PayTR güvenli ödeme sayfasında alınır.</p>
+    </details>
+    <details>
+      <summary>Deneme süresi bitince ne olur?</summary>
+      <p>Otomatik ücret alınmaz. Ücretsiz plana geçersin: Telegram bildirimi ve 1 platform açık kalır, diğer platformlar ve WhatsApp duraklar. İstediğin an Pro'ya geçip tekrar açabilirsin.</p>
+    </details>
+    <details>
+      <summary>Pro otomatik yenilenir mi?</summary>
+      <p>Hayır. Pro 30 gün geçerlidir; bitmeden önce hatırlatma gönderilir, yenilemek istersen panelden ödeme yaparsın.</p>
+    </details>
+    <details>
+      <summary>Yemeksepeti ve Getir ne zaman geliyor?</summary>
+      <p>Yemeksepeti entegrasyonu için altyapı hazır, platform onayı tamamlanınca açılacak. Kullanmak istediğin platformu bize yaz, önceliği buna göre belirliyoruz.</p>
+    </details>
+  </section>
+
+  <section class="container lp-final">
+    <h2>Bu akşamki gün sonu raporun telefonunda olsun.</h2>
+    <p>Kurulum yaklaşık 5 dakika. {% if trial_days %}{{ trial_days }} gün boyunca tüm özellikler açık.{% endif %}</p>
+    <a class="btn btn-lg lp-final-btn" href="{{ url_for('auth.register') }}">{% if trial_days %}Ücretsiz denemeyi başlat{% else %}Ücretsiz başla{% endif %}</a>
+    <p class="lp-final-contact">Sorun mu var? <a href="{{ url_for('public.contact') }}">Bize ulaş</a>{% if company.phone %} · {{ company.phone }}{% endif %}</p>
   </section>
 </div>
 {% include "public/_footer.html" %}

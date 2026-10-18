@@ -113,3 +113,30 @@ class Config:
     # Scheduler'ı web süreci içinde başlat (tek instance dev için). Prod'da
     # ayrı worker süreci öneririz → RUN_SCHEDULER=0 yapıp worker.py'yi ayrı çalıştır.
     RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "1") == "1"
+    # Polling'de aynı anda işlenecek entegrasyon sayısı (thread havuzu).
+    # SQLite'ta otomatik olarak 1'e düşer (eşzamanlı yazma kilidi olmasın).
+    POLL_MAX_WORKERS = int(os.environ.get("POLL_MAX_WORKERS", "8"))
+
+    # --- E-posta (SMTP) — şifre sıfırlama ve e-posta doğrulama ---
+    # Gmail: smtp.gmail.com / 587 / uygulama şifresi. Brevo, Resend, Yandex vb. de çalışır.
+    SMTP_HOST = os.environ.get("SMTP_HOST", "")
+    SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+    SMTP_USER = os.environ.get("SMTP_USER", "")
+    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+    SMTP_FROM = os.environ.get("SMTP_FROM", "")  # ör. "SiparişGeldi <destek@siparisgeldi.net>"
+    SMTP_USE_SSL = os.environ.get("SMTP_USE_SSL", "0") == "1"  # 465 portu için 1
+
+    # --- Deneme süresi ---
+    # Yeni kayıtlara verilen ücretsiz Pro deneme günü (0 = kapalı).
+    TRIAL_DAYS = int(os.environ.get("TRIAL_DAYS", "14"))
+    # Pro/deneme bitince "1 aktif platform" limitinin kimlere uygulanacağı:
+    # trial = sadece denemesi bitenler (varsayılan) · all = tüm süresi bitenler · off = kapalı
+    PLAN_LIMIT_SCOPE = os.environ.get("PLAN_LIMIT_SCOPE", "trial")
+
+    # --- İzleme ---
+    SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+    # Yönetici alarmlarının gideceği Telegram chat id'leri (virgülle). Boşsa
+    # ADMIN_EMAILS kullanıcılarının bağlı Telegram'ına gider.
+    ADMIN_ALERT_TELEGRAM_CHAT_IDS = [c.strip() for c in os.environ.get("ADMIN_ALERT_TELEGRAM_CHAT_IDS", "").split(",") if c.strip()]
+    # Polling yapılan bir entegrasyon bu kadar dakikadır senkron olmadıysa alarm.
+    SYNC_STALE_ALERT_MINUTES = int(os.environ.get("SYNC_STALE_ALERT_MINUTES", "10"))

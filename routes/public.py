@@ -1,5 +1,6 @@
 """Herkese açık sayfalar (landing)."""
-from flask import Blueprint, render_template, redirect, url_for
+from flask import Blueprint, current_app, jsonify, render_template, redirect, url_for
+from sqlalchemy import text
 from flask_login import current_user
 
 public_bp = Blueprint("public", __name__)
@@ -40,3 +41,26 @@ def privacy_policy():
 @public_bp.route("/kvkk-aydinlatma-metni")
 def kvkk_notice():
     return render_template("public/legal_kvkk.html")
+
+
+@public_bp.route("/healthz")
+def healthz():
+    """Uptime izleme (UptimeRobot vb.) için. DB erişimi ve worker heartbeat'i.
+
+    200 → her şey yolunda · 503 → DB'ye ulaşılamıyor veya worker 3 dk'dır sessiz.
+    """
+    from extensions import db
+    import monitoring
+    status = {"db": "ok", "worker": "ok"}
+    code = 200
+    try:
+        db.session.execute(text("SELECT 1"))
+    except Exception:
+        status["db"] = "down"
+        return jsonify(status), 503
+    age = monitoring.heartbeat_age_seconds()
+    status["worker_heartbeat_age_s"] = None if age is None else int(age)
+    if age is None or age > 180:
+        status["worker"] = "stale"
+        code = 503
+    return jsonify(status), code

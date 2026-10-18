@@ -18,6 +18,7 @@ import json
 import hmac
 import hashlib
 import base64
+import threading
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 
@@ -80,6 +81,51 @@ def _check_yemeksepeti_token() -> bool:
         else:
             sent = authorization.strip()
     return hmac.compare_digest(str(sent), str(expected))
+
+
+def _check_yemeksepeti_pos_jwt() -> bool:
+    secret = current_app.config.get("YEMEKSEPETI_POS_JWT_SECRET", "")
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.lower().startswith("bearer "):
+        return False
+    return ys.verify_middleware_jwt(authorization[7:].strip(), secret)
+
+
+def _find_yemeksepeti_integration(remote_id: str):
+    remote_id = str(remote_id or "").strip()
+    if not remote_id:
+        return None
+    return Integration.query.filter(
+        Integration.platform == ys.PLATFORM,
+        Integration.is_active.is_(True),
+        (Integration.ys_vendor_id == remote_id) | (Integration.ys_store_id == remote_id),
+    ).first()
+
+
+def _send_yemeksepeti_async(app, user_id: int, payload: dict, cancelled: bool = False):
+    def worker():
+        try:
+            with app.app_context():
+                user = db.session.get(User, user_id)
+                if not user:
+                    return
+                fields = ys.extract_order_fields(payload)
+                send_to_user(
+                    user,
+                    ys.format_cancelled(payload) if cancelled else ys.format_order_created(payload),
+                    wa=[
+                        ("Siparis iptal - Yemeksepeti" if cancelled else
+                         "TEST siparisi - Yemeksepeti" if payload.get("test") else
+                         "Yeni siparis - Yemeksepeti"),
+                        fields["order_number"],
+                        ys.summarize_items(payload),
+                        f"{fields['total_price']:.2f} TL",
+                    ],
+                    source="yemeksepeti",
+                )
+        except Exception as exc:
+            app.logger.warning("Yemeksepeti bildirimi gonderilemedi user_id=%s: %s", user_id, exc)
+    threading.Thread(target=worker, daemon=True, name="ys-notification").start()
 
 
 def _check_whatsapp_signature() -> bool:
@@ -361,6 +407,101 @@ def _handle_tmp_order(intg, order_data):
             )
             return
     db.session.commit()
+
+
+@webhooks_bp.route("/yemeksepeti/order/<remote_id>", methods=["POST"])
+def yemeksepeti_pos_dispatch(remote_id):
+    """Receive and acknowledge an official Delivery Hero POS dispatch."""
+    if not _check_yemeksepeti_pos_jwt():
+        return jsonify({"message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not ys.order_id(payload) or not ys.order_number(payload):
+        return jsonify({"message": "Invalid order payload"}), 400
+    intg = _find_yemeksepeti_integration(remote_id)
+    if not intg:
+        current_app.logger.warning("Yemeksepeti POS remoteId eslesmedi: %s", remote_id)
+        return jsonify({"message": "Unknown remoteId"}), 400
+
+    fields = ys.extract_order_fields(payload)
+    callbacks = ys.callback_urls(payload)
+    if not callbacks.get("orderAcceptedUrl") and not callbacks.get("orderRejectedUrl"):
+        # Indirect flow orders have already been accepted on the Yemeksepeti device.
+        fields["status"] = ys.STATUS_ACCEPTED
+    order = Order.query.filter_by(
+        user_id=intg.user_id, platform=ys.PLATFORM, external_id=fields["external_id"]
+    ).first()
+    is_new = order is None
+    if is_new:
+        order = Order(user_id=intg.user_id, platform=ys.PLATFORM, **fields)
+        order.mark_status_notified("INITIAL")
+        db.session.add(order)
+    else:
+        # Dispatch retries are idempotent: keep a status already advanced by the user.
+        order.order_number = fields["order_number"] or order.order_number
+        order.total_price = fields["total_price"]
+        order.payment_type = fields["payment_type"]
+        order.customer_note = fields["customer_note"]
+    order.raw_json = json.dumps(payload, ensure_ascii=False)
+    intg.last_sync_at = datetime.utcnow()
+    intg.last_error = None
+    db.session.commit()
+
+    if is_new and intg.notify_new_order:
+        _send_yemeksepeti_async(current_app._get_current_object(), intg.user_id, payload)
+    return jsonify({"remoteResponse": {"remoteOrderId": str(order.id)}}), 200
+
+
+@webhooks_bp.route(
+    "/yemeksepeti/remoteId/<remote_id>/remoteOrder/<int:remote_order_id>/posOrderStatus",
+    methods=["PUT"],
+)
+def yemeksepeti_pos_order_status(remote_id, remote_order_id):
+    if not _check_yemeksepeti_pos_jwt():
+        return jsonify({"message": "Unauthorized"}), 401
+    intg = _find_yemeksepeti_integration(remote_id)
+    if not intg:
+        return jsonify({"message": "Unknown remoteId"}), 404
+    order = Order.query.filter_by(id=remote_order_id, user_id=intg.user_id, platform=ys.PLATFORM).first()
+    if not order:
+        return jsonify({"message": "Unknown remoteOrderId"}), 404
+    event = request.get_json(silent=True) or {}
+    status_map = {
+        "ORDER_CANCELLED": ys.STATUS_CANCELLED,
+        "ORDER_PICKED_UP": ys.STATUS_DISPATCHED,
+    }
+    incoming = str(event.get("status") or "").upper()
+    new_status = status_map.get(incoming)
+    raw = json.loads(order.raw_json or "{}")
+    if incoming == "PRODUCT_ORDER_MODIFICATION_SUCCESSFUL" and isinstance(event.get("updatedOrder"), dict):
+        raw = event["updatedOrder"]
+    status_changed = bool(new_status and order.status != new_status)
+    if new_status:
+        order.status = new_status
+        if status_changed:
+            order.mark_status_notified(new_status)
+    order.raw_json = json.dumps(raw, ensure_ascii=False)
+    intg.last_sync_at = datetime.utcnow()
+    intg.last_error = None
+    db.session.commit()
+    if status_changed and new_status == ys.STATUS_CANCELLED and intg.notify_cancel:
+        _send_yemeksepeti_async(current_app._get_current_object(), intg.user_id, raw, cancelled=True)
+    return jsonify({"message": "OK"}), 200
+
+
+@webhooks_bp.route("/yemeksepeti/remoteId/<remote_id>/availability", methods=["PUT"])
+def yemeksepeti_pos_availability(remote_id):
+    if not _check_yemeksepeti_pos_jwt():
+        return jsonify({"message": "Unauthorized"}), 401
+    intg = _find_yemeksepeti_integration(remote_id)
+    if not intg:
+        return jsonify({"message": "Unknown remoteId"}), 404
+    payload = request.get_json(silent=True) or {}
+    if not payload.get("timestamp") or not isinstance(payload.get("closures", []), list):
+        return jsonify({"message": "Invalid availability payload"}), 400
+    intg.last_sync_at = datetime.utcnow()
+    intg.last_error = None
+    db.session.commit()
+    return jsonify({"message": "OK"}), 200
 
 
 @webhooks_bp.route("/yemeksepeti/order", methods=["POST"])

@@ -66,5 +66,8 @@ polling ve bildirimler mükerrer olur.
 - [ ] Getir Yemek
 - [ ] WhatsApp kanalı (Pro)
 - [ ] Excel/PDF rapor indirme
-- [ ] Ödeme/abonelik planları
+- [x] Ödeme/abonelik planları (PayTR)
+- [x] Şifre sıfırlama, e-posta doğrulama, 14 gün Pro deneme
+- [x] Kurulum kontrol listesi, yeni landing
+- [x] Paralel polling, /healthz, senkron alarmı, Sentry
 ```

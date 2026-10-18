@@ -1,7 +1,12 @@
 """Yemeksepeti sipariş webhook ve Partner API yardımcıları."""
 import html
+import base64
+import hashlib
+import hmac
+import json
 import time
 from datetime import datetime, timedelta
+from urllib.parse import quote, urljoin, urlparse
 
 import requests
 
@@ -10,6 +15,9 @@ PLATFORM = "yemeksepeti"
 LIVE_BASE = "https://yemeksepeti.partner.deliveryhero.io"
 SANDBOX_BASE = "https://sandbox.partner.deliveryhero.io"
 STATUS_RECEIVED = "RECEIVED"
+STATUS_ACCEPTED = "ACCEPTED"
+STATUS_REJECTED = "REJECTED"
+STATUS_PREPARED = "PREPARED"
 STATUS_READY = "READY_FOR_PICKUP"
 STATUS_DISPATCHED = "DISPATCHED"
 STATUS_CANCELLED = "CANCELLED"
@@ -17,6 +25,7 @@ STATUS_DELIVERED = "DELIVERED"
 STATUS_NOTIFY = {STATUS_RECEIVED, STATUS_READY, STATUS_DISPATCHED, STATUS_CANCELLED, STATUS_DELIVERED}
 
 _TOKEN_CACHE = {}
+_POS_TOKEN_CACHE = {}
 
 
 def _text(value) -> str:
@@ -49,11 +58,11 @@ def chain_id(payload: dict) -> str:
 
 
 def order_id(payload: dict) -> str:
-    return _text(payload.get("order_id") or payload.get("external_order_id") or payload.get("order_code"))
+    return _text(payload.get("token") or payload.get("order_id") or payload.get("external_order_id") or payload.get("order_code"))
 
 
 def order_number(payload: dict) -> str:
-    return _text(payload.get("order_code") or payload.get("external_order_id") or order_id(payload))
+    return _text(payload.get("code") or payload.get("order_code") or payload.get("external_order_id") or order_id(payload))
 
 
 def status(payload: dict) -> str:
@@ -70,7 +79,7 @@ def status(payload: dict) -> str:
 
 
 def items(payload: dict) -> list:
-    value = payload.get("items") or []
+    value = payload.get("products") or payload.get("items") or []
     return value if isinstance(value, list) else []
 
 
@@ -91,6 +100,8 @@ def item_name(item: dict) -> str:
 def item_price(item: dict) -> float:
     pricing = item.get("pricing") or {}
     value = pricing.get("total_price")
+    if value is None:
+        value = item.get("paidPrice")
     if value is None:
         value = (pricing.get("unit_price") or 0) * item_quantity(item)
     try:
@@ -158,7 +169,7 @@ def _option_rows(value, parent_header: str = "") -> list:
 
 def item_options(item: dict) -> list:
     rows = []
-    for key in ("options", "modifiers", "choices", "selected_options", "additions"):
+    for key in ("options", "modifiers", "choices", "selected_options", "additions", "selectedToppings"):
         rows.extend(_option_rows(item.get(key)))
     return rows
 
@@ -185,7 +196,10 @@ def item_details(item: dict) -> list:
 
 def total_price(payload: dict) -> float:
     payment = payload.get("payment") or {}
-    value = payment.get("order_total")
+    price = payload.get("price") or {}
+    value = price.get("grandTotal")
+    if value is None:
+        value = payment.get("order_total")
     if value is None:
         value = payment.get("total") or payment.get("sub_total") or 0
     try:
@@ -201,19 +215,23 @@ def payment_type(payload: dict) -> str:
 def customer_name(payload: dict) -> str:
     customer = payload.get("customer") or {}
     return " ".join(
-        part for part in (_text(customer.get("first_name")), _text(customer.get("last_name"))) if part
+        part for part in (
+            _text(customer.get("firstName") or customer.get("first_name")),
+            _text(customer.get("lastName") or customer.get("last_name")),
+        ) if part
     ) or "-"
 
 
 def address_text(payload: dict) -> str:
-    address = (payload.get("customer") or {}).get("delivery_address") or {}
+    address = ((payload.get("delivery") or {}).get("address")
+               or (payload.get("customer") or {}).get("delivery_address") or {})
     if not isinstance(address, dict):
         return ""
-    if address.get("formattedAddress"):
-        return _text(address["formattedAddress"])
+    if address.get("formattedAddress") or address.get("formatted_address"):
+        return _text(address.get("formattedAddress") or address.get("formatted_address"))
     parts = [
         address.get("street"),
-        address.get("number"),
+        address.get("number") or address.get("streetNumber"),
         address.get("building"),
         address.get("apartment"),
         address.get("floor"),
@@ -225,8 +243,9 @@ def address_text(payload: dict) -> str:
 
 
 def address_instructions(payload: dict) -> str:
-    address = (payload.get("customer") or {}).get("delivery_address") or {}
-    return _text(address.get("instructions")) if isinstance(address, dict) else ""
+    address = ((payload.get("delivery") or {}).get("address")
+               or (payload.get("customer") or {}).get("delivery_address") or {})
+    return _text(address.get("instructions") or address.get("deliveryInstructions")) if isinstance(address, dict) else ""
 
 
 def delivery_label(payload: dict) -> str:
@@ -236,6 +255,12 @@ def delivery_label(payload: dict) -> str:
         "DELIVERY": "Teslimat",
         "PICKUP": "Restorandan teslim",
     }
+    expedition = _text(payload.get("expeditionType")).lower()
+    if expedition == "pickup":
+        return "Restorandan teslim"
+    if expedition == "delivery":
+        delivery = payload.get("delivery") or {}
+        return "Restoran Kuryesi" if delivery.get("riderPickupTime") is None else "Yemeksepeti Kuryesi"
     raw = _text(payload.get("transport_type") or payload.get("order_type")).upper()
     return values.get(raw, raw or "-")
 
@@ -273,6 +298,7 @@ def summarize_items(payload: dict, max_items: int = 4, max_length: int = 850) ->
 
 
 def extract_order_fields(payload: dict) -> dict:
+    comments = payload.get("comments") or {}
     return {
         "external_id": order_id(payload),
         "order_number": order_number(payload),
@@ -280,7 +306,7 @@ def extract_order_fields(payload: dict) -> dict:
         "total_price": total_price(payload),
         "payment_type": payment_type(payload),
         "app_source": "Yemeksepeti",
-        "customer_note": _text(payload.get("comment") or address_instructions(payload)),
+        "customer_note": _text(comments.get("customerComment") or payload.get("comment") or address_instructions(payload)),
     }
 
 
@@ -294,8 +320,9 @@ def format_order_created(payload: dict) -> str:
         for detail in item_details(item):
             lines.append(f"    ↳ {html.escape(detail)}")
     item_text = "\n".join(lines) or "  (ürün bilgisi yok)"
+    title = "TEST SİPARİŞİ — Yemeksepeti" if payload.get("test") else "YENİ SİPARİŞ — Yemeksepeti"
     msg = (
-        "🍔 <b>YENİ SİPARİŞ — Yemeksepeti</b>\n"
+        f"🍔 <b>{title}</b>\n"
         f"{'━' * 28}\n"
         f"📋 <b>Sipariş No:</b> #{html.escape(p['order_number'] or '-')}\n"
         f"👤 <b>Müşteri:</b> {html.escape(customer_name(payload))}\n"
@@ -528,3 +555,168 @@ def build_order_update_payload(payload: dict, target_status: str, cancel_reason:
     if target_status == STATUS_CANCELLED:
         body["cancellation"] = {"reason": cancel_reason or "TOO_BUSY"}
     return body
+
+
+# POS Integration Middleware API. This is separate from the Partner API above.
+POS_LIVE_BASE = "https://integration-middleware.eu.restaurant-partners.com"
+POS_SANDBOX_BASE = "https://integration-middleware.stg.restaurant-partners.com"
+
+
+def pos_api_base(environment: str = "live", configured_base: str = "") -> str:
+    if configured_base:
+        return configured_base.rstrip("/")
+    return POS_SANDBOX_BASE if (environment or "").lower() == "sandbox" else POS_LIVE_BASE
+
+
+def _b64url_decode(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def verify_middleware_jwt(token: str, secret: str, now: float = None, leeway: int = 60) -> bool:
+    """Validate the HS256 token used by Middleware when calling plugin endpoints."""
+    try:
+        header_part, payload_part, signature_part = token.split(".")
+        header = json.loads(_b64url_decode(header_part))
+        claims = json.loads(_b64url_decode(payload_part))
+        if header.get("alg") != "HS256" or not secret:
+            return False
+        expected = hmac.new(
+            secret.encode("utf-8"),
+            f"{header_part}.{payload_part}".encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+        if not hmac.compare_digest(_b64url_decode(signature_part), expected):
+            return False
+        current = float(now if now is not None else time.time())
+        if claims.get("exp") is not None and current > float(claims["exp"]) + leeway:
+            return False
+        if claims.get("nbf") is not None and current + leeway < float(claims["nbf"]):
+            return False
+        return True
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return False
+
+
+def callback_urls(payload: dict) -> dict:
+    value = payload.get("callbackUrls") or {}
+    return value if isinstance(value, dict) else {}
+
+
+def _trusted_callback_url(value: str, base_url: str) -> str:
+    value = _text(value)
+    if not value:
+        raise ValueError("Yemeksepeti callback URL payload icinde yok.")
+    url = urljoin(f"{base_url.rstrip('/')}/", value)
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or parsed.username or parsed.password:
+        raise ValueError("Yemeksepeti callback URL guvenli degil.")
+    if not (hostname == "restaurant-partners.com" or hostname.endswith(".restaurant-partners.com")):
+        raise ValueError("Yemeksepeti callback URL beklenmeyen bir sunucuya ait.")
+    if parsed.port not in (None, 443):
+        raise ValueError("Yemeksepeti callback URL portu gecersiz.")
+    return url
+
+
+def get_pos_access_token(username: str, password: str, environment: str = "live",
+                         configured_base: str = "") -> str:
+    username, password = _text(username), _text(password)
+    if not username or not password:
+        raise ValueError("Yemeksepeti POS username/password eksik.")
+    base = pos_api_base(environment, configured_base)
+    key = ((environment or "live").lower(), base, username)
+    cached = _POS_TOKEN_CACHE.get(key)
+    now = time.time()
+    if cached and cached.get("expires_at", 0) > now + 60:
+        return cached["access_token"]
+    response = requests.post(
+        f"{base}/v2/login",
+        data={"username": username, "password": password, "grant_type": "client_credentials"},
+        headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+        timeout=20,
+    )
+    response.raise_for_status()
+    data = response.json()
+    token = _text(data.get("access_token"))
+    if not token:
+        raise RuntimeError("Yemeksepeti POS login cevabinda access_token yok.")
+    _POS_TOKEN_CACHE[key] = {
+        "access_token": token,
+        "expires_at": now + int(data.get("expires_in") or 1800),
+    }
+    return token
+
+
+def send_pos_callback(method: str, callback_url: str, body: dict, username: str,
+                      password: str, environment: str = "live", configured_base: str = ""):
+    base = pos_api_base(environment, configured_base)
+    url = _trusted_callback_url(callback_url, base)
+    token = get_pos_access_token(username, password, environment, configured_base)
+    response = requests.request(
+        method,
+        url,
+        headers={"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        json=body,
+        timeout=20,
+    )
+    if response.status_code == 401:
+        _POS_TOKEN_CACHE.pop(((environment or "live").lower(), base, _text(username)), None)
+    response.raise_for_status()
+    if not response.content:
+        return {}
+
+
+def set_pos_reachability(chain_code: str, remote_id: str, online: bool, username: str,
+                         password: str, environment: str = "live", configured_base: str = ""):
+    chain_code, remote_id = _text(chain_code), _text(remote_id)
+    if not chain_code or not remote_id:
+        raise ValueError("Yemeksepeti chain code veya remoteId eksik.")
+    base = pos_api_base(environment, configured_base)
+    callback = (
+        f"{base}/v2/chains/{quote(chain_code, safe='')}/remoteVendors/"
+        f"{quote(remote_id, safe='')}/posReachabilityStatus"
+    )
+    state = "online" if online else "offline"
+    return send_pos_callback(
+        "PUT", callback,
+        {"status": state, "reason": "POS_PLUGIN_STATUS", "message": f"SiparisGeldi POS is {state}"},
+        username, password, environment, configured_base,
+    )
+    try:
+        return response.json()
+    except ValueError:
+        return {}
+
+
+def acceptance_time(payload: dict, minutes: int = 30) -> str:
+    delivery = payload.get("delivery") or {}
+    pickup = payload.get("pickup") or {}
+    preferred = delivery.get("riderPickupTime") or delivery.get("expectedDeliveryTime") or pickup.get("pickupTime")
+    if preferred:
+        return _text(preferred)
+    return (datetime.utcnow() + timedelta(minutes=minutes)).isoformat(timespec="seconds") + "Z"
+
+
+def pos_action(payload: dict, action: str, remote_order_id: str, rejection_reason: str = "OTHER",
+               acceptance_minutes: int = 30) -> tuple:
+    urls = callback_urls(payload)
+    if action == "accept":
+        return "POST", urls.get("orderAcceptedUrl"), {
+            "status": "order_accepted",
+            "acceptanceTime": acceptance_time(payload, acceptance_minutes),
+            "remoteOrderId": str(remote_order_id),
+        }, STATUS_ACCEPTED
+    if action == "reject":
+        return "POST", urls.get("orderRejectedUrl"), {
+            "status": "order_rejected",
+            "reason": rejection_reason,
+            "remoteOrderId": str(remote_order_id),
+        }, STATUS_REJECTED
+    if action == "prepared":
+        return "POST", urls.get("orderPreparedUrl"), {}, STATUS_PREPARED
+    if action == "picked_up":
+        return "POST", urls.get("orderPickedUpUrl"), {
+            "status": "order_picked_up",
+            "remoteOrderId": str(remote_order_id),
+        }, STATUS_DISPATCHED
+    raise ValueError("Gecersiz Yemeksepeti POS islemi.")

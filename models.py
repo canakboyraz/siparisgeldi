@@ -24,6 +24,8 @@ class User(UserMixin, db.Model):
     pro_started_at = db.Column(db.DateTime)
     pro_expires_at = db.Column(db.DateTime)
     pro_expiry_notice_sent_on = db.Column(db.Date)
+    is_trial = db.Column(db.Boolean, default=False)          # Pro süresi deneme mi?
+    email_verified_at = db.Column(db.DateTime)
     feature_whatsapp = db.Column(db.Boolean, default=False)
     feature_multi_platform = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)
@@ -57,6 +59,14 @@ class User(UserMixin, db.Model):
         if not self.telegram_link_token:
             self.telegram_link_token = secrets.token_urlsafe(24)
         return self.telegram_link_token
+
+    @property
+    def email_verified(self) -> bool:
+        return bool(self.email_verified_at)
+
+    @property
+    def is_trial_active(self) -> bool:
+        return bool(self.is_trial and self.is_pro_active)
 
     @property
     def telegram_connected(self) -> bool:

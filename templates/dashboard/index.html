@@ -16,7 +16,51 @@
   </div>
 </div>
 
-{% if not current_user.telegram_connected %}
+{% if onboarding and not onboarding.complete %}
+<div class="card onboarding-card">
+  <div class="section-head">
+    <div>
+      <div class="card-title">Kurulumu tamamla</div>
+      <div class="muted">{{ onboarding.done }}/{{ onboarding.total }} adım tamam · Kalan adımlar bittiğinde siparişler ve gerçek kârın tek panelde.</div>
+    </div>
+    <strong class="onboarding-percent">%{{ onboarding.percent }}</strong>
+  </div>
+  <div class="onboarding-bar"><span style="width:{{ onboarding.percent }}%"></span></div>
+  <ol class="onboarding-steps">
+    {% for step in onboarding.steps %}
+    <li class="{{ 'done' if step.done else '' }}">
+      <span class="onboarding-check" aria-hidden="true">{{ '✓' if step.done else loop.index }}</span>
+      <div class="onboarding-body">
+        <strong>{{ step.title }}</strong>
+        {% if not step.done %}
+        <div class="muted">{{ step.desc }}</div>
+        {% if step.platforms %}
+        <div class="onboarding-platforms">
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.trendyolgo_setup') }}">Trendyol Go Yemek</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.trendyolgo_market_setup') }}">Trendyol Go Market</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.migros_setup') }}">Migros Yemek</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('adisyo.setup') }}">Adisyo</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.trendyol_marketplace_setup') }}">Trendyol Pazaryeri</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard.hepsiburada_setup') }}">Hepsiburada</a>
+        </div>
+        {% elif step.action == 'resend_verification' %}
+        <form method="post" action="{{ url_for('auth.resend_verification') }}" style="margin-top:.4rem">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-ghost btn-sm" type="submit">Doğrulama e-postasını tekrar gönder</button>
+        </form>
+        {% elif step.url %}
+        <a class="btn btn-primary btn-sm" style="margin-top:.4rem" href="{{ step.url }}">{{ step.cta }}</a>
+        {% endif %}
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  <p class="hint" style="margin:.6rem 0 0">Takıldığın adım olursa <a href="{{ url_for('public.contact') }}" style="color:var(--brand);font-weight:600">bize yaz</a>, kurulumu birlikte yapalım.</p>
+</div>
+{% endif %}
+
+{% if not current_user.telegram_connected and (not onboarding or onboarding.complete) %}
 <div class="card" style="border-color:var(--brand);background:var(--brand-soft);margin-bottom:1rem">
   <div class="row" style="border:none;padding:0">
     <div>

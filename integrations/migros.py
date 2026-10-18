@@ -110,7 +110,7 @@ def update_order_status(order_id, new_status: str, store_id, api_key: str, secre
 
 
 def get_cancel_reasons(api_key: str, base_url: str = DEFAULT_BASE) -> list:
-    """Migros iptal/red sebebi listesini dÃ¶ndÃ¼rÃ¼r."""
+    """Migros iptal/red sebebi listesini döndürür."""
     data = api_get("/Mapping/v2/GetCancelReasons", api_key, base_url)
     if isinstance(data, dict):
         reasons = data.get("data") or data.get("Data") or []
@@ -120,7 +120,7 @@ def get_cancel_reasons(api_key: str, base_url: str = DEFAULT_BASE) -> list:
 
 def cancel_order(order_id, store_id, user_id, cancel_reason_id, api_key: str, secret_key: str,
                  base_url: str = DEFAULT_BASE, notify_user: bool = True) -> dict:
-    """OnaylanmÄ±ÅŸ Migros sipariÅŸini iptal eder."""
+    """Onaylanmış Migros siparişini iptal eder."""
     body = {
         "orderId": order_id,
         "storeId": store_id,
@@ -133,7 +133,7 @@ def cancel_order(order_id, store_id, user_id, cancel_reason_id, api_key: str, se
 
 def set_store_status(store_id, api_key: str, secret_key: str, base_url: str = DEFAULT_BASE,
                      active: bool = True, warehouse_id=None) -> dict:
-    """RestoranÄ± Migros'ta satÄ±ÅŸa aÃ§ar veya kapatÄ±r."""
+    """Restoranı Migros'ta satışa açar veya kapatır."""
     body = {"storeId": store_id}
     if warehouse_id:
         body["warehouseId"] = warehouse_id

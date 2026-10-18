@@ -7,6 +7,8 @@
 - Her gece 23:45 günlük özet raporu gönderir.
 """
 import json
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import pytz
@@ -20,6 +22,8 @@ from integrations import getir, hepsiburada as hb, trendyol_marketplace as tmp, 
 from notifications import telegram
 from notifications.dispatcher import send_to_user
 from utils import status_label
+
+log = logging.getLogger("worker")
 
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
 scheduler = BackgroundScheduler(timezone=TURKEY_TZ)
@@ -68,61 +72,80 @@ def _hb_api_base(environment: str) -> str:
 
 # ── Sipariş polling ─────────────────────────────────────────────────────────
 
-def poll_trendyolgo(app):
+def _poll_workers(app) -> int:
+    """Aynı anda işlenecek entegrasyon sayısı. SQLite eşzamanlı yazmayı
+    kaldıramadığı için orada her zaman 1."""
+    try:
+        if db.engine.url.get_backend_name().startswith("sqlite"):
+            return 1
+    except Exception:
+        return 1
+    return max(1, int(app.config.get("POLL_MAX_WORKERS", 8) or 1))
+
+
+def _sync_one(app, integration_id: int, handler, tag: str):
+    """Tek bir entegrasyonu kendi app context'i (ve DB oturumu) içinde işler."""
     with app.app_context():
-        integrations = Integration.query.filter(
-            Integration.platform.in_([TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM]),
-            Integration.is_active.is_(True),
-        ).all()
-        for intg in integrations:
-            if not intg.tgo_supplier_id or not intg._tgo_api_key:
-                continue
-            try:
-                _process_tgo(intg)
-                intg.last_sync_at = datetime.utcnow()
-                intg.last_error = None
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
+        intg = db.session.get(Integration, integration_id)
+        if not intg or not intg.is_active:
+            return
+        try:
+            handler(intg)
+            intg.last_sync_at = datetime.utcnow()
+            intg.last_error = None
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            intg = db.session.get(Integration, integration_id)
+            if intg:
                 intg.last_error = str(e)[:300]
                 db.session.commit()
-                print(f"[WORKER TGO] Hata user={intg.user_id}: {e}")
+            log.warning("[WORKER %s] Hata user=%s intg=%s: %s",
+                        tag, getattr(intg, "user_id", "?"), integration_id, e)
+
+
+def _run_integrations(app, integration_ids: list, handler, tag: str):
+    """Entegrasyonları thread havuzunda paralel işler; bir restoranın yavaş
+    API'si diğerlerinin bildirimlerini geciktirmez."""
+    if not integration_ids:
+        return
+    workers = min(_poll_workers(app), len(integration_ids))
+    if workers <= 1:
+        for iid in integration_ids:
+            _sync_one(app, iid, handler, tag)
+        return
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f"poll-{tag}") as pool:
+        list(pool.map(lambda iid: _sync_one(app, iid, handler, tag), integration_ids))
+
+
+def poll_trendyolgo(app):
+    with app.app_context():
+        ids = [
+            intg.id for intg in Integration.query.filter(
+                Integration.platform.in_([TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM]),
+                Integration.is_active.is_(True),
+            ).all()
+            if intg.tgo_supplier_id and intg._tgo_api_key
+        ]
+    _run_integrations(app, ids, _process_tgo, "TGO")
 
 
 def poll_trendyol_marketplace(app):
     with app.app_context():
-        integrations = Integration.query.filter_by(platform=tmp.PLATFORM, is_active=True).all()
-        for intg in integrations:
-            if not intg.tmp_supplier_id or not intg._tmp_api_key:
-                continue
-            try:
-                _process_tmp(intg)
-                intg.last_sync_at = datetime.utcnow()
-                intg.last_error = None
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                intg.last_error = str(e)[:300]
-                db.session.commit()
-                print(f"[WORKER TMP] Hata user={intg.user_id}: {e}")
+        ids = [
+            intg.id for intg in Integration.query.filter_by(platform=tmp.PLATFORM, is_active=True).all()
+            if intg.tmp_supplier_id and intg._tmp_api_key
+        ]
+    _run_integrations(app, ids, _process_tmp, "TMP")
 
 
 def poll_hepsiburada(app):
     with app.app_context():
-        integrations = Integration.query.filter_by(platform=hb.PLATFORM, is_active=True).all()
-        for intg in integrations:
-            if not intg.hb_merchant_id or not intg.hb_username or not intg._hb_service_key:
-                continue
-            try:
-                _process_hb(intg)
-                intg.last_sync_at = datetime.utcnow()
-                intg.last_error = None
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                intg.last_error = str(e)[:300]
-                db.session.commit()
-                print(f"[WORKER HB] Hata user={intg.user_id}: {e}")
+        ids = [
+            intg.id for intg in Integration.query.filter_by(platform=hb.PLATFORM, is_active=True).all()
+            if intg.hb_merchant_id and intg.hb_username and intg._hb_service_key
+        ]
+    _run_integrations(app, ids, _process_hb, "HB")
 
 
 def _process_hb(intg):
@@ -976,6 +999,11 @@ def _notify_tgo_claim(user, claim: dict, amount: float, platform: str = TGO_FOOD
     )
 
 
+def _poll_workers_safe(app) -> int:
+    with app.app_context():
+        return _poll_workers(app)
+
+
 def start_scheduler(app):
     if scheduler.running:
         return
@@ -1012,8 +1040,22 @@ def start_scheduler(app):
     scheduler.add_job(send_subscription_expiry_warnings, "cron", hour=9, minute=0,
                       args=[app], id="subscription_expiry_warning", replace_existing=True)
 
+    import monitoring
+    scheduler.add_job(monitoring.heartbeat, "interval", seconds=60,
+                      args=[app], id="heartbeat", replace_existing=True, max_instances=1)
+    scheduler.add_job(monitoring.check_stale_syncs, "interval", minutes=5,
+                      args=[app], id="stale_sync_check", replace_existing=True, max_instances=1)
+    scheduler.add_job(monitoring.enforce_plan_limits, "interval", minutes=30,
+                      args=[app], id="plan_limits", replace_existing=True, max_instances=1)
+    scheduler.add_job(monitoring.send_trial_reminders, "cron", hour=10, minute=0,
+                      args=[app], id="trial_reminders", replace_existing=True)
+
     scheduler.start()
-    print(f"[SCHEDULER] Başlatıldı ✅ (polling: {interval}s)")
+    try:
+        monitoring.heartbeat(app)
+    except Exception as e:  # noqa: BLE001
+        log.warning("İlk heartbeat yazılamadı: %s", e)
+    print(f"[SCHEDULER] Başlatıldı ✅ (polling: {interval}s, paralel: {_poll_workers_safe(app)})")
 
 
 if __name__ == "__main__":

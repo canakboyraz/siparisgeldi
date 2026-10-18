@@ -8,14 +8,14 @@
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="v">{{ 'Pro' if is_pro_user() else 'Ücretsiz' }}</div><div class="l">Mevcut plan</div></div>
+  <div class="stat"><div class="v">{{ ('Pro deneme' if current_user.is_trial_active else 'Pro') if is_pro_user() else 'Ücretsiz' }}</div><div class="l">Mevcut plan</div></div>
   <div class="stat"><div class="v">{{ active_integrations|length }}</div><div class="l">Aktif platform</div></div>
   <div class="stat"><div class="v">{{ 'Açık' if user_can_whatsapp() else 'Kapalı' }}</div><div class="l">WhatsApp</div></div>
   <div class="stat"><div class="v">{{ 'Açık' if user_can_multi_platform() else 'Kapalı' }}</div><div class="l">Çoklu platform</div></div>
 </div>
 {% if is_pro_user() %}
 <div class="card" style="margin-top:1rem{% if pro_days_left is not none and pro_days_left <= 5 %};border-color:#d97706{% endif %}">
-  <div class="card-title">Pro kullanım süresi</div>
+  <div class="card-title">{{ 'Pro deneme süresi' if current_user.is_trial_active else 'Pro kullanım süresi' }}</div>
   {% if pro_days_left is not none %}<p class="muted" style="margin:.2rem 0 0">{{ pro_days_left }} gün kaldı. Bitiş: {{ current_user.pro_expires_at.strftime('%d.%m.%Y') }}</p>
   {% if pro_days_left <= 5 %}<p class="hint">Pro süreniz yakında sona eriyor. Yenilemek için ödeme adımını kullanın.</p>{% endif %}
   {% else %}<p class="muted" style="margin:.2rem 0 0">Pro aktif. Bu eski hesap için bitiş tarihi tanımlanmamış.</p>{% endif %}
@@ -46,9 +46,10 @@
       <li>Çoklu platform bağlantısı</li>
       <li>Tüm raporlar ve sipariş detayları</li>
     </ul>
-    {% if is_pro_user() %}
+    {% if is_pro_user() and not current_user.is_trial_active %}
     <span class="badge green">Mevcut plan</span>
     {% else %}
+    {% if current_user.is_trial_active %}<p class="hint" style="margin-top:0">Denemen sürerken ödeme yaparsan kalan deneme günlerin korunur, 30 gün üstüne eklenir.</p>{% endif %}
     <form method="post" action="{{ url_for('paytr.start') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-primary btn-block" type="submit">PayTR ile Pro'ya geç</button></form>
     <p class="hint">Güvenli ödeme PayTR ekranında açılır. Kart bilgileriniz sitemizde tutulmaz.</p>
     {% endif %}

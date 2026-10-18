@@ -85,7 +85,9 @@ def callback():
         payment.status = "success"
         user = db.session.get(__import__("models").User, payment.user_id)
         now = datetime.utcnow()
+        # Deneme süresindeyken ödeme yapılırsa kalan deneme günleri korunur.
         period_start = user.pro_expires_at if user.pro_expires_at and user.pro_expires_at > now else now
+        user.is_trial = False
         user.pro_started_at = user.pro_started_at or period_start
         user.pro_expires_at = period_start + timedelta(days=30)
         user.plan = "pro"

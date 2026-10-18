@@ -77,6 +77,7 @@
     </div>
     {% endif %}
     {% include "_flashes.html" %}
+    {% if request.endpoint != 'dashboard.active_orders' %}{% include "dashboard/_account_banners.html" %}{% endif %}
     {% block panel %}{% endblock %}
   </main>
   {% if request.endpoint != 'dashboard.active_orders' %}

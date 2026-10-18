@@ -60,7 +60,8 @@
               <option value="both" {{ 'selected' if u.notification_channel == 'both' }}>TG + WA</option>
             </select>
             <button class="btn btn-ghost btn-sm" type="submit">Kaydet</button>
-            {% if u.pro_expires_at %}<div class="muted small">{{ [((u.pro_expires_at.date() - now().date()).days), 0]|max }} gün kaldı · {{ u.pro_expires_at.strftime('%d.%m.%Y') }}</div>{% elif u.plan == 'pro' %}<div class="muted small">Süresiz eski kayıt</div>{% endif %}
+            {% if u.pro_expires_at %}<div class="muted small">{% if u.is_trial %}<span class="badge amber">Deneme</span> {% endif %}{{ [((u.pro_expires_at.date() - now().date()).days), 0]|max }} gün kaldı · {{ u.pro_expires_at.strftime('%d.%m.%Y') }}</div>{% elif u.plan == 'pro' %}<div class="muted small">Süresiz eski kayıt</div>{% endif %}
+            {% if not u.email_verified_at %}<div class="muted small">E-posta doğrulanmadı</div>{% endif %}
           </form>
         </td>
         <td class="muted">{{ u.created_at.strftime('%d.%m.%Y') if u.created_at else '—' }}</td>

@@ -99,9 +99,56 @@ def index():
     recent = (Order.query.filter_by(user_id=current_user.id)
               .order_by(Order.created_at.desc()).limit(10).all())
     today_count = None
+    onboarding = _onboarding_steps(integrations, has_order=bool(recent))
     return render_template("dashboard/index.html",
                            integrations=integrations, recent_orders=recent,
-                           today_count=today_count)
+                           today_count=today_count, onboarding=onboarding)
+
+
+def _onboarding_steps(integrations, has_order: bool) -> dict:
+    """Panel ana sayfasındaki kurulum kontrol listesi."""
+    has_cost = db.session.query(ProductCost.id).filter_by(user_id=current_user.id).first() is not None
+    has_commission = (db.session.query(PlatformCommission.id)
+                      .filter(PlatformCommission.user_id == current_user.id,
+                              PlatformCommission.percentage > 0).first() is not None)
+    notify_ready = current_user.telegram_connected or bool(
+        current_user.whatsapp_number and _can_use_whatsapp()
+        and (current_user.notification_channel or "telegram") in ("whatsapp", "both")
+    )
+    steps = []
+    if current_app.config.get("SMTP_HOST"):
+        steps.append({
+            "key": "email", "done": current_user.email_verified,
+            "title": "E-posta adresini doğrula",
+            "desc": "Şifreni unutursan hesabına geri dönebilmen için.",
+            "action": "resend_verification",
+        })
+    steps += [
+        {"key": "notify", "done": notify_ready,
+         "title": "Bildirim kanalını bağla",
+         "desc": "Telegram'da tek tıkla bağlan; siparişler telefonuna düşsün.",
+         "url": url_for("dashboard.connect_telegram"), "cta": "Telegram'ı bağla"},
+        {"key": "platform", "done": bool(integrations),
+         "title": "İlk platformunu bağla",
+         "desc": "API bilgilerini gir, bağlantıyı test edip kaydedelim.",
+         "platforms": True},
+        {"key": "order", "done": has_order,
+         "title": "İlk siparişini al",
+         "desc": "Platform bağlandıktan sonra yeni sipariş en geç 30 sn içinde panelde ve telefonunda.",
+         "url": url_for("dashboard.active_orders"), "cta": "Aktif siparişler"},
+        {"key": "cost", "done": has_cost,
+         "title": "Ürün maliyetlerini gir",
+         "desc": "En çok satan 5 ürünün maliyetini girmen gerçek kârı görmek için yeterli.",
+         "url": url_for("dashboard.product_cost_entry"), "cta": "Maliyet gir"},
+        {"key": "commission", "done": has_commission,
+         "title": "Platform komisyon oranını gir",
+         "desc": "Komisyon sonrası kârın günlük olarak hesaplansın.",
+         "url": url_for("dashboard.product_cost_entry"), "cta": "Komisyon gir"},
+    ]
+    done = sum(1 for s in steps if s["done"])
+    return {"steps": steps, "done": done, "total": len(steps),
+            "percent": int(done * 100 / len(steps)) if steps else 100,
+            "complete": done == len(steps)}
 
 
 # ── Telegram bağlama ────────────────────────────────────────────────────────
@@ -770,11 +817,11 @@ def update_migros_store_status():
     action = request.form.get("action", "").strip()
     active = action == "activate"
     if action not in {"activate", "deactivate"}:
-        flash("GeÃ§ersiz Migros restoran iÅŸlemi.", "warning")
+        flash("Geçersiz Migros restoran işlemi.", "warning")
         return redirect(url_for("dashboard.migros_setup"))
     secret = current_app.config.get("MIGROS_SECRET_KEY", "")
     if not secret:
-        flash("MIGROS_SECRET_KEY Railway tarafÄ±nda tanÄ±mlÄ± deÄŸil.", "danger")
+        flash("MIGROS_SECRET_KEY Railway tarafında tanımlı değil.", "danger")
         return redirect(url_for("dashboard.migros_setup"))
     try:
         migros.set_store_status(
@@ -788,11 +835,11 @@ def update_migros_store_status():
         intg.last_sync_at = datetime.utcnow()
         intg.last_error = None
         db.session.commit()
-        flash("Migros restoran satÄ±ÅŸa aÃ§Ä±ldÄ±." if active else "Migros restoran satÄ±ÅŸa kapatÄ±ldÄ±.", "success")
+        flash("Migros restoran satışa açıldı." if active else "Migros restoran satışa kapatıldı.", "success")
     except Exception as e:
-        intg.last_error = f"Migros restoran iÅŸlemi: {e}"[:300]
+        intg.last_error = f"Migros restoran işlemi: {e}"[:300]
         db.session.commit()
-        flash(f"Migros restoran iÅŸlemi gÃ¶nderilemedi: {e}", "danger")
+        flash(f"Migros restoran işlemi gönderilemedi: {e}", "danger")
     return redirect(url_for("dashboard.migros_setup"))
 
 
@@ -3213,7 +3260,7 @@ def _migros_detail_options(options: list) -> list:
         name = option.get("itemNames") or option.get("headerName") or "-"
         header = option.get("headerName") or ""
         excluded = bool(option.get("excluded"))
-        label = f"Ã‡Ä±karÄ±lacak: {name}" if excluded else (f"{header}: {name}" if header and header != name else name)
+        label = f"Çıkarılacak: {name}" if excluded else (f"{header}: {name}" if header and header != name else name)
         rows.append({
             "label": _display_detail_text(label),
             "name": name,
@@ -3368,8 +3415,8 @@ def profile():
             if new_pw != confirm_pw:
                 flash("Yeni şifreler eşleşmiyor.", "danger")
                 return render_template("dashboard/profile.html", sound_options=sound_options, receipt_width_options=receipt_width_options)
-            if len(new_pw) < 6:
-                flash("Şifre en az 6 karakter olmalı.", "danger")
+            if len(new_pw) < 8:
+                flash("Şifre en az 8 karakter olmalı.", "danger")
                 return render_template("dashboard/profile.html", sound_options=sound_options, receipt_width_options=receipt_width_options)
             current_user.set_password(new_pw)
 
