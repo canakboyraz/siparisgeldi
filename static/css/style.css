@@ -803,7 +803,8 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 @media(max-width:560px){
   .lp-features{grid-template-columns:1fr}
   .lp-cta .btn{width:100%}
-  .lp-nav .btn-ghost{display:none}
+  .lp-nav .btn{padding:.45rem .75rem;font-size:.86rem}
+  .lp-nav .brand{font-size:1.05rem}
 }
 
 /* Kâr karnesi */
@@ -1207,3 +1208,13 @@ td{font-variant-numeric:tabular-nums}
 .link-button{background:none;border:0;padding:0;font:inherit;color:var(--basil);font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .demo-banner{background:var(--basil-soft);border-color:#C2DCCF}
 @media (max-width:560px){.lp-cta .inline-form{width:100%}.lp-cta .inline-form .btn{width:100%}}
+
+/* Üst menü: dar telefonda "Giriş yap" kalır, deneme butonu hero'da zaten var */
+@media (max-width:400px){.lp-nav .btn-primary{display:none}}
+/* Google ile giriş */
+.btn-google{display:flex;align-items:center;justify-content:center;gap:.6rem;background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:600}
+.btn-google:hover{background:#F7F8F7;border-color:#C9D2CD}
+.auth-google-note{text-align:center;margin:.55rem 0 0;font-size:.8rem}
+.auth-google-note a{color:var(--basil);font-weight:600}
+.auth-divider{display:flex;align-items:center;gap:.75rem;margin:1.1rem 0 1rem;color:var(--muted);font-size:.82rem}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--line)}

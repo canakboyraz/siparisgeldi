@@ -7,6 +7,7 @@
     <div class="card">
       <h2 style="text-align:center">Tekrar hoş geldin</h2>
       {% include "_flashes.html" %}
+      {% include "auth/_google_button.html" %}
       <form method="post">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="field">

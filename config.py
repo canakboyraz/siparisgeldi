@@ -128,6 +128,9 @@ class Config:
     # Resend HTTPS API anahtarı (opsiyonel). SMTP_HOST=smtp.resend.com ise
     # SMTP_PASSWORD'deki anahtar otomatik kullanılır.
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    # Google ile giriş (Google Cloud Console → OAuth istemci kimliği, "Web uygulaması")
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
     # --- Deneme süresi ---
     # Yeni kayıtlara verilen ücretsiz Pro deneme günü (0 = kapalı).

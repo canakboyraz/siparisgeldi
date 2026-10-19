@@ -8,6 +8,7 @@
       <h2 style="text-align:center">Ücretsiz hesap oluştur</h2>
       {% if trial_days %}<p class="muted" style="text-align:center;margin:-.2rem 0 1rem">{{ trial_days }} gün tüm Pro özellikler açık. Kart bilgisi istenmez.</p>{% endif %}
       {% include "_flashes.html" %}
+      {% include "auth/_google_button.html" %}
       <form method="post">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="field">

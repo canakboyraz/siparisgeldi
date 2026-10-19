@@ -27,6 +27,7 @@ class User(UserMixin, db.Model):
     is_trial = db.Column(db.Boolean, default=False)          # Pro süresi deneme mi?
     email_verified_at = db.Column(db.DateTime)
     is_demo = db.Column(db.Boolean, default=False, index=True)  # geçici demo hesabı
+    google_sub = db.Column(db.String(64), unique=True, index=True)  # Google hesabı kimliği (Google ile giriş)
     feature_whatsapp = db.Column(db.Boolean, default=False)
     feature_multi_platform = db.Column(db.Boolean, default=False)
     is_active     = db.Column(db.Boolean, default=True)

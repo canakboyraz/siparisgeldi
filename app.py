@@ -36,6 +36,8 @@ def _ensure_schema():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_trial BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(64)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tgo_store_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_warehouse_id VARCHAR(50)",
@@ -106,6 +108,9 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE users ADD COLUMN is_trial BOOLEAN DEFAULT 0")
             if "is_demo" not in user_cols:
                 stmts.append("ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT 0")
+            if "google_sub" not in user_cols:
+                stmts.append("ALTER TABLE users ADD COLUMN google_sub VARCHAR(64)")
+                stmts.append("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)")
             if "tgo_store_id" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN tgo_store_id VARCHAR(50)")
             if "migros_group_id" not in intg_cols:
@@ -307,6 +312,7 @@ def create_app(config_class=Config, start_scheduler=None):
             },
             "csrf_token": csrf_token,
             "trial_days": int(app.config.get("TRIAL_DAYS", 0) or 0),
+            "google_login_enabled": bool(app.config.get("GOOGLE_CLIENT_ID") and app.config.get("GOOGLE_CLIENT_SECRET")),
             "tl_amount": profit_report.tl,
             "mail_configured": bool(app.config.get("SMTP_HOST")),
             "dashboard_latest_order_id": dashboard_latest_order_id,

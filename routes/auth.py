@@ -1,9 +1,14 @@
 """Kimlik doğrulama: kayıt, giriş, çıkış, şifre sıfırlama, e-posta doğrulama."""
+import hmac
 import logging
+import secrets
 import time
 from datetime import datetime, timedelta
 
-from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request
+from urllib.parse import urlencode
+
+import requests
+from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, login_required, current_user
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
@@ -134,6 +139,26 @@ def _password_problem(password: str, confirm: str):
 
 # ── Giriş / kayıt / çıkış ───────────────────────────────────────────────────
 
+def _start_trial(user: User) -> int:
+    """Yeni hesaba deneme süresini tanımlar; deneme gün sayısını döndürür."""
+    trial_days = int(current_app.config.get("TRIAL_DAYS", 0) or 0)
+    if trial_days > 0:
+        now = datetime.utcnow()
+        user.plan = "pro"
+        user.is_trial = True
+        user.pro_started_at = now
+        user.pro_expires_at = now + timedelta(days=trial_days)
+    return trial_days
+
+
+def _flash_welcome(trial_days: int):
+    if trial_days > 0:
+        flash(f"Hesabın oluşturuldu! {trial_days} gün boyunca tüm Pro özellikler açık. "
+              "Şimdi Telegram'ı bağla.", "success")
+    else:
+        flash("Hesabınız oluşturuldu! Şimdi Telegram'ı bağlayın.", "success")
+
+
 @auth_bp.route("/giris", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated and getattr(current_user, "is_demo", False):
@@ -188,22 +213,12 @@ def register():
             user = User(name=name, email=email)
             user.set_password(password)
             user.ensure_link_token()
-            trial_days = int(current_app.config.get("TRIAL_DAYS", 0) or 0)
-            if trial_days > 0:
-                now = datetime.utcnow()
-                user.plan = "pro"
-                user.is_trial = True
-                user.pro_started_at = now
-                user.pro_expires_at = now + timedelta(days=trial_days)
+            trial_days = _start_trial(user)
             db.session.add(user)
             db.session.commit()
             login_user(user)
             send_verification_email(user)
-            if trial_days > 0:
-                flash(f"Hesabın oluşturuldu! {trial_days} gün boyunca tüm Pro özellikler açık. "
-                      "Şimdi Telegram'ı bağla.", "success")
-            else:
-                flash("Hesabınız oluşturuldu! Şimdi Telegram'ı bağlayın.", "success")
+            _flash_welcome(trial_days)
             return redirect(url_for("dashboard.connect_telegram"))
 
     return render_template("auth/register.html", min_password_length=MIN_PASSWORD_LENGTH)
@@ -314,3 +329,129 @@ def start_demo():
     user = demo.create_demo_user()
     login_user(user)
     return redirect(url_for("dashboard.index"))
+
+
+# ── Google ile giriş (OAuth 2.0 / OpenID Connect, yetkilendirme kodu akışı) ──
+
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
+
+
+def google_login_enabled() -> bool:
+    cfg = current_app.config
+    return bool(cfg.get("GOOGLE_CLIENT_ID") and cfg.get("GOOGLE_CLIENT_SECRET"))
+
+
+def _google_redirect_uri() -> str:
+    return url_for("auth.google_callback", _external=True)
+
+
+def _google_profile(code: str) -> dict:
+    """Yetkilendirme kodunu Google'da token ile değiştirir ve profil bilgisini döndürür.
+
+    Token doğrudan Google'dan (TLS üzerinden, istemci gizli anahtarıyla) alındığı
+    için userinfo yanıtı güvenilirdir; ayrıca id_token imza doğrulaması gerekmez.
+    """
+    cfg = current_app.config
+    token_resp = requests.post(GOOGLE_TOKEN_URL, data={
+        "code": code,
+        "client_id": cfg["GOOGLE_CLIENT_ID"],
+        "client_secret": cfg["GOOGLE_CLIENT_SECRET"],
+        "redirect_uri": _google_redirect_uri(),
+        "grant_type": "authorization_code",
+    }, timeout=10)
+    token_resp.raise_for_status()
+    access_token = token_resp.json().get("access_token")
+    if not access_token:
+        raise ValueError("Google access_token döndürmedi")
+    info_resp = requests.get(GOOGLE_USERINFO_URL, timeout=10,
+                             headers={"Authorization": f"Bearer {access_token}"})
+    info_resp.raise_for_status()
+    return info_resp.json()
+
+
+@auth_bp.route("/giris/google")
+def google_login():
+    if not google_login_enabled():
+        flash("Google ile giriş şu an kullanılamıyor. E-posta ve şifrenle giriş yapabilirsin.", "warning")
+        return redirect(url_for("auth.login"))
+    if current_user.is_authenticated and getattr(current_user, "is_demo", False):
+        logout_user()
+    elif current_user.is_authenticated:
+        return redirect(url_for("dashboard.index"))
+
+    state = secrets.token_urlsafe(32)
+    session["google_oauth_state"] = state
+    params = {
+        "client_id": current_app.config["GOOGLE_CLIENT_ID"],
+        "redirect_uri": _google_redirect_uri(),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "prompt": "select_account",
+    }
+    return redirect(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
+
+
+@auth_bp.route("/giris/google/donus")
+def google_callback():
+    expected_state = session.pop("google_oauth_state", None)
+    if request.args.get("error"):
+        flash("Google ile giriş iptal edildi.", "warning")
+        return redirect(url_for("auth.login"))
+    if not google_login_enabled():
+        return redirect(url_for("auth.login"))
+    state = request.args.get("state", "")
+    code = request.args.get("code", "")
+    if not expected_state or not state or not hmac.compare_digest(expected_state, state) or not code:
+        flash("Google oturumu doğrulanamadı. Lütfen tekrar dene.", "danger")
+        return redirect(url_for("auth.login"))
+
+    try:
+        info = _google_profile(code)
+    except Exception as e:  # noqa: BLE001 — ağ/Google hatası kullanıcıya sade mesaj olarak döner
+        log.error("[GOOGLE] giriş başarısız: %s", e)
+        flash("Google ile giriş şu an yapılamadı. Biraz sonra tekrar dene.", "danger")
+        return redirect(url_for("auth.login"))
+
+    sub = str(info.get("sub") or "").strip()
+    email = str(info.get("email") or "").strip().lower()
+    verified = info.get("email_verified") in (True, "true", "True")
+    if not sub or not email:
+        flash("Google hesabından e-posta bilgisi alınamadı.", "danger")
+        return redirect(url_for("auth.login"))
+    if not verified:
+        flash("Google hesabının e-posta adresi doğrulanmamış. E-posta ve şifreyle kayıt olabilirsin.", "danger")
+        return redirect(url_for("auth.register"))
+
+    user = User.query.filter_by(google_sub=sub).first() or User.query.filter_by(email=email).first()
+    if user and getattr(user, "is_demo", False):
+        user = None
+
+    if user:
+        if user.is_active is False:
+            flash("Hesabınız pasif durumda. Destek ile iletişime geçin.", "danger")
+            return redirect(url_for("auth.login"))
+        if user.google_sub and user.google_sub != sub:
+            flash("Bu e-posta başka bir Google hesabına bağlı. E-posta ve şifrenle giriş yap.", "danger")
+            return redirect(url_for("auth.login"))
+        user.google_sub = sub
+        if not user.email_verified_at:
+            user.email_verified_at = datetime.utcnow()
+        db.session.commit()
+        _clear_login_failures(user.email)
+        login_user(user, remember=True)
+        return redirect(url_for("dashboard.index"))
+
+    name = str(info.get("name") or "").strip()[:100] or email.split("@")[0]
+    user = User(name=name, email=email, google_sub=sub, email_verified_at=datetime.utcnow())
+    user.set_password(secrets.token_urlsafe(32))  # şifre "Şifremi unuttum" ile sonradan belirlenebilir
+    user.ensure_link_token()
+    trial_days = _start_trial(user)
+    db.session.add(user)
+    db.session.commit()
+    login_user(user, remember=True)
+    log.info("[GOOGLE] yeni hesap oluşturuldu user=%s", user.id)
+    _flash_welcome(trial_days)
+    return redirect(url_for("dashboard.connect_telegram"))
