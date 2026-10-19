@@ -305,7 +305,7 @@ def _name_from_dict(data: dict) -> str:
 
 def line_name(line: dict) -> str:
     """Yemek ve Market payload'larında ürün adını ortak şekilde okur."""
-    return _name_from_dict(line) or _clean_text(line.get("barcode")) or "?"
+    return _name_from_dict(line) or _clean_text(line.get("barcode")) or "Ürün"
 
 
 def _note_parts(data: dict) -> list:
@@ -374,7 +374,7 @@ def _line_detail_parts(line: dict) -> list:
         if not isinstance(item, dict):
             continue
         item_name = _name_from_dict(item)
-        if item_name and item_name != line.get("name"):
+        if item_name and item_name != line_name(line):
             parts.append(item_name)
         parts.extend(_note_parts(item))
         for key in (

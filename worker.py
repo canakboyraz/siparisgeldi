@@ -509,10 +509,12 @@ def _aggregate_products(orders, max_items: int = 15) -> str:
                     continue
                 name = ys.item_name(item)
                 counts[name] = counts.get(name, 0) + ys.item_quantity(item)
-        else:  # trendyolgo
+        else:  # trendyolgo (yemek + market): market'te ürün adı line.product içinde
             for ln in (data.get("lines") or []):
-                name = ln.get("name", "?")
-                qty = len(ln.get("items", [])) or 1
+                if not isinstance(ln, dict):
+                    continue
+                name = tgo.line_name(ln)
+                qty = tgo._line_quantity(ln)
                 counts[name] = counts.get(name, 0) + qty
 
     if not counts:
