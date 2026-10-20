@@ -37,6 +37,7 @@ def _ensure_schema():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_trial BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(64)",
+            "ALTER TABLE payments ADD COLUMN IF NOT EXISTS period VARCHAR(10) DEFAULT 'monthly'",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tgo_store_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",
@@ -160,6 +161,9 @@ def _ensure_schema():
             expense_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(platform_expenses)")).fetchall()} if conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='platform_expenses'")).fetchone() else set()
             if expense_cols and "expense_type" not in expense_cols:
                 stmts.append("ALTER TABLE platform_expenses ADD COLUMN expense_type VARCHAR(20) DEFAULT 'fixed'")
+            pay_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(payments)")).fetchall()} if conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='payments'")).fetchone() else set()
+            if pay_cols and "period" not in pay_cols:
+                stmts.append("ALTER TABLE payments ADD COLUMN period VARCHAR(10) DEFAULT 'monthly'")
             order_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(orders)")).fetchall()} if conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='orders'")).fetchone() else set()
             if order_cols and "active_hidden_at" not in order_cols:
                 stmts.append("ALTER TABLE orders ADD COLUMN active_hidden_at DATETIME")
@@ -178,6 +182,20 @@ def _ensure_schema():
                 conn.execute(text(s))
             except Exception as e:
                 print(f"[SCHEMA] atlandi: {s} -> {e}")
+
+def _pro_prices(cfg) -> dict:
+    """Şablonlar için Pro fiyatları: aylık, yıllık, yıllığın aylık karşılığı ve kazanç."""
+    monthly = float(cfg.get("PRO_MONTHLY_PRICE", 250) or 250)
+    yearly = float(cfg.get("PRO_YEARLY_PRICE", 2500) or 2500)
+    saving = max(0.0, monthly * 12 - yearly)
+    return {
+        "monthly": monthly,
+        "yearly": yearly,
+        "yearly_per_month": yearly / 12,
+        "saving": saving,
+        "free_months": int(round(saving / monthly)) if monthly else 0,
+    }
+
 
 def create_app(config_class=Config, start_scheduler=None):
     import monitoring
@@ -313,6 +331,7 @@ def create_app(config_class=Config, start_scheduler=None):
             "csrf_token": csrf_token,
             "trial_days": int(app.config.get("TRIAL_DAYS", 0) or 0),
             "google_login_enabled": bool(app.config.get("GOOGLE_CLIENT_ID") and app.config.get("GOOGLE_CLIENT_SECRET")),
+            "pro_prices": _pro_prices(app.config),
             "tl_amount": profit_report.tl,
             "mail_configured": bool(app.config.get("SMTP_HOST")),
             "dashboard_latest_order_id": dashboard_latest_order_id,

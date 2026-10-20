@@ -1289,3 +1289,18 @@ body{line-height:1.5}
 }
 /* Üst menü kenardan kenara cam şerit, içerik yine sayfa genişliğinde */
 .lp-nav{max-width:none;width:100%;margin:0;padding-left:max(20px,calc((100% - 1040px)/2));padding-right:max(20px,calc((100% - 1040px)/2))}
+
+/* Pro dönem seçimi (aylık / yıllık) */
+.plan-form{display:grid;gap:.8rem;margin-top:.4rem}
+.plan-options{border:0;margin:0;padding:0;display:grid;gap:.55rem}
+.plan-option{display:flex;gap:.75rem;align-items:flex-start;border:1.5px solid var(--line);border-radius:12px;padding:.8rem .9rem;cursor:pointer;background:var(--surface);transition:border-color .12s,background .12s,transform .1s ease-out}
+.plan-option:active{transform:scale(.99)}
+.plan-option input{margin-top:.3rem;accent-color:var(--basil);width:18px;height:18px;flex:0 0 auto}
+.plan-option:has(input:checked){border-color:var(--basil);background:var(--basil-soft)}
+.plan-option-body{display:grid;gap:.15rem;min-width:0}
+.plan-option-head{display:flex;align-items:center;gap:.5rem}
+.plan-option-price{font-family:var(--font-display);font-weight:700;font-size:1.25rem;letter-spacing:-.02em}
+.plan-option-price small{font-family:var(--font-ui,inherit);font-weight:500;font-size:.85rem;color:var(--muted);letter-spacing:0}
+.plan-option .hint{margin:0}
+.price-alt{margin:.35rem 0 .2rem;font-size:.92rem;color:var(--muted)}
+.price-alt b{color:var(--ink)}

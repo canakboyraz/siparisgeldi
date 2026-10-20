@@ -135,6 +135,9 @@ class Config:
     # --- Deneme süresi ---
     # Yeni kayıtlara verilen ücretsiz Pro deneme günü (0 = kapalı).
     TRIAL_DAYS = int(os.environ.get("TRIAL_DAYS", "14"))
+    # Pro fiyatları (TL, KDV dahil). Değiştirilirse yalnızca yeni ödemelere yansır.
+    PRO_MONTHLY_PRICE = float(os.environ.get("PRO_MONTHLY_PRICE", "250"))
+    PRO_YEARLY_PRICE = float(os.environ.get("PRO_YEARLY_PRICE", "2500"))
     # Pro/deneme bitince "1 aktif platform" limitinin kimlere uygulanacağı:
     # trial = sadece denemesi bitenler (varsayılan) · all = tüm süresi bitenler · off = kapalı
     PLAN_LIMIT_SCOPE = os.environ.get("PLAN_LIMIT_SCOPE", "trial")

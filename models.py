@@ -394,6 +394,7 @@ class Payment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     merchant_oid = db.Column(db.String(64), unique=True, nullable=False, index=True)
     amount = db.Column(db.Float, nullable=False)
+    period = db.Column(db.String(10), default="monthly")   # monthly | yearly
     currency = db.Column(db.String(3), default="TRY")
     status = db.Column(db.String(20), default="pending", nullable=False)
     reference = db.Column(db.String(120))

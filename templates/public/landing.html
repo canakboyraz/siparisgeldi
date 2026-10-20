@@ -190,7 +190,8 @@
       </div>
       <div class="price-card featured">
         <div class="card-title">Pro</div>
-        <div class="price">250 TL <span>/ ay · KDV dahil</span></div>
+        <div class="price">{{ tl_amount(pro_prices.monthly) }} <span>/ ay · KDV dahil</span></div>
+        <p class="price-alt">veya yıllık <b>{{ tl_amount(pro_prices.yearly) }}</b>{% if pro_prices.free_months %} · <b>{{ pro_prices.free_months }} ay bedava</b>{% endif %}</p>
         <p class="muted">Birden fazla platformda satış yapan işletmeler için.</p>
         <ul>
           <li>Çoklu platform bağlantısı</li>
@@ -199,7 +200,7 @@
           <li>Kârlılık ve tüm raporlar</li>
         </ul>
         <a class="btn btn-primary btn-block" href="{{ url_for('auth.register') }}">{% if trial_days %}{{ trial_days }} gün ücretsiz dene{% else %}Pro için hesap aç{% endif %}</a>
-        <p class="hint" style="text-align:center">Ödeme aylık yapılır, otomatik çekim yoktur.</p>
+        <p class="hint" style="text-align:center">Aylık ya da yıllık öde; otomatik çekim yoktur.</p>
       </div>
     </div>
   </section>
@@ -224,7 +225,7 @@
     </details>
     <details>
       <summary>Pro otomatik yenilenir mi?</summary>
-      <p>Hayır. Pro 30 gün geçerlidir; bitmeden önce hatırlatma gönderilir, yenilemek istersen panelden ödeme yaparsın.</p>
+      <p>Hayır. Aylık Pro 30 gün, yıllık Pro 365 gün geçerlidir; bitmeden önce hatırlatma gönderilir, yenilemek istersen panelden ödeme yaparsın. Yıllık pakette erken ayrılırsan kullanmadığın aylar iade edilir.</p>
     </details>
     <details>
       <summary>Yemeksepeti ve Getir ne zaman geliyor?</summary>

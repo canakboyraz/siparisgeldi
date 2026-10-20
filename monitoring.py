@@ -219,6 +219,18 @@ def enforce_plan_limits(app):
 TRIAL_REMINDER_DAYS = (3, 1)
 
 
+def _yearly_offer_line() -> str:
+    """Hatırlatma mesajına eklenen yıllık paket satırı (ör. '💡 Yıllık öde: 2.500 TL, 2 ay bedava.')."""
+    import profit_report
+    cfg = current_app.config
+    monthly = float(cfg.get("PRO_MONTHLY_PRICE", 250) or 250)
+    yearly = float(cfg.get("PRO_YEARLY_PRICE", 2500) or 2500)
+    free_months = int(round((monthly * 12 - yearly) / monthly)) if monthly else 0
+    extra = f", {free_months} ay bedava" if free_months > 0 else ""
+    return (f"💡 Aylık {profit_report.tl(monthly)} ya da yıllık {profit_report.tl(yearly)}{extra}. "
+            "Otomatik çekim yok.\n\n")
+
+
 def send_trial_reminders(app):
     """Deneme ve ücretli Pro süresi bitmeden 3 ve 1 gün önce Telegram hatırlatması.
     (WhatsApp kanalındaki ücretli kullanıcılara ayrıca WhatsApp uyarısı gider.)"""
@@ -256,6 +268,7 @@ def send_trial_reminders(app):
             text = (
                 f"⏳ <b>{what} bitmesine {days_left} gün kaldı</b> ({end_day.strftime('%d.%m.%Y')})\n\n"
                 f"{effect}\n\n"
+                f"{_yearly_offer_line()}"
                 f"Kesintisiz devam etmek için: https://{domain}/panel/abonelik"
             )
             if telegram.send_message(token, user.telegram_chat_id, text):

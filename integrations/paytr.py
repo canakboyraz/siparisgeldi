@@ -17,14 +17,14 @@ def merchant_oid():
     return "SG" + secrets.token_hex(20)
 
 
-def iframe_token(config, oid, user, amount, ok_url, fail_url, ip):
+def iframe_token(config, oid, user, amount, ok_url, fail_url, ip, item_name="SiparisGeldi Pro Aylik Abonelik"):
     required = ("PAYTR_MERCHANT_ID", "PAYTR_MERCHANT_KEY", "PAYTR_MERCHANT_SALT")
     missing = [key for key in required if not str(config.get(key) or "").strip()]
     if missing:
         raise ValueError("PayTR eksik degisken: " + ", ".join(missing))
 
     amount_kurus = str(int(round(amount * 100)))
-    basket = base64.b64encode(json.dumps([["SiparisGeldi Pro Aylik Abonelik", f"{amount:.2f}", 1]], ensure_ascii=False, separators=(",", ":")).encode()).decode()
+    basket = base64.b64encode(json.dumps([[item_name, f"{amount:.2f}", 1]], ensure_ascii=False, separators=(",", ":")).encode()).decode()
     payload = {
         "merchant_id": config["PAYTR_MERCHANT_ID"], "user_ip": ip[:39], "merchant_oid": oid,
         "email": user.email, "payment_amount": amount_kurus, "user_basket": basket,

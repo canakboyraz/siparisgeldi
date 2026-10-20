@@ -7,17 +7,26 @@
 <h2>Hizmetin Kapsamı</h2>
 <p>SiparişGeldi, restoranların bağlı yemek platformlarından gelen siparişleri takip etmesi, bildirim alması ve raporları görüntülemesi için sunulan dijital abonelik hizmetidir. Fiziksel ürün teslimatı yapılmaz.</p>
 
-<h2>Abonelik İptali</h2>
-<p>Kullanıcı, Pro aboneliğini panel üzerinden veya {{ company.email }} adresine yazarak iptal edebilir. İptal işlemi bir sonraki otomatik yenilemeyi durdurur; mevcut ödeme döneminin sonuna kadar Pro özellikleri kullanılabilir.</p>
+<h2>Paketler ve Yenileme</h2>
+<p>Pro plan aylık (30 gün, {{ tl_amount(pro_prices.monthly) }}) veya yıllık (365 gün, {{ tl_amount(pro_prices.yearly) }}) olarak satın alınır. Otomatik yenileme ve otomatik tahsilat yapılmaz; dönem sonunda Pro özellikleri kapanır, hesap ücretsiz planda devam eder. Bu nedenle bir sonraki dönemin ücretini durdurmak için ayrıca iptal işlemi gerekmez.</p>
 
-<h2>İade Koşulları</h2>
-<p>Teknik bir hata nedeniyle ücretli hizmetin hiç kullanılamaması durumunda kullanıcı destek ekibine başvurabilir. İnceleme sonucunda uygun görülürse ilgili ödeme için iade yapılır. Kullanıcının kendi isteğiyle iptal ettiği dönemlerde, ilgili dönem hizmeti başlamış veya kullanılmışsa iade yapılmayabilir.</p>
+<h2>Aylık Plan</h2>
+<p>Aylık planda ödenen dönem başladıktan sonra kullanıcının kendi isteğiyle ayrılması halinde iade yapılmaz; Pro özellikleri ödenen 30 günün sonuna kadar kullanılabilir.</p>
+
+<h2>Yıllık Plan: Kalan Aylara Göre İade</h2>
+<p>Yıllık planda kullanıcı, ödemeden sonra istediği zaman {{ company.email }} adresine yazarak aboneliğini sonlandırabilir ve kullanılmayan aylar için iade talep edebilir:</p>
+<ul>
+  <li><strong>İlk 14 gün:</strong> Ödeme tarihinden itibaren 14 gün içinde yapılan taleplerde ödenen tutarın tamamı iade edilir.</li>
+  <li><strong>14 günden sonra:</strong> İade tutarı = kalan tam ay sayısı × (yıllık bedel ÷ 12). Başlamış olan ay kullanılmış sayılır.</li>
+  <li><strong>Örnek:</strong> {{ tl_amount(pro_prices.yearly) }} ödenen yıllık planda 4 ay 10 gün kullanıldıysa 5. ay başlamış sayılır; kalan 7 ay için 7 × {{ tl_amount(pro_prices.yearly_per_month) }} = {{ tl_amount(pro_prices.yearly_per_month * 7) }} iade edilir.</li>
+</ul>
+<p>İade onaylandığında Pro özellikleri kapanır ve tutar, ödemenin yapıldığı karta en geç 10 iş günü içinde iade edilir. Kartın hesabına yansıma süresi bankaya göre değişebilir.</p>
+
+<h2>Teknik Sorunlar</h2>
+<p>Hizmetten kaynaklanan bir teknik hata nedeniyle ücretli özelliklerin kullanılamaması halinde kullanıcı destek ekibine başvurabilir. İnceleme sonucunda, plan türünden bağımsız olarak kullanılamayan süre için iade yapılır veya süre uzatılır.</p>
 
 <h2>Ödeme Hataları</h2>
-<p>Kredi kartından tahsilat yapılamaması halinde abonelik durumu pasife alınabilir veya kullanıcıdan ödeme bilgisini güncellemesi istenebilir.</p>
-
-<h2>Otomatik Yenileme</h2>
-<p>Pro abonelik, kullanıcı iptal edene kadar aylık olarak yenilenir. Kullanıcı yenileme tarihinden önce iptal ederek sonraki dönem ücretinin alınmasını engelleyebilir.</p>
+<p>Ödemenin tamamlanamaması halinde Pro özellikleri açılmaz ve karttan tahsilat yapılmaz. Tahsil edildiği halde Pro'nun açılmaması durumunda destek ekibine başvurulabilir.</p>
 
 <h2>İletişim</h2>
 <p>İptal ve iade talepleri için: <a href="mailto:{{ company.email }}">{{ company.email }}</a></p>

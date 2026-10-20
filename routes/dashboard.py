@@ -1257,7 +1257,18 @@ def subscription():
         active_integrations=active_integrations,
         pro_days_left=pro_days_left,
         payment_returned=request.args.get("payment_returned") == "1",
+        current_period=_current_pro_period(current_user),
     )
+
+
+def _current_pro_period(user):
+    """Ödenmiş Pro'nun son paketi (monthly | yearly); deneme veya ödeme yoksa None."""
+    from models import Payment
+    if getattr(user, "is_trial_active", False) or not getattr(user, "is_pro_active", False):
+        return None
+    last = (Payment.query.filter_by(user_id=user.id, status="success")
+            .order_by(Payment.id.desc()).first())
+    return (last.period or "monthly") if last else None
 
 
 @dashboard_bp.route("/siparis/<int:order_id>")

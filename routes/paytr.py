@@ -7,7 +7,21 @@ from models import Payment
 from integrations import paytr
 
 paytr_bp = Blueprint("paytr", __name__)
-PRICE = 250.0
+
+# Pro paketleri: süre (gün) ve PayTR sepet adı. Fiyat config'ten okunur.
+PLANS = {
+    "monthly": {"days": 30, "item": "SiparisGeldi Pro Aylik Abonelik", "price_key": "PRO_MONTHLY_PRICE", "default": 250.0},
+    "yearly": {"days": 365, "item": "SiparisGeldi Pro Yillik Abonelik", "price_key": "PRO_YEARLY_PRICE", "default": 2500.0},
+}
+
+
+def plan_price(period: str) -> float:
+    plan = PLANS.get(period) or PLANS["monthly"]
+    return float(current_app.config.get(plan["price_key"], plan["default"]) or plan["default"])
+
+
+def plan_days(period: str) -> int:
+    return (PLANS.get(period) or PLANS["monthly"])["days"]
 
 
 def _amount_in_kurus(value):
@@ -38,13 +52,18 @@ def start():
     if not configured():
         flash("PayTR bilgileri henuz yapilandirilmadi.", "warning")
         return redirect(url_for("dashboard.subscription"))
+    period = request.form.get("period", "monthly")
+    if period not in PLANS:
+        period = "monthly"
+    price = plan_price(period)
     oid = paytr.merchant_oid()
-    payment = Payment(user_id=current_user.id, merchant_oid=oid, amount=PRICE)
+    payment = Payment(user_id=current_user.id, merchant_oid=oid, amount=price, period=period)
     db.session.add(payment)
     db.session.commit()
     try:
-        token = paytr.iframe_token(current_app.config, oid, current_user, PRICE,
-            url_for("paytr.success", _external=True), url_for("paytr.fail", _external=True), request.remote_addr or "0.0.0.0")
+        token = paytr.iframe_token(current_app.config, oid, current_user, price,
+            url_for("paytr.success", _external=True), url_for("paytr.fail", _external=True), request.remote_addr or "0.0.0.0",
+            item_name=PLANS[period]["item"])
     except Exception as exc:
         payment.status, payment.failure_reason = "failed", str(exc)[:300]
         db.session.commit()
@@ -89,7 +108,7 @@ def callback():
         period_start = user.pro_expires_at if user.pro_expires_at and user.pro_expires_at > now else now
         user.is_trial = False
         user.pro_started_at = user.pro_started_at or period_start
-        user.pro_expires_at = period_start + timedelta(days=30)
+        user.pro_expires_at = period_start + timedelta(days=plan_days(payment.period or "monthly"))
         user.plan = "pro"
         user.feature_whatsapp = True
         user.feature_multi_platform = True
