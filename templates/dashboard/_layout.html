@@ -7,6 +7,7 @@
   {% set contact_endpoints = ['dashboard.connect_telegram', 'dashboard.reset_telegram', 'dashboard.connect_whatsapp'] %}
   {% set cost_endpoints = ['dashboard.profit_card', 'dashboard.product_costs', 'dashboard.product_cost_entry', 'dashboard.monthly_expenses', 'dashboard.reports', 'dashboard.analytics'] %}
   <aside class="sidebar" id="app-nav" aria-label="Menü">
+    <div class="sheet-grabber" aria-hidden="true"><span></span></div>
     <div class="sidebar-head">
       <a class="brand" href="{{ url_for('dashboard.index') }}"><span class="brand-mark" aria-hidden="true"></span>SiparişGeldi</a>
       <button class="sheet-close" type="button" data-nav-close aria-label="Menüyü kapat">{{ icon('x', 20) }}</button>
@@ -251,18 +252,127 @@
   {% endif %}
 </div>
 <script>
+  /* Mobil menü: Apple tarzı alttan açılan sayfa.
+     Yaylı (spring) animasyon, sürükle-bırak, hız aktarımı ve momentum tahmini;
+     animasyon her an yakalanıp tersine çevrilebilir. */
   (function () {
     var body = document.body;
+    var sheet = document.getElementById("app-nav");
     var backdrop = document.querySelector(".nav-backdrop");
+    var topbar = document.querySelector(".topbar");
     var openers = document.querySelectorAll("[data-nav-open]");
-    function setOpen(open) {
-      body.classList.toggle("nav-open", open);
-      if (backdrop) backdrop.hidden = !open;
+    var mobile = window.matchMedia("(max-width: 860px)");
+    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    var y = 0, v = 0, target = 0, raf = 0, isOpen = false, spring = null;
+
+    function height() { return sheet.offsetHeight + 24; }
+    function render() {
+      sheet.style.transform = "translate3d(0," + y.toFixed(2) + "px,0)";
+      if (backdrop) backdrop.style.opacity = Math.max(0, Math.min(1, 1 - y / height())).toFixed(3);
+    }
+    function setAria(open) {
       openers.forEach(function (b) { b.setAttribute("aria-expanded", open ? "true" : "false"); });
     }
-    openers.forEach(function (b) { b.addEventListener("click", function () { setOpen(!body.classList.contains("nav-open")); }); });
+    function settle() {
+      raf = 0;
+      if (!isOpen) {
+        body.classList.remove("nav-open");
+        if (backdrop) backdrop.hidden = true;
+        sheet.style.transform = "";
+      }
+    }
+    // Yay: Apple'ın "damping + response" parametreleri (kütle 1)
+    function animateTo(to, velocity, damping, response) {
+      target = to; v = velocity || 0;
+      var k = Math.pow(2 * Math.PI / response, 2), c = 4 * Math.PI * damping / response;
+      var last = performance.now();
+      cancelAnimationFrame(raf);
+      function step(now) {
+        var dt = Math.min((now - last) / 1000, 1 / 30); last = now;
+        var a = -k * (y - target) - c * v;
+        v += a * dt; y += v * dt;
+        render();
+        if (Math.abs(v) < 2 && Math.abs(y - target) < 0.5) { y = target; v = 0; render(); settle(); return; }
+        raf = requestAnimationFrame(step);
+      }
+      raf = requestAnimationFrame(step);
+    }
+    function setOpen(open, velocity, momentum) {
+      if (!mobile.matches) {
+        body.classList.toggle("nav-open", open);
+        if (backdrop) backdrop.hidden = !open;
+        isOpen = open; setAria(open); return;
+      }
+      isOpen = open; setAria(open);
+      if (open) {
+        if (!body.classList.contains("nav-open")) { body.classList.add("nav-open"); y = height(); render(); }
+        if (backdrop) backdrop.hidden = false;
+      }
+      if (reduceMotion.matches) {                 // azaltılmış hareket: kayma yerine kısa geçiş
+        cancelAnimationFrame(raf); y = open ? 0 : height(); render(); settle(); return;
+      }
+      // Varsayılan: sıçramasız (damping 1). Fırlatma ile gelindiyse hafif sıçrama (0.8).
+      animateTo(open ? 0 : height(), velocity || 0, momentum ? 0.82 : 1, 0.32);
+    }
+
+    // Sürükleme: tutamak ve başlıktan, ya da menü listesi en üstteyken aşağı çekerek
+    var drag = null;
+    function rubberband(over, dim) { var c = 0.55; return (over * dim * c) / (dim + c * Math.abs(over)); }
+    function onDown(e) {
+      if (!mobile.matches || !isOpen || e.button > 0) return;
+      var nav = sheet.querySelector("nav");
+      var fromList = nav && nav.contains(e.target);
+      if (fromList && nav.scrollTop > 0) return;
+      cancelAnimationFrame(raf); raf = 0;           // uçuştaki animasyonu yakala
+      drag = { id: e.pointerId, startY: e.clientY, base: y, active: false, fromList: fromList, hist: [{ t: e.timeStamp, y: e.clientY }] };
+    }
+    function onMove(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dy = e.clientY - drag.startY;
+      if (!drag.active) {
+        if (Math.abs(dy) < 8) return;               // yön belirlenmeden önce küçük eşik
+        if (drag.fromList && dy < 0) { drag = null; return; }
+        drag.active = true; sheet.setPointerCapture(e.pointerId); sheet.classList.add("is-dragging");
+      }
+      var next = drag.base + dy;
+      y = next < 0 ? -rubberband(-next, height()) : next;   // üst sınırda yumuşak direnç
+      render();
+      drag.hist.push({ t: e.timeStamp, y: e.clientY });
+      if (drag.hist.length > 6) drag.hist.shift();
+      e.preventDefault();
+    }
+    function onUp(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var d = drag; drag = null;
+      sheet.classList.remove("is-dragging");
+      if (!d.active) { if (isOpen) animateTo(0, 0, 1, 0.32); return; }
+      var a = d.hist[0], b = d.hist[d.hist.length - 1];
+      var vel = (b.t - a.t) > 0 ? (b.y - a.y) / ((b.t - a.t) / 1000) : 0;   // px/s
+      var projected = y + (vel / 1000) * 0.998 / (1 - 0.998);                 // momentum tahmini
+      setOpen(projected < height() * 0.5, vel, Math.abs(vel) > 300);
+    }
+    sheet.addEventListener("pointerdown", onDown);
+    sheet.addEventListener("pointermove", onMove, { passive: false });
+    sheet.addEventListener("pointerup", onUp);
+    sheet.addEventListener("pointercancel", onUp);
+
+    openers.forEach(function (b) { b.addEventListener("click", function () { setOpen(!isOpen); }); });
     document.querySelectorAll("[data-nav-close]").forEach(function (el) { el.addEventListener("click", function () { setOpen(false); }); });
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape") setOpen(false); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && isOpen) setOpen(false); });
+    mobile.addEventListener && mobile.addEventListener("change", function () {
+      cancelAnimationFrame(raf); raf = 0; isOpen = false; setAria(false);
+      body.classList.remove("nav-open"); if (backdrop) { backdrop.hidden = true; backdrop.style.opacity = ""; }
+      sheet.style.transform = "";
+    });
+
+    // Üst bar: sabit çizgi yerine, içerik altına girince beliren yumuşak kenar
+    if (topbar) {
+      var ticking = false;
+      window.addEventListener("scroll", function () {
+        if (ticking) return; ticking = true;
+        requestAnimationFrame(function () { topbar.classList.toggle("is-scrolled", window.scrollY > 4); ticking = false; });
+      }, { passive: true });
+    }
   })();
 </script>
 {% endblock %}

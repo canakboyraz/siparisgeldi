@@ -9,6 +9,7 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden}
+@supports (overflow:clip){html,body{overflow-x:clip}}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
   background:var(--bg); color:var(--ink); line-height:1.55;
@@ -726,7 +727,7 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .onboarding-platforms{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
 
 /* ─── Landing (lp-) ─── */
-.lp{overflow-x:hidden}
+.lp{overflow-x:clip}
 .lp-nav{gap:1rem}
 .lp-links{display:flex;gap:1.3rem;font-weight:600;font-size:.93rem;color:var(--muted)}
 .lp-links a:hover{color:var(--ink)}
@@ -1218,3 +1219,73 @@ td{font-variant-numeric:tabular-nums}
 .auth-google-note a{color:var(--basil);font-weight:600}
 .auth-divider{display:flex;align-items:center;gap:.75rem;margin:1.1rem 0 1rem;color:var(--muted);font-size:.82rem}
 .auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ═══ Apple tasarım katmanı (apple-design skill) ═══════════════════════════
+   Anında basma tepkisi, buzlu cam katmanlar, boyuta göre harf aralığı,
+   sürüklenebilir alt sayfa, azaltılmış hareket / saydamlık / kontrast. */
+
+/* 1 · Tepki: basıldığı an, 300ms dokunma gecikmesi yok */
+a,button,summary,.btn,.icon-btn{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.btn,.icon-btn,.tabbar a,.tabbar button,.stat-link,.status-tab,.chip,.link-button,.sheet-close{transition:transform .1s ease-out,background .12s,border-color .12s,color .12s}
+.btn:active:not([disabled]),.icon-btn:active,.sheet-close:active{transform:scale(.97)}
+.tabbar a:active,.tabbar button:active{transform:scale(.92)}
+.stat-link:active,.row-link:active{transform:scale(.985)}
+.row-link{transition:transform .1s ease-out,background .12s}
+.sidebar a:active,.sidebar summary:active,.sidebar-logout button:active{background:rgba(255,255,255,.14)}
+
+/* 2 · Tipografi: büyük başlıkta sıkı, küçük yazıda açık harf aralığı */
+h1,.page-head h1{letter-spacing:-.025em;line-height:1.1}
+h2{letter-spacing:-.02em;line-height:1.15}
+h3,.card-title{letter-spacing:-.01em;line-height:1.25}
+.lp-hero h1,.calc-head h1{letter-spacing:-.035em;line-height:1.04}
+.stat .v{letter-spacing:-.02em}
+.stat .l,.hint,.badge,.tabbar a span,.tabbar button span,.muted.page-sub{letter-spacing:.01em}
+body{line-height:1.5}
+
+/* 3 · Malzeme: içerik altından akan buzlu cam çubuklar */
+.lp-nav{position:sticky;top:0;z-index:40;background:rgba(245,246,244,.72);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%)}
+.sheet-grabber{display:none}
+
+@media (max-width:860px){
+  .tabbar{background:rgba(255,255,255,.72);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
+    border-top:1px solid rgba(255,255,255,.6);box-shadow:0 -1px 0 rgba(23,32,28,.06)}
+  .tabbar a.active,.tabbar button.active{font-weight:700}
+  .topbar{background:rgba(245,246,244,.72);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
+    border-bottom:0;transition:box-shadow .2s ease}
+  .topbar.is-scrolled{box-shadow:0 1px 0 rgba(23,32,28,.06),0 8px 16px -12px rgba(23,32,28,.18)}
+
+  /* 4 · Alt sayfa: konumu JS'teki yay yönetir; CSS geçişi yok */
+  .sidebar{transition:none;will-change:transform;touch-action:pan-y}
+  .sidebar.is-dragging{cursor:grabbing}
+  .sidebar.is-dragging nav{overflow:hidden}
+  .nav-backdrop{transition:none;will-change:opacity}
+  .sheet-grabber{display:flex;justify-content:center;padding:.15rem 0 .55rem;margin-top:-.35rem;cursor:grab;touch-action:none}
+  .sheet-grabber span{width:38px;height:5px;border-radius:3px;background:rgba(255,255,255,.28)}
+  .sidebar-head{touch-action:none}
+}
+
+/* Yeni sipariş penceresi: soluklaşmak yerine "malzeme gibi" belirir */
+.order-alert{animation:sg-materialize .32s cubic-bezier(.2,.9,.25,1)}
+@keyframes sg-materialize{from{opacity:0;transform:scale(.94) translateY(8px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+.order-alert-backdrop{-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+
+/* 5 · Erişilebilirlik */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}
+  .btn:active,.icon-btn:active,.tabbar a:active,.tabbar button:active,.stat-link:active,.row-link:active{transform:none}
+  .order-alert{animation:sg-fade .2s ease}
+  @keyframes sg-fade{from{opacity:0}to{opacity:1}}
+}
+@media (prefers-reduced-transparency:reduce){
+  .lp-nav,.tabbar,.topbar{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
+  .lp-nav,.topbar{background:var(--bg)}
+  .order-alert-backdrop{-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+@media (prefers-contrast:more){
+  .tabbar,.topbar,.lp-nav{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none;border-color:var(--ink)}
+  .tabbar{border-top:1px solid var(--ink)}
+  .topbar{border-bottom:1px solid var(--ink)}
+}
+/* Üst menü kenardan kenara cam şerit, içerik yine sayfa genişliğinde */
+.lp-nav{max-width:none;width:100%;margin:0;padding-left:max(20px,calc((100% - 1040px)/2));padding-right:max(20px,calc((100% - 1040px)/2))}
