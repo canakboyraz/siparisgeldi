@@ -80,8 +80,8 @@
           <a class="ticket-no" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">#{{ o.order_number or o.external_id }}</a>
           <div class="ticket-meta">{{ platform_label(o.platform) }}</div>
         </div>
-        <div class="ticket-time {{ 'is-late' if row.is_unaccepted_warning }}" title="{{ o.created_at.strftime('%d.%m.%Y %H:%M') if o.created_at else '' }}">
-          {{ icon('clock', 15) }}<span>{% if row.age_minutes < 60 %}{{ row.age_minutes }} dk{% else %}{{ o.created_at.strftime('%H:%M') if o.created_at else '—' }}{% endif %}</span>
+        <div class="ticket-time {{ 'is-late' if row.is_unaccepted_warning }}" title="{{ (o.created_at|yerel).strftime('%d.%m.%Y %H:%M') if o.created_at else '' }}">
+          {{ icon('clock', 15) }}<span>{% if row.age_minutes < 60 %}{{ row.age_minutes }} dk{% else %}{{ (o.created_at|yerel).strftime('%H:%M') if o.created_at else '—' }}{% endif %}</span>
         </div>
       </header>
       <div class="ticket-status"><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span>{% if row.is_unaccepted_warning %}<span class="ticket-late">{{ icon('alert', 14) }}Kabul gecikti</span>{% endif %}</div>

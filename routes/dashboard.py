@@ -14,7 +14,7 @@ from models import (Integration, Order, ProductCost, PlatformExpense, DailyAdver
                     MonthlyExpense, PlatformCommission, AdisyoReport, AdisyoConnection)
 from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications.dispatcher import send_to_user, record_whatsapp_result
-from utils import platform_label, status_label
+from utils import platform_label, status_label, to_local
 
 dashboard_bp = Blueprint("dashboard", __name__)
 TURKEY_TZ = pytz.timezone("Europe/Istanbul")
@@ -922,7 +922,7 @@ def _migros_go_live_checks(intg: Integration = None, migros_api_base: str = "") 
         {
             "label": "Son webhook",
             "state": "ok" if has_sync else "warn",
-            "text": intg.last_sync_at.strftime("%d.%m.%Y %H:%M") if has_sync else "Henüz webhook alınmadı",
+            "text": to_local(intg.last_sync_at).strftime("%d.%m.%Y %H:%M") if has_sync else "Henüz webhook alınmadı",
         },
         {
             "label": "Son hata",
@@ -1049,7 +1049,7 @@ def _getir_go_live_checks(intg: Integration = None) -> list:
         {"label": "x-api-key", "state": "ok" if has_webhook_key else "danger", "text": "GETIR_WEBHOOK_API_KEY tanımlı" if has_webhook_key else "Railway GETIR_WEBHOOK_API_KEY eksik"},
         {"label": "Restoran eşleşmesi", "state": "ok" if has_match_key else "warn", "text": "Restoran bilgisi kayıtlı" if has_match_key else "Restoran ID veya secret key henüz girilmedi"},
         {"label": "API doğrulama", "state": "ok" if has_app_secret else "warn", "text": f"Base URL: {current_app.config.get('GETIR_API_BASE')}" if has_app_secret else "GETIR_APP_SECRET_KEY gelince doğrulama açılır"},
-        {"label": "Son webhook", "state": "ok" if has_sync else "warn", "text": intg.last_sync_at.strftime("%d.%m.%Y %H:%M") if has_sync else "Henüz webhook alınmadı"},
+        {"label": "Son webhook", "state": "ok" if has_sync else "warn", "text": to_local(intg.last_sync_at).strftime("%d.%m.%Y %H:%M") if has_sync else "Henüz webhook alınmadı"},
         {"label": "Son hata", "state": "danger" if has_error else "ok", "text": intg.last_error if has_error else "Hata yok"},
     ]
 
@@ -2154,7 +2154,7 @@ def active_orders_check():
             "status": status_label(order.status),
             "items": _active_order_items_summary(order, raw),
             "total": f"{float(order.total_price or 0):.2f} TL",
-            "created_at": order.created_at.strftime("%d.%m.%Y %H:%M") if order.created_at else "",
+            "created_at": to_local(order.created_at).strftime("%d.%m.%Y %H:%M") if order.created_at else "",
             "url": url_for("dashboard.order_detail", order_id=order.id),
         })
     next_since_id = new_orders[-1].id if len(new_orders) >= 20 else latest_order_id
@@ -2957,6 +2957,7 @@ def _order_detail_context(order: Order) -> dict:
                       for p in raw.get("products") or [] if isinstance(p, dict)],
             "totals": _generic_detail_totals(order.total_price),
             "customer": "Salon / gel-al",
+            "order_created_at": to_local(order.created_at).strftime("%d.%m.%Y %H:%M") if order.created_at else "",
             "store": "Adisyo",
             "source": "Adisyo",
             "delivery": "-",

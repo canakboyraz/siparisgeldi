@@ -64,7 +64,7 @@
           </td>
           <td><span class="badge red">{{ i.platform }}</span></td>
           <td class="muted">{{ i.last_error }}</td>
-          <td class="muted">{{ i.updated_at.strftime('%d.%m %H:%M') if i.updated_at else '—' }}</td>
+          <td class="muted">{{ (i.updated_at|yerel).strftime('%d.%m %H:%M') if i.updated_at else '—' }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -96,7 +96,7 @@
             {% if i.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
             {% if i.last_error %}<span class="badge red">hata</span>{% endif %}
           </td>
-          <td class="muted">{{ i.last_sync_at.strftime('%d.%m %H:%M') if i.last_sync_at else '—' }}</td>
+          <td class="muted">{{ (i.last_sync_at|yerel).strftime('%d.%m %H:%M') if i.last_sync_at else '—' }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -123,7 +123,7 @@
     <tbody>
       {% for o in recent_orders %}
       <tr>
-        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
+        <td class="muted">{{ (o.created_at|yerel).strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
         <td>
           <a class="table-link" href="{{ url_for('admin.user_detail', user_id=o.user.id) }}"><strong>{{ o.user.name }}</strong></a><br>
           <span class="muted">{{ o.user.email }}</span>

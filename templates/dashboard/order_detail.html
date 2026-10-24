@@ -162,7 +162,7 @@
       {% if detail.customer_id %}
       <div><span>Müşteri ID</span><strong>{{ detail.customer_id }}</strong></div>
       {% endif %}
-      <div><span>Güncelleme</span><strong>{{ order.updated_at.strftime('%d.%m.%Y %H:%M') if order.updated_at else '—' }}</strong></div>
+      <div><span>Güncelleme</span><strong>{{ (order.updated_at|yerel).strftime('%d.%m.%Y %H:%M') if order.updated_at else '—' }}</strong></div>
     </div>
   </div>
 

@@ -75,7 +75,7 @@
         <td>{{ platform_label(i.platform) }}</td>
         <td>{% if i.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}</td>
         <td>{{ i.tgo_supplier_id or i.tmp_supplier_id or i.hb_merchant_id or i.migros_store_id or i.getir_restaurant_id or '-' }}</td>
-        <td class="muted">{{ i.last_sync_at.strftime('%d.%m %H:%M') if i.last_sync_at else '-' }}</td>
+        <td class="muted">{{ (i.last_sync_at|yerel).strftime('%d.%m %H:%M') if i.last_sync_at else '-' }}</td>
         <td class="muted">{{ i.last_error or '-' }}</td>
       </tr>
       {% endfor %}
@@ -94,7 +94,7 @@
     <tbody>
       {% for o in recent_orders %}
       <tr>
-        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '-' }}</td>
+        <td class="muted">{{ (o.created_at|yerel).strftime('%d.%m %H:%M') if o.created_at else '-' }}</td>
         <td>{{ platform_label(o.platform) }}</td>
         <td><a class="table-link" href="{{ url_for('admin.orders', q=o.order_number or o.external_id) }}">#{{ o.order_number or o.external_id }}</a></td>
         <td><span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span></td>

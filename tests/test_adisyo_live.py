@@ -153,6 +153,11 @@ class AdisyoLiveTest(unittest.TestCase):
         html = self.client.get("/giris").get_data(as_text=True)
         token = re.search(r'name="_csrf_token" value="([^"]+)"', html).group(1)
         self.client.post("/giris", data={"_csrf_token": token, "email": "usta@restoran.com", "password": "sifre12345"})
+        from models import Order
+        db.session.add(Order(user_id=self.user.id, platform="adisyo", external_id="z", status="Completed",
+                             total_price=10, created_at=datetime(2026, 10, 24, 10, 5)))
+        db.session.commit()
+        self.assertIn("24.10 13:05", self.client.get("/panel/siparisler").get_data(as_text=True))
         page = self.client.get("/panel/adisyo").get_data(as_text=True)
         self.assertIn("Saatlik satış", page)
         self.assertIn("13:00", page)

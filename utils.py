@@ -123,3 +123,14 @@ def status_color(status: str) -> str:
 
 def platform_label(platform: str) -> str:
     return _PLATFORM_LABELS.get(platform, platform or "-")
+
+
+def to_local(value):
+    """Veritabanındaki UTC (saat dilimsiz) zamanı Türkiye saatine çevirir."""
+    if value is None:
+        return None
+    import pytz
+    if value.tzinfo is None:
+        value = pytz.utc.localize(value)
+    return value.astimezone(pytz.timezone("Europe/Istanbul"))
+

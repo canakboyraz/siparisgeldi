@@ -28,7 +28,7 @@
     <a class="order-list-row" role="listitem" href="{{ url_for('dashboard.order_detail', order_id=o.id) }}">
       <div class="olr-main">
         <strong>#{{ o.order_number or o.external_id }}</strong>
-        <span class="muted">{{ platform_label(o.platform) }} · {{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</span>
+        <span class="muted">{{ platform_label(o.platform) }} · {{ (o.created_at|yerel).strftime('%d.%m %H:%M') if o.created_at else '—' }}</span>
       </div>
       <span class="badge {{ status_color(o.status) }}">{{ status_label(o.status) }}</span>
       <strong class="num olr-total">{{ tl_amount(o.total_price or 0) }}</strong>

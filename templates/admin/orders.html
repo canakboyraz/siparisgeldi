@@ -50,7 +50,7 @@
     <tbody>
       {% for o in orders.items %}
       <tr>
-        <td class="muted">{{ o.created_at.strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
+        <td class="muted">{{ (o.created_at|yerel).strftime('%d.%m %H:%M') if o.created_at else '—' }}</td>
         <td>
           <strong>{{ o.user.name }}</strong><br>
           <span class="muted">{{ o.user.email }}</span>

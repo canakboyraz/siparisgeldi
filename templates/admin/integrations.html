@@ -60,7 +60,7 @@
           {% if i.is_active %}<span class="badge green">aktif</span>{% else %}<span class="badge gray">pasif</span>{% endif %}
           {% if i.last_error %}<span class="badge red">hata</span>{% endif %}
         </td>
-        <td class="muted">{{ i.last_sync_at.strftime('%d.%m %H:%M') if i.last_sync_at else '—' }}</td>
+        <td class="muted">{{ (i.last_sync_at|yerel).strftime('%d.%m %H:%M') if i.last_sync_at else '—' }}</td>
         <td class="muted">{{ i.last_error or '—' }}</td>
       </tr>
       {% endfor %}

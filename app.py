@@ -298,6 +298,8 @@ def create_app(config_class=Config, start_scheduler=None):
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
 
+    app.jinja_env.filters["yerel"] = utils.to_local
+
     @app.context_processor
     def inject_helpers():
         dashboard_latest_order_id = 0

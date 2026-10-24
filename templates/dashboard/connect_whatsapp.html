@@ -72,7 +72,7 @@
     <div>Son mesaj durumu:
       <b>{{ whatsapp_status.last_status or "Henüz durum alınmadı" }}</b>
       {% if whatsapp_status.last_status_at %}
-      <span>({{ whatsapp_status.last_status_at.strftime('%d.%m.%Y %H:%M') }})</span>
+      <span>({{ (whatsapp_status.last_status_at|yerel).strftime('%d.%m.%Y %H:%M') }})</span>
       {% endif %}
     </div>
     {% if whatsapp_status.last_error %}
