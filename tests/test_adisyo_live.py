@@ -96,6 +96,20 @@ class AdisyoLiveTest(unittest.TestCase):
         self._schedule_at(datetime(2026, 10, 25, 1, 0), datetime(2026, 10, 24, 22, 0))
         self.assertEqual(live.state, "ready")  # not re-read again
 
+    def test_request_today_has_end_and_error_text(self):
+        from unittest.mock import MagicMock
+        self.conn.api_key = "sirr-123456"
+        resp = MagicMock(status_code=400)
+        resp.json.return_value = {"message": "endDate gerekli sirr-123456"}
+        with self.app.test_request_context(), patch("integrations.adisyo.requests.get", return_value=resp) as get:
+            with self.assertRaises(adisyo.AdisyoError) as err:
+                adisyo.completed_page(self.conn, datetime.now(adisyo.TURKEY_TZ).date(), 1)
+            self.assertIn("endDate", get.call_args.kwargs["params"])
+            self.assertIn("endDate gerekli ***", str(err.exception))
+            with self.assertRaises(adisyo.AdisyoError):
+                adisyo.completed_page(self.conn, date(2026, 1, 5), 1)
+            self.assertNotIn("endDate", get.call_args.kwargs["params"])
+
     def test_analytics_uses_real_hours(self):
         from routes.dashboard import _analytics_adisyo_orders, _build_analytics_summary
         day = date(2026, 10, 24)

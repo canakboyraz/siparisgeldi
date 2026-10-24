@@ -1,6 +1,6 @@
 """Read-only Adisyo reports. No webhook or order mutations."""
 from collections import defaultdict
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import unicodedata
 
@@ -41,23 +41,43 @@ def local_day(value):
     return local_time(value).date()
 
 
+def remote_message(response, connection):
+    """Adisyo'nun hata açıklamasını kısa ve güvenli biçimde döndürür (anahtarlar ayıklanır)."""
+    try:
+        data = response.json()
+        text = data.get("message") or data.get("title") or data.get("errors") if isinstance(data, dict) else data
+    except ValueError:
+        text = response.text
+    text = " ".join(str(text or "").split())
+    for secret in (connection.api_key, connection.api_secret):
+        if secret and len(secret) >= 6:
+            text = text.replace(secret, "***")
+    return (text[:160] or "yetki veya istek limitini kontrol edin.")
+
+
 def completed_page(connection, day, page):
     if not connection.api_key or not connection.api_secret:
         raise AdisyoError("Adisyo anahtarlari okunamadi; baglanti bilgilerini kontrol edin.")
     start = TURKEY_TZ.localize(datetime.combine(day, time.min)).astimezone(timezone.utc)
+    params = {"page": page, "startDate": start.strftime("%Y-%m-%d %H:%M:%S"),
+              "includeCancelled": "true", "orderType": "TakeAway,Table,Retail"}
+    now = datetime.now(timezone.utc)
+    end = TURKEY_TZ.localize(datetime.combine(day, time.max)).astimezone(timezone.utc)
+    if end > now:
+        # Gün henüz bitmedi: aralığı geleceğe taşımadan şu ana kadar iste.
+        params["endDate"] = (now - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
     try:
         response = requests.get(
             current_app.config.get("ADISYO_API_BASE", BASE_URL).rstrip("/") + "/CompletedOrders",
             headers={"x-api-key": connection.api_key, "x-api-secret": connection.api_secret,
                      "x-api-consumer": connection.consumer},
-            params={"page": page, "startDate": start.strftime("%Y-%m-%d %H:%M:%S"),
-                    "includeCancelled": "true", "orderType": "TakeAway,Table,Retail"},
+            params=params,
             timeout=(5, 20), allow_redirects=False,
         )
     except requests.RequestException:
         raise AdisyoError("Adisyo baglantisi kurulamadi veya zaman asimina ugradi.") from None
     if response.status_code != 200:
-        raise AdisyoError(f"Adisyo HTTP {response.status_code}; yetki veya istek limitini kontrol edin.")
+        raise AdisyoError(f"Adisyo HTTP {response.status_code}: {remote_message(response, connection)}")
     try:
         data = response.json()
     except ValueError:
