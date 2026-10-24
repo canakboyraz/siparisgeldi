@@ -1161,9 +1161,6 @@ def analytics():
     orders = query.order_by(Order.created_at.desc()).all()
     # Adisyo siparişleri günlük rapor modelinde tutulur; istatistikler için
     # aynı ortak sipariş biçimine dönüştürülür.
-    if not platform or platform == "adisyo":
-        orders += _analytics_adisyo_orders(current_user.id, start_date, end_date)
-        orders.sort(key=lambda item: item.created_at or datetime.min, reverse=True)
     summary = _build_analytics_summary(orders, start_date, end_date)
     previous_start, previous_end = _previous_calendar_week(end_date)
     current_week_start = end_date - timedelta(days=end_date.weekday())
@@ -1172,8 +1169,6 @@ def analytics():
         current_week_query = current_week_query.filter_by(platform=platform)
     current_week_query = _apply_report_date_filter(current_week_query, current_week_start, end_date)
     current_week_orders = current_week_query.all()
-    if not platform or platform == "adisyo":
-        current_week_orders += _analytics_adisyo_orders(current_user.id, current_week_start, end_date)
     current_week = _build_previous_week_summary(
         current_week_orders,
         current_week_start,
@@ -1184,8 +1179,6 @@ def analytics():
         previous_query = previous_query.filter_by(platform=platform)
     previous_query = _apply_report_date_filter(previous_query, previous_start, previous_end)
     previous_orders = previous_query.all()
-    if not platform or platform == "adisyo":
-        previous_orders += _analytics_adisyo_orders(current_user.id, previous_start, previous_end)
     previous_week = _build_previous_week_summary(previous_orders, previous_start)
     week_comparison = _build_week_comparison(current_week, previous_week)
 
@@ -1203,41 +1196,6 @@ def analytics():
         },
         period_label=period_label,
     )
-
-
-def _analytics_adisyo_orders(user_id, start_date, end_date):
-    """Adisyo günlük özetlerini istatistik ekranının ortak sipariş biçimine çevirir.
-
-    Özetteki saatlik dağılım varsa siparişler gerçek saatlerine yerleştirilir;
-    eski raporlarda saat bilgisi yoksa gün içinde tek kova (12:00) kullanılır.
-    """
-    reports = (AdisyoReport.query.join(AdisyoConnection)
-               .join(Integration, AdisyoConnection.integration_id == Integration.id)
-               .filter(Integration.user_id == user_id, AdisyoReport.summary_json.isnot(None),
-                       AdisyoReport.day >= start_date, AdisyoReport.day <= end_date).all())
-    result = []
-    for report in reports:
-        try:
-            summary = json.loads(report.summary_json or "{}")
-            count = max(0, int(summary.get("count") or 0))
-            total = float(summary.get("amount") or 0)
-            buckets = [(int(h["hour"]), int(h["count"]), float(h["amount"]))
-                       for h in summary.get("hours") or [] if 0 <= int(h["hour"]) <= 23 and int(h["count"]) > 0]
-        except (TypeError, ValueError, KeyError):
-            continue
-        if not buckets and count:
-            buckets = [(None, count, total)]
-        index = 0
-        for hour, bucket_count, bucket_total in buckets:
-            local = datetime.combine(report.day, datetime.min.time()).replace(hour=12 if hour is None else hour)
-            created = TURKEY_TZ.localize(local).astimezone(pytz.utc).replace(tzinfo=None)
-            for _ in range(bucket_count):
-                result.append(Order(user_id=user_id, platform="adisyo",
-                                    external_id=f"adisyo-{report.day}-{index}", status="Completed",
-                                    total_price=bucket_total / bucket_count,
-                                    created_at=created))
-                index += 1
-    return result
 
 
 @dashboard_bp.route("/abonelik")
@@ -1445,27 +1403,6 @@ def product_costs():
             row = products.setdefault(key, {"platform": order.platform, "key": item["key"], "name": item["name"], "quantity": 0.0, "revenue": 0.0})
             row["quantity"] += item["quantity"]
             row["revenue"] += item["revenue"]
-    # Adisyo siparişleri Order tablosunda değil, hazır günlük raporlarda tutulur.
-    if not platform_filter or "adisyo" in platform_filter:
-        adisyo_reports = (AdisyoReport.query.join(AdisyoConnection)
-                          .join(Integration, AdisyoConnection.integration_id == Integration.id)
-                          .filter(Integration.user_id == current_user.id,
-                                  AdisyoReport.summary_json.isnot(None),
-                                  AdisyoReport.day >= since.date(),
-                                  AdisyoReport.day < until.date()).all())
-        for report in adisyo_reports:
-            try:
-                summary = json.loads(report.summary_json or "{}")
-            except (TypeError, ValueError):
-                continue
-            for item in summary.get("products", []):
-                name = str(item.get("name") or "Ürün").strip()
-                quantity = float(item.get("quantity") or 0)
-                revenue = float(item.get("amount") or 0)
-                key = ("adisyo", " ".join(name.casefold().split()))
-                row = products.setdefault(key, {"platform": "adisyo", "key": key[1], "name": name, "quantity": 0.0, "revenue": 0.0})
-                row["quantity"] += quantity
-                row["revenue"] += revenue
     for row in products.values():
         saved = costs.get(" ".join(row["name"].casefold().split()))
         row["cost"] = saved.unit_cost if saved else None
@@ -1484,13 +1421,6 @@ def product_costs():
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
         if (not platform_filter or order.platform in platform_filter) and not _is_cancelled_order(order) and not _is_refunded_order(order):
             order_counts[order.platform] = order_counts.get(order.platform, 0) + 1
-    if not platform_filter or "adisyo" in platform_filter:
-        for report in adisyo_reports if 'adisyo_reports' in locals() else []:
-            try:
-                summary = json.loads(report.summary_json or "{}")
-                order_counts["adisyo"] = order_counts.get("adisyo", 0) + max(0, int(summary.get("count") or 0))
-            except (TypeError, ValueError):
-                pass
     order_counts["genel"] = sum(order_counts.values())
     other_expense_total = sum(
         e.amount * order_counts.get(e.platform, 0) if e.expense_type == "per_order" else e.amount
@@ -1545,32 +1475,6 @@ def product_costs():
             product["revenue"] += item["revenue"]
             if saved:
                 product["cost"] += item["quantity"] * saved.unit_cost
-    if not platform_filter or "adisyo" in platform_filter:
-        for report in adisyo_reports if 'adisyo_reports' in locals() else []:
-            try:
-                summary = json.loads(report.summary_json or "{}")
-            except (TypeError, ValueError):
-                continue
-            day = report.day
-            row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0, "other_expense": 0.0, "other_expense_details": [], "advertising_expense": 0.0, "advertising_expense_details": [], "monthly_expense": 0.0, "monthly_expense_details": []})
-            valid_orders = max(0, int(summary.get("count") or 0))
-            row["orders"] += valid_orders
-            row["platform_orders"]["adisyo"] = row["platform_orders"].get("adisyo", 0) + valid_orders
-            for item in summary.get("products", []):
-                name = str(item.get("name") or "Ürün").strip()
-                quantity = float(item.get("quantity") or 0)
-                revenue = float(item.get("amount") or 0)
-                row["revenue"] += revenue
-                row["platform_revenue"]["adisyo"] = row["platform_revenue"].get("adisyo", 0.0) + revenue
-                saved = costs.get(" ".join(name.casefold().split()))
-                if saved:
-                    row["cost"] += quantity * saved.unit_cost
-                product_key = " ".join(name.casefold().split())
-                product = row["products"].setdefault(product_key, {"name": name, "quantity": 0.0, "revenue": 0.0, "cost": 0.0})
-                product["quantity"] += quantity
-                product["revenue"] += revenue
-                if saved:
-                    product["cost"] += quantity * saved.unit_cost
     try:
         advertising_expenses = (DailyAdvertisingExpense.query
                                 .filter(DailyAdvertisingExpense.user_id == current_user.id,
@@ -1855,16 +1759,6 @@ def product_cost_entry():
             continue
         for item in _cost_product_lines(order.platform, _parse_raw_json(order.raw_json)):
             names.add(" ".join(item["name"].casefold().split()))
-    for report in (AdisyoReport.query.join(AdisyoConnection)
-                   .join(Integration, AdisyoConnection.integration_id == Integration.id)
-                   .filter(Integration.user_id == current_user.id, AdisyoReport.summary_json.isnot(None),
-                           AdisyoReport.day >= since.date()).all()):
-        try:
-            summary = json.loads(report.summary_json or "{}")
-            names.update(" ".join(str(item.get("name") or "Ürün").casefold().split())
-                         for item in summary.get("products", []))
-        except (TypeError, ValueError):
-            continue
     existing = ProductCost.query.filter_by(user_id=current_user.id).all()
     cost_names = {" ".join((row.product_name or "").casefold().split()) for row in existing}
     missing = sorted((name for name in names if name not in cost_names), key=str.casefold)
@@ -1874,17 +1768,6 @@ def product_cost_entry():
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= expense_since).all():
         if not _is_cancelled_order(order) and not _is_refunded_order(order):
             order_counts[order.platform] = order_counts.get(order.platform, 0) + 1
-    recent_adisyo = (AdisyoReport.query.join(AdisyoConnection)
-                     .join(Integration, AdisyoConnection.integration_id == Integration.id)
-                     .filter(Integration.user_id == current_user.id,
-                             AdisyoReport.summary_json.isnot(None),
-                             AdisyoReport.day >= expense_since.date()).all())
-    for report in recent_adisyo:
-        try:
-            summary = json.loads(report.summary_json or "{}")
-            order_counts["adisyo"] = order_counts.get("adisyo", 0) + max(0, int(summary.get("count") or 0))
-        except (TypeError, ValueError):
-            pass
     order_counts["genel"] = sum(order_counts.values())
     advertising_page = request.args.get("advertising_page", 1, type=int)
     advertising_expenses = (DailyAdvertisingExpense.query
@@ -2395,6 +2278,10 @@ def _active_order_items_summary(order: Order, raw: dict) -> str:
             return hb.summarize_items(raw, max_items=3)
         if order.platform == ys.PLATFORM:
             return ys.summarize_items(raw, max_items=3)
+        if order.platform == "adisyo":
+            names = [f"{p.get('name')} x{p.get('quantity')}" for p in raw.get("products") or []
+                     if isinstance(p, dict) and not p.get("child")]
+            return ", ".join(names[:3]) + (f" +{len(names) - 3}" if len(names) > 3 else "") if names else "-"
     except Exception:
         pass
     return "-"
@@ -3006,6 +2893,13 @@ def _cost_product_lines(platform, data):
             name = getter.line_name(item)
             lines.append({"key": str(item.get("barcode") or item.get("id") or name), "name": name,
                           "quantity": qty, "revenue": float(item.get("totalPrice") or item.get("price") or 0) * qty})
+    elif platform == "adisyo":
+        for item in data.get("products") or []:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "Ürün").strip()
+            lines.append({"key": " ".join(name.casefold().split()), "name": name,
+                          "quantity": float(item.get("quantity") or 0), "revenue": float(item.get("amount") or 0)})
     elif platform == ys.PLATFORM:
         for item in ys.items(data):
             qty = ys.item_quantity(item)
@@ -3054,6 +2948,24 @@ def _order_detail_context(order: Order) -> dict:
         return _ys_detail_context(order, raw)
     if order.platform in {TGO_FOOD_PLATFORM, TGO_MARKET_PLATFORM}:
         return _tgo_detail_context(order, raw)
+    if order.platform == "adisyo":
+        return {
+            "raw": raw,
+            "items": [{"name": ("↳ " if p.get("child") else "") + str(p.get("name") or "Ürün"),
+                       "quantity": p.get("quantity"), "price": f"{float(p.get('amount') or 0):.2f} TL",
+                       "note": "", "details": [], "options": []}
+                      for p in raw.get("products") or [] if isinstance(p, dict)],
+            "totals": _generic_detail_totals(order.total_price),
+            "customer": "Salon / gel-al",
+            "store": "Adisyo",
+            "source": "Adisyo",
+            "delivery": "-",
+            "payment": order.payment_type or "-",
+            "address": "",
+            "address_direction": "",
+            "flags": [],
+            "order_note": "",
+        }
     return {
         "raw": raw,
         "items": [],

@@ -7,7 +7,7 @@ from flask import current_app
 from sqlalchemy.exc import IntegrityError
 
 from extensions import db
-from models import AdisyoConnection, AdisyoReport, Integration
+from models import AdisyoConnection, AdisyoReport, Integration, Order
 from integrations import adisyo
 from notifications.dispatcher import send_to_user
 
@@ -54,6 +54,13 @@ def schedule(connection, now):
                 queue_report(connection, yesterday, send=True)
         elif report.state != "queued" and not is_final(report):
             queue_report(connection, yesterday, send=notify, refresh=True)
+    # Sipariş satırları saklanmadan önce hazırlanmış eski raporları bir kez yeniden oku.
+    old = (AdisyoReport.query.filter(AdisyoReport.connection_id == connection.id,
+                                     AdisyoReport.started_at.is_(None),
+                                     AdisyoReport.state.in_(("ready", "error")))
+           .order_by(AdisyoReport.day.desc()).first())
+    if old is not None and not AdisyoReport.query.filter_by(connection_id=connection.id, state="queued").first():
+        queue_report(connection, old.day, refresh=True)
     report = AdisyoReport.query.filter_by(connection_id=connection.id, day=today).first()
     if report is None:
         queue_report(connection, today)
@@ -102,6 +109,32 @@ def tick(app):
                 current_app.logger.exception("Adisyo rapor gorevi basarisiz connection_id=%s", connection.id)
 
 
+def save_orders(connection, rows):
+    """Adisyo satışlarını diğer platformlar gibi tek tek sipariş olarak saklar.
+
+    Böylece Tüm siparişler, raporlar, istatistikler ve kârlılık aynı kaynaktan
+    beslenir. Müşteri bilgisi tutulmaz; yalnızca ürün, ödeme ve tutarlar.
+    """
+    user_id = connection.integration.user_id
+    ids = [row["id"] for row in rows]
+    existing = {o.external_id: o for o in Order.query.filter(
+        Order.user_id == user_id, Order.platform == "adisyo", Order.external_id.in_(ids)).all()} if ids else {}
+    for row in rows:
+        order = existing.get(row["id"])
+        if order is None:
+            order = Order(user_id=user_id, platform="adisyo", external_id=row["id"])
+            db.session.add(order)
+        order.order_number = row["id"][:50]
+        order.status = "Cancelled" if row["cancelled"] else "Completed"
+        order.total_price = float(row["amount"])
+        order.payment_type = ", ".join(sorted({p["name"] for p in row["payments"]}))[:50] or None
+        order.app_source = "Adisyo"
+        order.raw_json = json.dumps({"source": "adisyo", "products": row["products"], "payments": row["payments"],
+                                     "discount": row["discount"], "tax": row["tax"]}, ensure_ascii=False)
+        if row.get("created"):
+            order.created_at = datetime.fromisoformat(row["created"])
+
+
 def process_page(connection_id):
     connection = AdisyoConnection.query.filter_by(id=connection_id).with_for_update(skip_locked=True).first()
     now = datetime.utcnow()
@@ -115,10 +148,13 @@ def process_page(connection_id):
     try:
         rows, page_count = adisyo.completed_page(connection, report.day, report.page)
         stored = json.loads(report.rows_json)
+        page_rows = []
         for row in rows:
             normalized = adisyo.normalize(row, report.day)
             if normalized:
                 stored[normalized["id"]] = normalized
+                page_rows.append(normalized)
+        save_orders(connection, page_rows)
         report.rows_json = json.dumps(stored, ensure_ascii=False)
         report.attempts, report.error = 0, None
         connection.integration.last_sync_at, connection.integration.last_error = now, None

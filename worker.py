@@ -509,6 +509,12 @@ def _aggregate_products(orders, max_items: int = 15) -> str:
                     continue
                 name = ys.item_name(item)
                 counts[name] = counts.get(name, 0) + ys.item_quantity(item)
+        elif o.platform == "adisyo":
+            for item in (data.get("products") or []):
+                if isinstance(item, dict) and not item.get("child"):
+                    name = item.get("name") or "?"
+                    qty = float(item.get("quantity") or 0)
+                    counts[name] = counts.get(name, 0) + (int(qty) if qty.is_integer() else qty)
         else:  # trendyolgo (yemek + market): market'te ürün adı line.product içinde
             for ln in (data.get("lines") or []):
                 if not isinstance(ln, dict):

@@ -77,20 +77,6 @@ def compute(user_id: int, start_day, end_day) -> dict:
         for line in _cost_product_lines(order.platform, _parse_raw_json(order.raw_json)):
             add_line(order.platform, line["name"], line["quantity"], line["revenue"])
 
-    reports = (AdisyoReport.query.join(AdisyoConnection)
-               .join(Integration, AdisyoConnection.integration_id == Integration.id)
-               .filter(Integration.user_id == user_id, AdisyoReport.summary_json.isnot(None),
-                       AdisyoReport.day >= start_day, AdisyoReport.day <= end_day).all())
-    for report in reports:
-        try:
-            summary = json.loads(report.summary_json or "{}")
-        except (TypeError, ValueError):
-            continue
-        platform_row("adisyo")["orders"] += max(0, int(summary.get("count") or 0))
-        for item in summary.get("products", []):
-            add_line("adisyo", str(item.get("name") or "Ürün").strip(),
-                     float(item.get("quantity") or 0), float(item.get("amount") or 0))
-
     for expense in per_order:
         if expense.platform == "genel":
             for prow in platforms.values():

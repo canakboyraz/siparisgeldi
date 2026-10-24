@@ -96,6 +96,7 @@ _STATUS_COLORS.update({
 _PLATFORM_LABELS["getir"] = "Getir Yemek"
 _PLATFORM_LABELS["hepsiburada"] = "Hepsiburada"
 _PLATFORM_LABELS["yemeksepeti"] = "Yemeksepeti"
+_PLATFORM_LABELS["adisyo"] = "Adisyo"
 
 _STATUS_LABELS.update({
     "Open": "Yeni",

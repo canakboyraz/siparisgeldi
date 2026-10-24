@@ -126,6 +126,7 @@ def normalize(order, day):
                          "amount": str(decimal(payment.get("amount")))})
     # Keep reporting data only, without customer addresses, phones or invoices.
     return {"id": str(order["id"]), "cancelled": cancelled, "hour": stamp.hour,
+            "created": stamp.astimezone(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
             "amount": str(decimal(order.get("orderTotal"))),
             "discount": str(decimal(order.get("discountAmount"))),
             "tax": str(decimal(order.get("taxAmount"))),
