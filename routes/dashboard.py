@@ -1162,23 +1162,7 @@ def analytics():
     # Adisyo siparişleri günlük rapor modelinde tutulur; istatistikler için
     # aynı ortak sipariş biçimine dönüştürülür.
     if not platform or platform == "adisyo":
-        reports = (AdisyoReport.query.join(AdisyoConnection)
-                   .join(Integration, AdisyoConnection.integration_id == Integration.id)
-                   .filter(Integration.user_id == current_user.id, AdisyoReport.state == "ready",
-                           AdisyoReport.day >= start_date, AdisyoReport.day <= end_date).all())
-        for report in reports:
-            try:
-                summary = json.loads(report.summary_json or "{}")
-                count = max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
-                total = float(summary.get("amount") or 0)
-            except (TypeError, ValueError):
-                continue
-            per_order = total / count if count else 0
-            for index in range(count):
-                orders.append(Order(user_id=current_user.id, platform="adisyo",
-                                    external_id=f"adisyo-{report.day}-{index}",
-                                    status="Completed", total_price=per_order,
-                                    created_at=datetime.combine(report.day, datetime.min.time())))
+        orders += _analytics_adisyo_orders(current_user.id, start_date, end_date)
         orders.sort(key=lambda item: item.created_at or datetime.min, reverse=True)
     summary = _build_analytics_summary(orders, start_date, end_date)
     previous_start, previous_end = _previous_calendar_week(end_date)
@@ -1222,23 +1206,37 @@ def analytics():
 
 
 def _analytics_adisyo_orders(user_id, start_date, end_date):
+    """Adisyo günlük özetlerini istatistik ekranının ortak sipariş biçimine çevirir.
+
+    Özetteki saatlik dağılım varsa siparişler gerçek saatlerine yerleştirilir;
+    eski raporlarda saat bilgisi yoksa gün içinde tek kova (12:00) kullanılır.
+    """
     reports = (AdisyoReport.query.join(AdisyoConnection)
                .join(Integration, AdisyoConnection.integration_id == Integration.id)
-               .filter(Integration.user_id == user_id, AdisyoReport.state == "ready",
+               .filter(Integration.user_id == user_id, AdisyoReport.summary_json.isnot(None),
                        AdisyoReport.day >= start_date, AdisyoReport.day <= end_date).all())
     result = []
     for report in reports:
         try:
             summary = json.loads(report.summary_json or "{}")
-            count = max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+            count = max(0, int(summary.get("count") or 0))
             total = float(summary.get("amount") or 0)
-        except (TypeError, ValueError):
+            buckets = [(int(h["hour"]), int(h["count"]), float(h["amount"]))
+                       for h in summary.get("hours") or [] if 0 <= int(h["hour"]) <= 23 and int(h["count"]) > 0]
+        except (TypeError, ValueError, KeyError):
             continue
-        for index in range(count):
-            result.append(Order(user_id=user_id, platform="adisyo",
-                                external_id=f"adisyo-{report.day}-{index}", status="Completed",
-                                total_price=total / count if count else 0,
-                                created_at=datetime.combine(report.day, datetime.min.time())))
+        if not buckets and count:
+            buckets = [(None, count, total)]
+        index = 0
+        for hour, bucket_count, bucket_total in buckets:
+            local = datetime.combine(report.day, datetime.min.time()).replace(hour=12 if hour is None else hour)
+            created = TURKEY_TZ.localize(local).astimezone(pytz.utc).replace(tzinfo=None)
+            for _ in range(bucket_count):
+                result.append(Order(user_id=user_id, platform="adisyo",
+                                    external_id=f"adisyo-{report.day}-{index}", status="Completed",
+                                    total_price=bucket_total / bucket_count,
+                                    created_at=created))
+                index += 1
     return result
 
 
@@ -1452,7 +1450,7 @@ def product_costs():
         adisyo_reports = (AdisyoReport.query.join(AdisyoConnection)
                           .join(Integration, AdisyoConnection.integration_id == Integration.id)
                           .filter(Integration.user_id == current_user.id,
-                                  AdisyoReport.state == "ready",
+                                  AdisyoReport.summary_json.isnot(None),
                                   AdisyoReport.day >= since.date(),
                                   AdisyoReport.day < until.date()).all())
         for report in adisyo_reports:
@@ -1490,7 +1488,7 @@ def product_costs():
         for report in adisyo_reports if 'adisyo_reports' in locals() else []:
             try:
                 summary = json.loads(report.summary_json or "{}")
-                order_counts["adisyo"] = order_counts.get("adisyo", 0) + max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+                order_counts["adisyo"] = order_counts.get("adisyo", 0) + max(0, int(summary.get("count") or 0))
             except (TypeError, ValueError):
                 pass
     order_counts["genel"] = sum(order_counts.values())
@@ -1555,7 +1553,7 @@ def product_costs():
                 continue
             day = report.day
             row = daily.setdefault(day, {"date": day, "orders": 0, "platform_orders": {}, "platform_revenue": {}, "products": {}, "revenue": 0.0, "cost": 0.0, "commission": 0.0, "expense": 0.0, "other_expense": 0.0, "other_expense_details": [], "advertising_expense": 0.0, "advertising_expense_details": [], "monthly_expense": 0.0, "monthly_expense_details": []})
-            valid_orders = max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+            valid_orders = max(0, int(summary.get("count") or 0))
             row["orders"] += valid_orders
             row["platform_orders"]["adisyo"] = row["platform_orders"].get("adisyo", 0) + valid_orders
             for item in summary.get("products", []):
@@ -1859,7 +1857,7 @@ def product_cost_entry():
             names.add(" ".join(item["name"].casefold().split()))
     for report in (AdisyoReport.query.join(AdisyoConnection)
                    .join(Integration, AdisyoConnection.integration_id == Integration.id)
-                   .filter(Integration.user_id == current_user.id, AdisyoReport.state == "ready",
+                   .filter(Integration.user_id == current_user.id, AdisyoReport.summary_json.isnot(None),
                            AdisyoReport.day >= since.date()).all()):
         try:
             summary = json.loads(report.summary_json or "{}")
@@ -1879,12 +1877,12 @@ def product_cost_entry():
     recent_adisyo = (AdisyoReport.query.join(AdisyoConnection)
                      .join(Integration, AdisyoConnection.integration_id == Integration.id)
                      .filter(Integration.user_id == current_user.id,
-                             AdisyoReport.state == "ready",
+                             AdisyoReport.summary_json.isnot(None),
                              AdisyoReport.day >= expense_since.date()).all())
     for report in recent_adisyo:
         try:
             summary = json.loads(report.summary_json or "{}")
-            order_counts["adisyo"] = order_counts.get("adisyo", 0) + max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+            order_counts["adisyo"] = order_counts.get("adisyo", 0) + max(0, int(summary.get("count") or 0))
         except (TypeError, ValueError):
             pass
     order_counts["genel"] = sum(order_counts.values())

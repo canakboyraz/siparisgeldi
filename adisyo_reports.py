@@ -12,17 +12,55 @@ from integrations import adisyo
 from notifications.dispatcher import send_to_user
 
 
+LIVE_REFRESH_MINUTES = 15      # bugünün raporu bu sıklıkla yenilenir
+ERROR_RETRY_MINUTES = 60       # hata veren bağlantı daha seyrek denenir
+
+
 def queue_report(connection, day, send=False, refresh=False):
     report = AdisyoReport.query.filter_by(connection_id=connection.id, day=day).first()
     if report is None:
-        report = AdisyoReport(connection_id=connection.id, day=day, send_requested=send)
+        report = AdisyoReport(connection_id=connection.id, day=day, send_requested=send,
+                              started_at=datetime.utcnow())
         db.session.add(report)
     elif refresh and report.state in ("ready", "error"):
+        # Eski özet yeni tur bitene kadar ekranda kalır; yalnızca sayfa verisi sıfırlanır.
         report.state, report.page, report.attempts = "queued", 1, 0
-        report.rows_json, report.summary_json, report.error = "{}", None, None
+        report.rows_json, report.error = "{}", None
         report.send_requested, report.notification_status = send, None
+        report.started_at = datetime.utcnow()
     db.session.commit()
     return report
+
+
+def day_end_utc(day):
+    end = adisyo.TURKEY_TZ.localize(datetime.combine(day + timedelta(days=1), datetime.min.time()))
+    return end.astimezone(adisyo.pytz.utc).replace(tzinfo=None)
+
+
+def is_final(report):
+    """Gün kapandıktan sonra başlayan okuma turu tüm siparişleri içerir."""
+    return report.started_at is None or report.started_at >= day_end_utc(report.day)
+
+
+def schedule(connection, now):
+    """Bugünü sık sık yeniler; dünü gece bir kez kesinleştirip raporunu gönderir."""
+    today, yesterday = now.date(), now.date() - timedelta(days=1)
+    notify = bool(connection.integration.notify_daily_report)
+    utcnow = datetime.utcnow()
+    if (now.hour, now.minute) >= (0, 15):
+        report = AdisyoReport.query.filter_by(connection_id=connection.id, day=yesterday).first()
+        if report is None:
+            if notify:
+                queue_report(connection, yesterday, send=True)
+        elif report.state != "queued" and not is_final(report):
+            queue_report(connection, yesterday, send=notify, refresh=True)
+    report = AdisyoReport.query.filter_by(connection_id=connection.id, day=today).first()
+    if report is None:
+        queue_report(connection, today)
+    elif report.state != "queued":
+        wait = ERROR_RETRY_MINUTES if report.state == "error" else LIVE_REFRESH_MINUTES
+        if not report.started_at or report.started_at <= utcnow - timedelta(minutes=wait):
+            queue_report(connection, today, refresh=True)
 
 
 def report_message(report):
@@ -54,8 +92,7 @@ def tick(app):
         connections = AdisyoConnection.query.join(Integration).filter(Integration.is_active.is_(True)).all()
         for connection in connections:
             try:
-                if (now.hour, now.minute) >= (0, 15) and connection.integration.notify_daily_report:
-                    queue_report(connection, now.date() - timedelta(days=1), send=True)
+                schedule(connection, now)
                 process_page(connection.id)
             except IntegrityError:
                 db.session.rollback()

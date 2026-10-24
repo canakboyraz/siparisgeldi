@@ -26,15 +26,19 @@ def decimal(value):
         raise AdisyoError("Adisyo sayisal veri formati gecersiz.") from None
 
 
-def local_day(value):
+def local_time(value):
     try:
         stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         # Adisyo examples omit the offset; these are POS local times.
         if stamp.tzinfo is None:
             stamp = TURKEY_TZ.localize(stamp)
-        return stamp.astimezone(TURKEY_TZ).date()
+        return stamp.astimezone(TURKEY_TZ)
     except (ValueError, TypeError):
         raise AdisyoError("Adisyo siparis tarihi eksik veya gecersiz.") from None
+
+
+def local_day(value):
+    return local_time(value).date()
 
 
 def completed_page(connection, day, page):
@@ -75,8 +79,8 @@ def completed_page(connection, day, page):
 def normalize(order, day):
     if not isinstance(order, dict) or not order.get("id"):
         raise AdisyoError("Adisyo siparis kimligi eksik.")
-    order_day = order.get("insertDate") or order.get("updateDate")
-    if local_day(order_day) != day:
+    stamp = local_time(order.get("insertDate") or order.get("updateDate"))
+    if stamp.date() != day:
         return None
     status = "".join(c for c in unicodedata.normalize("NFKD", str(order.get("status", "")).casefold())
                      if not unicodedata.combining(c))
@@ -101,7 +105,7 @@ def normalize(order, day):
         payments.append({"name": str(payment.get("paymentName") or "Belirtilmemis"),
                          "amount": str(decimal(payment.get("amount")))})
     # Keep reporting data only, without customer addresses, phones or invoices.
-    return {"id": str(order["id"]), "cancelled": cancelled,
+    return {"id": str(order["id"]), "cancelled": cancelled, "hour": stamp.hour,
             "amount": str(decimal(order.get("orderTotal"))),
             "discount": str(decimal(order.get("discountAmount"))),
             "tax": str(decimal(order.get("taxAmount"))),
@@ -112,6 +116,7 @@ def summarize(rows):
     result = {"count": 0, "cancelled": 0}
     amounts = defaultdict(Decimal)
     products, payments = {}, defaultdict(Decimal)
+    hours = {}
     for row in rows:
         amounts["gross_amount"] += decimal(row["amount"])
         if row["cancelled"]:
@@ -121,6 +126,10 @@ def summarize(rows):
         result["count"] += 1
         for name in ("amount", "discount", "tax"):
             amounts[name] += decimal(row[name])
+        if isinstance(row.get("hour"), int) and 0 <= row["hour"] <= 23:
+            bucket = hours.setdefault(row["hour"], {"count": 0, "amount": Decimal(0)})
+            bucket["count"] += 1
+            bucket["amount"] += decimal(row["amount"])
         for item in row["products"]:
             key = (item["key"], item["name"], item["child"])
             target = products.setdefault(key, {"name": item["name"], "child": item["child"],
@@ -133,5 +142,8 @@ def summarize(rows):
         result[name] = f"{amounts[name]:.2f}"
     result["products"] = [{**p, "quantity": format(p["quantity"], "f"), "amount": f"{p['amount']:.2f}"}
                           for p in sorted(products.values(), key=lambda p: (-p["quantity"], p["name"]))]
+    # Saatlik dağılım: siparişin açıldığı yerel saate göre (iptaller hariç).
+    result["hours"] = [{"hour": hour, "count": b["count"], "amount": f"{b['amount']:.2f}"}
+                       for hour, b in sorted(hours.items())]
     result["payments"] = [{"name": name, "amount": f"{amount:.2f}"} for name, amount in sorted(payments.items())]
     return result

@@ -1,4 +1,5 @@
 import json
+import pytz
 from datetime import datetime, timedelta, date
 
 from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app
@@ -7,7 +8,7 @@ from flask_login import login_required, current_user
 from extensions import db
 from models import Integration, AdisyoConnection, AdisyoReport
 from integrations.adisyo import TURKEY_TZ
-from adisyo_reports import queue_report
+from adisyo_reports import queue_report, LIVE_REFRESH_MINUTES
 
 adisyo_bp = Blueprint("adisyo", __name__)
 
@@ -54,11 +55,19 @@ def setup():
         return redirect(url_for("adisyo.setup"))
     reports = AdisyoReport.query.filter_by(connection_id=connection.id).order_by(AdisyoReport.day.desc()).limit(31).all() if connection else []
     selected = next((r for r in reports if str(r.id) == request.args.get("report")), None)
-    selected = selected or next((r for r in reports if r.state == "ready"), None)
+    selected = selected or next((r for r in reports if r.summary_json), None)
     summary = json.loads(selected.summary_json) if selected and selected.summary_json else None
+    hours = []
+    if summary and summary.get("hours"):
+        peak = max(h["count"] for h in summary["hours"]) or 1
+        hours = [{**h, "label": f"{h['hour']:02d}:00", "bar": round(h["count"] / peak * 100)} for h in summary["hours"]]
     return render_template("dashboard/adisyo.html", connection=connection, integration=integration,
                            reports=reports, selected=selected, summary=summary, today=today,
-                           yesterday=today - timedelta(days=1))
+                           yesterday=today - timedelta(days=1), hours=hours,
+                           peak=max(hours, key=lambda h: h["count"]) if hours else None,
+                           live_minutes=LIVE_REFRESH_MINUTES,
+                           refreshed_at=(pytz.utc.localize(selected.updated_at).astimezone(TURKEY_TZ)
+                                         if selected and selected.updated_at else None))
 
 
 @adisyo_bp.post("/rapor")

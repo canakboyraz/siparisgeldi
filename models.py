@@ -285,6 +285,8 @@ class AdisyoReport(db.Model):
     error = db.Column(db.String(300))
     send_requested = db.Column(db.Boolean, default=False, nullable=False)
     notification_status = db.Column(db.String(30))
+    # Son okuma turunun başladığı an (UTC). Gün bittikten sonra başlayan tur = kesin rapor.
+    started_at = db.Column(db.DateTime)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint("connection_id", "day", name="uq_adisyo_report_day"),)
 

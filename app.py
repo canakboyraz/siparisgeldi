@@ -38,6 +38,7 @@ def _ensure_schema():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(64)",
             "ALTER TABLE payments ADD COLUMN IF NOT EXISTS period VARCHAR(10) DEFAULT 'monthly'",
+            "ALTER TABLE adisyo_reports ADD COLUMN IF NOT EXISTS started_at TIMESTAMP",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS tgo_store_id VARCHAR(50)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS migros_group_id VARCHAR(50)",

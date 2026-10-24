@@ -79,14 +79,14 @@ def compute(user_id: int, start_day, end_day) -> dict:
 
     reports = (AdisyoReport.query.join(AdisyoConnection)
                .join(Integration, AdisyoConnection.integration_id == Integration.id)
-               .filter(Integration.user_id == user_id, AdisyoReport.state == "ready",
+               .filter(Integration.user_id == user_id, AdisyoReport.summary_json.isnot(None),
                        AdisyoReport.day >= start_day, AdisyoReport.day <= end_day).all())
     for report in reports:
         try:
             summary = json.loads(report.summary_json or "{}")
         except (TypeError, ValueError):
             continue
-        platform_row("adisyo")["orders"] += max(0, int(summary.get("count") or 0) - int(summary.get("cancelled") or 0))
+        platform_row("adisyo")["orders"] += max(0, int(summary.get("count") or 0))
         for item in summary.get("products", []):
             add_line("adisyo", str(item.get("name") or "Ürün").strip(),
                      float(item.get("quantity") or 0), float(item.get("amount") or 0))
