@@ -296,6 +296,9 @@ def create_app(config_class=Config, start_scheduler=None):
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         if request.is_secure:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        # Panel sayfaları kişiye özel ve canlı: tarayıcı (özellikle mobil) eski kopyayı göstermesin.
+        if request.blueprint in ("dashboard", "adisyo") and response.mimetype == "text/html":
+            response.headers["Cache-Control"] = "no-store"
         return response
 
     app.jinja_env.filters["yerel"] = utils.to_local

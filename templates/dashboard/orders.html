@@ -1,12 +1,15 @@
 {% extends "dashboard/_layout.html" %}
 {% set active = 'orders' %}
+{% from "_icons.html" import icon %}
 {% block title %}Siparişler · SiparişGeldi{% endblock %}
 {% block panel %}
 <div class="page-head">
   <div>
     <h1>Tüm siparişler</h1>
-    <p class="muted page-sub">{{ orders.total }} sipariş</p>
+    <p class="muted page-sub">{{ orders.total }} sipariş · güncellendi {{ (now()|yerel).strftime('%H:%M') }}</p>
   </div>
+  <div class="orders-head-actions">
+  <a class="btn btn-ghost btn-sm orders-refresh" href="{{ url_for('dashboard.orders', platform=platform or None) }}" aria-label="Siparişleri yenile">{{ icon('refresh', 16) }}<span>Yenile</span></a>
   <form method="get" class="inline">
     <label class="sr-only" for="orders-platform">Platform</label>
     <select id="orders-platform" name="platform" onchange="this.form.submit()">
@@ -17,9 +20,27 @@
       <option value="hepsiburada" {{ 'selected' if platform=='hepsiburada' }}>Hepsiburada</option>
       <option value="migros" {{ 'selected' if platform=='migros' }}>Migros Yemek</option>
       <option value="yemeksepeti" {{ 'selected' if platform=='yemeksepeti' }}>Yemeksepeti</option>
+      <option value="adisyo" {{ 'selected' if platform=='adisyo' }}>Adisyo</option>
     </select>
   </form>
+  </div>
 </div>
+<style>
+.orders-head-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.orders-refresh{display:inline-flex;align-items:center;gap:.35rem;min-height:40px}
+.orders-refresh:active{transform:scale(.97)}
+.orders-refresh.is-loading svg{animation:orders-spin .8s linear infinite}
+@keyframes orders-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.orders-refresh.is-loading svg{animation:none}}
+</style>
+<script>
+(function(){
+  var btn=document.querySelector('.orders-refresh');
+  if(btn){btn.addEventListener('click',function(){btn.classList.add('is-loading');});}
+  // Telefonda geri gelince/sekme açılınca eski sayfa önbellekten gösterilmesin.
+  window.addEventListener('pageshow',function(e){if(e.persisted){location.reload();}});
+})();
+</script>
 
 <div class="card order-list-card">
   {% if orders.items %}
