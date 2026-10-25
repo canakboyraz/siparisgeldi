@@ -193,6 +193,8 @@ def _pro_prices(cfg) -> dict:
         "monthly": monthly,
         "yearly": yearly,
         "yearly_per_month": yearly / 12,
+        "monthly_x12": monthly * 12,   # yıllık fiyatın yanında çıpa olarak gösterilir
+        "per_day": monthly / 30,        # "günde yaklaşık 8 TL" çerçevesi
         "saving": saving,
         "free_months": int(round(saving / monthly)) if monthly else 0,
     }

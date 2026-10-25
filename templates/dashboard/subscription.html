@@ -22,6 +22,22 @@
 </div>
 {% endif %}
 
+{% if usage %}
+<div class="card usage-card" style="margin-top:1rem">
+  <div class="card-title">Denemende SiparişGeldi</div>
+  <div class="usage-stats">
+    <div><b>{{ usage.orders }}</b><span>sipariş takip edildi</span></div>
+    <div><b>{{ tl_amount(usage.revenue) }}</b><span>ciro</span></div>
+    <div><b>{{ usage.platforms|length }}</b><span>bağlı platform</span></div>
+  </div>
+  {% if usage.paused_platforms or usage.whatsapp %}
+  <p class="muted" style="margin:.8rem 0 0">Deneme bitince {% if usage.keep_platform %}<b>{{ usage.keep_platform }}</b> ve Telegram açık kalır; {% endif %}<b>{{ (usage.paused_platforms + (['WhatsApp bildirimi'] if usage.whatsapp else []))|join(', ') }}</b> durur. Pro'ya geçersen hepsi aynen devam eder.</p>
+  {% else %}
+  <p class="muted" style="margin:.8rem 0 0">Deneme bitince Telegram bildirimi ve bağlı platformun ücretsiz planda açık kalır.</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="pricing-grid">
   <div class="price-card">
     <div class="card-title">Ücretsiz</div>
@@ -57,7 +73,7 @@
           <input type="radio" name="period" value="yearly" checked>
           <span class="plan-option-body">
             <span class="plan-option-head"><b>Yıllık</b>{% if pro_prices.free_months %}<span class="badge violet">{{ pro_prices.free_months }} ay bedava</span>{% endif %}</span>
-            <span class="plan-option-price">{{ tl_amount(pro_prices.yearly) }} <small>/ yıl</small></span>
+            <span class="plan-option-price">{% if pro_prices.saving %}<s class="price-anchor">{{ tl_amount(pro_prices.monthly_x12) }}</s> {% endif %}{{ tl_amount(pro_prices.yearly) }} <small>/ yıl</small></span>
             <span class="hint">Ayda {{ tl_amount(pro_prices.yearly_per_month) }}'ye gelir · {{ tl_amount(pro_prices.saving) }} kazanç</span>
           </span>
         </label>
@@ -66,7 +82,7 @@
           <span class="plan-option-body">
             <span class="plan-option-head"><b>Aylık</b></span>
             <span class="plan-option-price">{{ tl_amount(pro_prices.monthly) }} <small>/ ay</small></span>
-            <span class="hint">30 gün · istediğin zaman bırak</span>
+            <span class="hint">30 gün · günde yaklaşık {{ tl_amount(pro_prices.per_day) }} · istediğin zaman bırak</span>
           </span>
         </label>
       </fieldset>

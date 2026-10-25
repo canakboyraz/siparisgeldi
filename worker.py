@@ -1057,6 +1057,9 @@ def start_scheduler(app):
                       args=[app], id="plan_limits", replace_existing=True, max_instances=1)
     scheduler.add_job(monitoring.send_trial_reminders, "cron", hour=10, minute=0,
                       args=[app], id="trial_reminders", replace_existing=True)
+    import lifecycle
+    scheduler.add_job(lifecycle.send_lifecycle_emails, "cron", hour=11, minute=0,
+                      args=[app], id="lifecycle_emails", replace_existing=True)
     import demo
     scheduler.add_job(demo.cleanup_demo_users, "interval", hours=1,
                       args=[app], id="demo_cleanup", replace_existing=True, max_instances=1)

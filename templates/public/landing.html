@@ -191,7 +191,8 @@
       <div class="price-card featured">
         <div class="card-title">Pro</div>
         <div class="price">{{ tl_amount(pro_prices.monthly) }} <span>/ ay · KDV dahil</span></div>
-        <p class="price-alt">veya yıllık <b>{{ tl_amount(pro_prices.yearly) }}</b>{% if pro_prices.free_months %} · <b>{{ pro_prices.free_months }} ay bedava</b>{% endif %}</p>
+        <p class="price-alt">Günde yaklaşık {{ tl_amount(pro_prices.per_day) }}</p>
+        <p class="price-alt">veya yıllık {% if pro_prices.saving %}<s class="price-anchor">{{ tl_amount(pro_prices.monthly_x12) }}</s> {% endif %}<b>{{ tl_amount(pro_prices.yearly) }}</b>{% if pro_prices.free_months %} · <b>{{ pro_prices.free_months }} ay bedava</b>{% endif %}</p>
         <p class="muted">Birden fazla platformda satış yapan işletmeler için.</p>
         <ul>
           <li>Çoklu platform bağlantısı</li>

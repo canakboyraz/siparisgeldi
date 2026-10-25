@@ -86,8 +86,9 @@
         <p class="hint" id="r-tip"></p>
       </div>
       <div class="card calc-cta">
+        <p class="calc-cta-hook" id="r-cta-hook" hidden></p>
         <strong>Bunu tüm menün için her gün otomatik görmek ister misin?</strong>
-        <p class="muted">SiparişGeldi, Trendyol Go ve Migros Yemek siparişlerini kendisi çeker; komisyon, maliyet ve paket giderinden sonra kârını gün gün hesaplar, zararına satılan ürünü sana söyler.</p>
+        <p class="muted">SiparişGeldi, Trendyol Go, Migros Yemek ve Adisyo siparişlerini kendisi çeker; komisyon, maliyet ve paket giderinden sonra kârını gün gün hesaplar, zararına satılan ürünü sana söyler.</p>
         <a class="btn btn-primary" href="{{ url_for('auth.register') }}">{% if trial_days %}{{ trial_days }} gün ücretsiz dene{% else %}Ücretsiz başla{% endif %}</a>
       </div>
     </div>
@@ -145,6 +146,12 @@
     else if (margin < target * 100) tip = "Kâr var ama hedefin altında. Fiyatı hedef seviyeye çekmek ya da ambalaj maliyetini düşürmek marjı artırır.";
     else if (price) tip = "Hedef marjın üzerindesin. Bu ürün menünün kazandıranlarından.";
     el("r-tip").textContent = tip;
+    // Kayıp çerçevesi: kullanıcının kendi rakamıyla, sadece anlamlıysa göster.
+    var hook = el("r-cta-hook"), text = "";
+    var tl0 = function (v) { return Math.round(v).toLocaleString("tr-TR") + " TL"; };
+    if (qty && profit < 0) text = "Bu tek ürün ayda " + tl0(-profit * qty) + " zarar ettiriyor.";
+    else if (qty && commission > 0) text = "Bu tek üründe ayda " + tl0(commission * qty) + " komisyona gidiyor.";
+    hook.textContent = text; hook.hidden = !text;
   }
   ids.forEach(function (id) { el(id).addEventListener("input", calc); });
   calc();

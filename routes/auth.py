@@ -197,7 +197,8 @@ def register():
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
-        confirm = request.form.get("confirm_password", "")
+        # Kayıtta tek şifre alanı + "göster" düğmesi var; eski form tekrar alanı gönderirse yine kontrol edilir.
+        confirm = request.form.get("confirm_password", password)
         accepted = request.form.get("accept_terms") == "1"
 
         problem = _password_problem(password, confirm)

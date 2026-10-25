@@ -141,7 +141,10 @@ def _onboarding_steps(integrations, has_order: bool) -> dict:
         current_user.whatsapp_number and _can_use_whatsapp()
         and (current_user.notification_channel or "telegram") in ("whatsapp", "both")
     )
-    steps = []
+    # İlk adım hesabı açmak: kullanıcı yolun başında değil, bir adım ilerde başlar.
+    trial_days = int(current_app.config.get("TRIAL_DAYS", 0) or 0)
+    steps = [{"key": "account", "done": True, "title": "Hesabını aç",
+              "desc": f"{trial_days} gün Pro açık." if trial_days else ""}]
     if current_app.config.get("SMTP_HOST"):
         steps.append({
             "key": "email", "done": current_user.email_verified,
@@ -172,7 +175,9 @@ def _onboarding_steps(integrations, has_order: bool) -> dict:
          "url": url_for("dashboard.product_cost_entry"), "cta": "Komisyon gir"},
     ]
     done = sum(1 for s in steps if s["done"])
-    return {"steps": steps, "done": done, "total": len(steps),
+    next_step = next((s["key"] for s in steps if not s["done"]), None)
+    return {"steps": steps, "done": done, "total": len(steps), "next": next_step,
+            "remaining": len(steps) - done,
             "percent": int(done * 100 / len(steps)) if steps else 100,
             "complete": done == len(steps)}
 
@@ -1214,7 +1219,18 @@ def subscription():
         pro_days_left=pro_days_left,
         payment_returned=request.args.get("payment_returned") == "1",
         current_period=_current_pro_period(current_user),
+        usage=_trial_usage(),
     )
+
+
+def _trial_usage():
+    """Abonelik sayfasında denemedeki kullanıcıya kendi kullanımını gösterir."""
+    if current_user.is_demo or not current_user.is_trial_active:
+        return None
+    import lifecycle
+    summary = lifecycle.usage_summary(current_user)
+    summary["end_lines"] = lifecycle.trial_end_lines(summary)
+    return summary if (summary["orders"] or summary["platforms"]) else None
 
 
 def _current_pro_period(user):

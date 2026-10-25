@@ -265,6 +265,11 @@ def send_trial_reminders(app):
                           "WhatsApp ve diğer platformlar duraklar.")
             else:
                 effect = "Süre bitince WhatsApp bildirimleri durur, yeni platform eklenemez."
+            if user.is_trial and _limit_scope_applies(user):
+                import lifecycle
+                personal = lifecycle.trial_end_lines(lifecycle.usage_summary(user))
+                if personal:
+                    effect = "\n".join(personal)
             text = (
                 f"⏳ <b>{what} bitmesine {days_left} gün kaldı</b> ({end_day.strftime('%d.%m.%Y')})\n\n"
                 f"{effect}\n\n"
