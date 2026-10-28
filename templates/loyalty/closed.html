@@ -1,5 +1,6 @@
 {% extends "loyalty/_shell.html" %}
 {% block title %}{{ program.name }} · Damga kartı{% endblock %}
 {% block card %}
-<section class="lc-card lc-hero"><h1>Damga kartı şu an kapalı</h1><p>{{ program.name }} programı geçici olarak durdurmuş. Kasaya sorabilirsin.</p></section>
+{% if message %}<section class="lc-card lc-hero"><h1>Bir sorun oldu</h1><p>{{ message }}</p></section>
+{% else %}<section class="lc-card lc-hero"><h1>Damga kartı şu an kapalı</h1><p>{{ program.name }} programı geçici olarak durdurmuş. Kasaya sorabilirsin.</p></section>{% endif %}
 {% endblock %}

@@ -78,6 +78,7 @@ def approve(req):
     customer.last_visit_at = datetime.utcnow()
     req.status, req.decided_at = "approved", datetime.utcnow()
     db.session.commit()
+    _changed(customer)
     return True
 
 
@@ -98,7 +99,32 @@ def redeem(program, customer):
                                   stamps=-program.stamps_required, status="approved", code="---",
                                   decided_at=datetime.utcnow()))
     db.session.commit()
+    _changed(customer)
     return True
+
+
+def _changed(customer):
+    """Damga değişti: Apple Cüzdan'daki kartı güncelle."""
+    import wallet
+    wallet.notify(customer)
+
+
+def stamp_now(program, customer, force=False):
+    """Kasada müşterinin kartı okutuldu: damgayı onay beklemeden işler.
+
+    Bekleyen isteği varsa onu onaylar. Bekleme süresi içindeyse (force değilse)
+    işlem yapmadan kalan dakikayı döndürür. Dönüş: (durum, istek, kalan_dk)."""
+    req = pending_for(customer)
+    if not req:
+        left = cooldown_left(program, customer)
+        if left and not force:
+            return "cooldown", None, left
+        req = LoyaltyRequest(program_id=program.id, customer_id=customer.id, kind="visit",
+                             stamps=max(1, program.stamps_per_visit), code=f"{secrets.randbelow(1000):03d}")
+        db.session.add(req)
+        db.session.commit()
+    approve(req)
+    return "ok", req, 0
 
 
 def card_state(program, customer) -> dict:

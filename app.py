@@ -239,6 +239,8 @@ def create_app(config_class=Config, start_scheduler=None):
     app.register_blueprint(paytr_bp, url_prefix="/payment/paytr")
     app.register_blueprint(loyalty_public_bp)
     app.register_blueprint(loyalty_bp, url_prefix="/panel/sadakat")
+    from routes.wallet import wallet_bp
+    app.register_blueprint(wallet_bp)
 
     # Şablonlarda kullanılacak yardımcılar
     from datetime import datetime
@@ -257,7 +259,8 @@ def create_app(config_class=Config, start_scheduler=None):
 
     @app.before_request
     def protect_forms():
-        if request.method != "POST" or request.path.startswith("/webhooks/") or request.path == "/payment/paytr/callback":
+        if request.method != "POST" or request.path.startswith("/webhooks/") or request.path == "/payment/paytr/callback" \
+                or request.path.startswith("/wallet/v1/"):
             return None
         sent = request.form.get("_csrf_token") or request.headers.get("X-CSRF-Token", "")
         if not secrets.compare_digest(str(session.get("_csrf_token", "")), str(sent)):
@@ -298,7 +301,9 @@ def create_app(config_class=Config, start_scheduler=None):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # Kasada kart okutma ekranı kamerayı kullanır; diğer sayfalarda kapalı.
+        camera = "(self)" if request.endpoint == "loyalty.scan" else "()"
+        response.headers.setdefault("Permissions-Policy", f"camera={camera}, microphone=(), geolocation=()")
         if request.is_secure:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         # Panel sayfaları kişiye özel ve canlı: tarayıcı (özellikle mobil) eski kopyayı göstermesin.

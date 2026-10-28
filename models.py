@@ -479,3 +479,17 @@ class LoyaltyRequest(db.Model):
 
     customer = db.relationship("LoyaltyCustomer", backref=db.backref("requests", lazy="dynamic", cascade="all, delete-orphan"))
 
+
+
+class WalletRegistration(db.Model):
+    """Apple Cüzdan'a eklenmiş damga kartı: hangi iPhone, hangi bildirim adresi."""
+    __tablename__ = "wallet_registrations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.String(128), nullable=False, index=True)
+    push_token = db.Column(db.String(200), nullable=False)
+    serial = db.Column(db.String(40), nullable=False, index=True)
+    customer_id = db.Column(db.Integer, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint("device_id", "serial", name="uq_wallet_device_serial"),)

@@ -9,7 +9,7 @@
 <form method="post" class="lc-card lc-form" novalidate>
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   {% if error %}<p class="lc-error" role="alert">{{ error }}</p>{% endif %}
-  <p class="lc-hint lc-returning">Daha önce kayıt olduysan <b>sadece telefonunu yaz</b>, kartın açılır.</p>
+  <p class="lc-hint lc-returning">Daha önce kayıt olduysan <b>sadece telefonunu yaz</b>, kartın açılır. Cüzdan'ında kartın varsa kasaya göstermen de yeter.</p>
   <label for="lc-phone">Telefonun</label>
   <input id="lc-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required value="{{ form.phone or '' }}" placeholder="05XX XXX XX XX">
   <label for="lc-name">Adın <span class="lc-opt">(ilk kayıtta)</span></label>

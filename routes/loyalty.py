@@ -101,7 +101,9 @@ def join(token):
 
 def _render_card(program, customer):
     key = card_key(program, customer)
+    import wallet
     return render_template("loyalty/card.html", program=program, customer=customer, card_key=key,
+                           wallet_ready=wallet.is_configured(),
                            card_url=url_for("loyalty_public.my_card", token=program.token, key=key, _external=True),
                            state=loyalty.card_state(program, customer))
 
@@ -137,6 +139,23 @@ def card_manifest(token, key):
                         "background_color": "#FBF7F2", "theme_color": "#D4411F"})
     response.mimetype = "application/manifest+json"
     return response
+
+
+@loyalty_public_bp.route("/k/<token>/kartim/<key>/cuzdan.pkpass")
+def wallet_pass(token, key):
+    """Apple Cüzdan'a ekle: müşteriye özel imzalı .pkpass."""
+    import wallet
+    from routes.wallet import pkpass_response
+    program = _active_program(token)
+    customer = _customer_from_key(program, key)
+    if not customer or not wallet.is_configured():
+        abort(404)
+    try:
+        return pkpass_response(program, customer)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("[WALLET] .pkpass üretilemedi")
+        return render_template("loyalty/closed.html", program=program,
+                               message="Cüzdan kartı şu an hazırlanamadı. Kartın bu sayfada geçerli."), 503
 
 
 @loyalty_public_bp.route("/k/<token>/durum")
@@ -279,6 +298,8 @@ def give_reward(customer_id):
 def delete_customer(customer_id):
     program = loyalty.get_program(current_user) or abort(404)
     customer = loyalty.find_customer(program, customer_id) or abort(404)
+    from models import WalletRegistration
+    WalletRegistration.query.filter_by(customer_id=customer.id).delete()
     db.session.delete(customer)
     db.session.commit()
     flash("Müşteri ve damga geçmişi silindi.", "success")
@@ -351,3 +372,57 @@ def poster():
     program = loyalty.get_program(current_user) or abort(404)
     return render_template("loyalty/poster.html", program=program,
                            join_url=url_for("loyalty_public.join", token=program.token, _external=True))
+
+
+# ── Kasada kart okutma ───────────────────────────────────────────────────────
+
+def _key_from_code(program, code):
+    """Okutulan QR: kişiye özel kart linki (…/k/<token>/kartim/<anahtar>) ya da yalnız anahtar."""
+    code = (code or "").strip()
+    if "/kartim/" in code:
+        head, _, key = code.partition("/kartim/")
+        if not head.rstrip("/").endswith(f"/k/{program.token}"):
+            return None
+        return key.split("/")[0].split("?")[0]
+    return code if "." in code and len(code) < 200 else None
+
+
+def _scan_json(program, customer, status, req=None, left=0):
+    return {
+        "ok": status == "ok", "status": status, "customer_id": customer.id, "name": customer.name,
+        "phone": loyalty.mask_phone(customer.phone), "added": req.stamps if req else 0,
+        "current": customer.stamps, "required": program.stamps_required,
+        "reward_ready": customer.stamps >= program.stamps_required, "reward": program.reward,
+        "cooldown": left,
+    }
+
+
+@loyalty_bp.route("/okut", methods=["GET", "POST"])
+@login_required
+def scan():
+    """Kasada müşterinin kart QR'ını (Cüzdan / ana ekran) okut ya da telefonla bul; damga anında işlenir."""
+    program = loyalty.get_program(current_user)
+    if request.method == "GET":
+        if not program:
+            return redirect(url_for("loyalty.setup"))
+        return render_template("loyalty/scan.html", program=program)
+    if not program:
+        abort(404)
+    data = request.get_json(silent=True) or request.form
+    force = str(data.get("force") or "") in ("1", "true", "True")
+    customer = None
+    if data.get("code"):
+        customer = _customer_from_key(program, _key_from_code(program, data.get("code")))
+        if not customer:
+            return jsonify({"ok": False, "status": "unknown",
+                            "message": "Bu kod bu işletmenin damga kartı değil."}), 404
+    elif data.get("phone"):
+        phone = loyalty.normalize_phone(data.get("phone"))
+        customer = LoyaltyCustomer.query.filter_by(program_id=program.id, phone=phone).first() if phone else None
+        if not customer:
+            return jsonify({"ok": False, "status": "unknown",
+                            "message": "Bu numarayla kart yok. Müşteri kasadaki QR'ı okutup kayıt olabilir."}), 404
+    else:
+        abort(400)
+    status, req, left = loyalty.stamp_now(program, customer, force=force)
+    return jsonify(_scan_json(program, customer, status, req, left))

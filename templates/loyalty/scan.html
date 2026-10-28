@@ -1,0 +1,196 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Kart okut · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Kart okut</h1><p class="muted page-sub">Müşterinin Cüzdan'daki ya da telefonundaki kart kodunu kameraya tut; damga onay beklemeden işlenir.</p></div>
+  <a class="btn btn-ghost" href="{{ url_for('loyalty.setup') }}">{{ icon('coffee', 16) }} Damga kartı</a>
+</div>
+
+<div class="lc-scan-grid">
+  <section class="card lc-scan-cam">
+    <div class="lc-scan-view" id="scan-view">
+      <video id="scan-video" playsinline muted></video>
+      <div class="lc-scan-frame" aria-hidden="true"></div>
+      <div class="lc-scan-idle" id="scan-idle">
+        <p id="scan-idle-text">Kamerayı açınca kod otomatik okunur.</p>
+        <button class="btn btn-primary btn-lg" type="button" id="scan-start">{{ icon('qr', 18) }} Kamerayı aç</button>
+      </div>
+    </div>
+    <p class="hint" id="scan-hint">Arka kamera kullanılır. Tarayıcı izin sorarsa “İzin ver”e dokun.</p>
+  </section>
+
+  <section class="lc-scan-side">
+    <div class="card lc-scan-result" id="scan-result" aria-live="polite" hidden>
+      <div class="lc-scan-badge" id="r-badge"></div>
+      <h2 id="r-name"></h2>
+      <p class="muted" id="r-phone"></p>
+      <div class="loyalty-alert-stamps" id="r-dots"></div>
+      <p id="r-note"></p>
+      <div class="lc-scan-actions">
+        <button class="btn btn-primary" type="button" id="r-force" hidden>Yine de damga ver</button>
+        <button class="btn btn-accent" type="button" id="r-reward" hidden></button>
+        <button class="btn btn-ghost" type="button" id="r-next">Sıradaki</button>
+      </div>
+    </div>
+
+    <form class="card lc-scan-phone" id="phone-form">
+      <h3>Kodu yoksa telefonla bul</h3>
+      <p class="muted">Müşterinin kartı açık değilse numarasını yaz, damgayı buradan ver.</p>
+      <div class="lc-scan-phone-row">
+        <input type="tel" inputmode="tel" name="phone" id="phone-input" placeholder="05XX XXX XX XX" autocomplete="off" required>
+        <button class="btn btn-primary" type="submit">Damga ver</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+(function () {
+  var scanUrl = "{{ url_for('loyalty.scan') }}";
+  var rewardBase = "{{ url_for('loyalty.give_reward', customer_id=0) }}".replace("/0/odul", "/");
+  var csrf = "{{ csrf_token() }}";
+  var video = document.getElementById("scan-video"), idle = document.getElementById("scan-idle");
+  var result = document.getElementById("scan-result");
+  var canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
+  var stream = null, detector = null, busy = false, paused = false, lastCode = "", lastAt = 0, current = null, lastPayload = null;
+  function el(id) { return document.getElementById(id); }
+
+  if ("BarcodeDetector" in window) {
+    try { detector = new BarcodeDetector({ formats: ["qr_code"] }); } catch (e) { detector = null; }
+  }
+
+  function beep(ok) {
+    try {
+      var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      var c = new C(), o = c.createOscillator(), g = c.createGain();
+      o.frequency.value = ok ? 1046 : 330; g.gain.value = 0.15; o.connect(g); g.connect(c.destination);
+      o.start(); o.stop(c.currentTime + (ok ? 0.15 : 0.3));
+    } catch (e) {}
+    if (navigator.vibrate) { try { navigator.vibrate(ok ? 80 : [60, 60, 60]); } catch (e) {} }
+  }
+
+  function dots(n, total, add) {
+    var html = "";
+    for (var i = 0; i < total; i++) {
+      html += '<span class="' + (i < n ? "on" : "") + (i >= n - add && i < n ? " is-new" : "") + '"></span>';
+    }
+    return html;
+  }
+
+  function show(data) {
+    current = data;
+    result.hidden = false;
+    result.className = "card lc-scan-result is-" + (data.ok ? "ok" : (data.status === "cooldown" ? "warn" : "err"));
+    el("r-force").hidden = true; el("r-reward").hidden = true;
+    if (!data.name) {
+      el("r-badge").textContent = "Tanınmadı";
+      el("r-name").textContent = data.message || "Kod okunamadı.";
+      el("r-phone").textContent = ""; el("r-dots").innerHTML = ""; el("r-note").textContent = "";
+      return;
+    }
+    el("r-name").textContent = data.name;
+    el("r-phone").textContent = data.phone;
+    var shown = Math.min(data.current, data.required);
+    el("r-dots").innerHTML = dots(shown, data.required, data.ok ? Math.min(data.added, shown) : 0);
+    if (data.ok) {
+      el("r-badge").textContent = "+" + data.added + " damga verildi";
+      el("r-note").textContent = "Kartta " + data.current + "/" + data.required + " damga.";
+    } else {
+      el("r-badge").textContent = data.cooldown + " dk önce damga aldı";
+      el("r-note").textContent = "Aynı ziyarette iki kez damga verilmesin diye bekleme süresi var.";
+      el("r-force").hidden = false;
+    }
+    if (data.reward_ready) {
+      el("r-reward").hidden = false;
+      el("r-reward").textContent = "Ödülü ver: " + data.reward;
+    }
+  }
+
+  function send(payload) {
+    if (busy) return;
+    busy = true; paused = true; lastPayload = payload;
+    fetch(scanUrl, { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf, "X-Requested-With": "fetch", "Accept": "application/json" },
+      body: JSON.stringify(payload) })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { beep(data.ok); show(data); })
+      .catch(function () { beep(false); show({ ok: false, status: "error", message: "Bağlantı hatası. Tekrar dene." }); })
+      .finally(function () { busy = false; });
+  }
+
+  function onCode(text) {
+    var now = Date.now();
+    if (!text || (text === lastCode && now - lastAt < 8000)) return;
+    lastCode = text; lastAt = now;
+    send({ code: text });
+  }
+
+  function tick() {
+    if (!stream) return;
+    if (!paused && video.readyState >= 2) {
+      if (detector) {
+        detector.detect(video).then(function (codes) { if (codes.length) onCode(codes[0].rawValue); }).catch(function () {});
+      } else if (window.jsQR) {
+        var w = video.videoWidth, h = video.videoHeight, scale = Math.min(1, 640 / Math.max(w, h));
+        canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        var img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var code = window.jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+        if (code && code.data) onCode(code.data);
+      }
+    }
+    window.setTimeout(function () { window.requestAnimationFrame(tick); }, 180);
+  }
+
+  el("scan-start").addEventListener("click", function () {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      el("scan-idle-text").textContent = "Bu tarayıcı kamerayı desteklemiyor. Telefonla bul kısmını kullan.";
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .then(function (s) {
+        stream = s; video.srcObject = s; video.play();
+        idle.hidden = true; el("scan-view").classList.add("is-live");
+        tick();
+      })
+      .catch(function () {
+        el("scan-idle-text").textContent = "Kamera izni verilmedi. Tarayıcı ayarlarından izin verip tekrar dene.";
+      });
+  });
+
+  el("r-next").addEventListener("click", function () { result.hidden = true; paused = false; lastCode = ""; });
+  el("r-force").addEventListener("click", function () {
+    if (!lastPayload) return;
+    var p = Object.assign({}, lastPayload, { force: true }); send(p);
+  });
+  el("r-reward").addEventListener("click", function () {
+    if (!current) return; var btn = this; btn.disabled = true;
+    fetch(rewardBase + current.customer_id + "/odul", { method: "POST", credentials: "same-origin",
+      headers: { "X-CSRF-Token": csrf, "X-Requested-With": "fetch", "Accept": "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res && res.ok) {
+          current.current = res.current; current.reward_ready = res.current >= current.required;
+          current.added = 0; current.ok = true; show(current);
+          el("r-badge").textContent = "Ödül verildi";
+          el("r-note").textContent = "Kart yeniden başladı: " + res.current + "/" + current.required + " damga.";
+        }
+      }).finally(function () { btn.disabled = false; });
+  });
+  el("phone-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var phone = el("phone-input").value.trim(); if (!phone) return;
+    send({ phone: phone }); el("phone-input").value = "";
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden && stream) {
+      stream.getTracks().forEach(function (t) { t.stop(); }); stream = null;
+      idle.hidden = false; el("scan-view").classList.remove("is-live");
+      el("scan-idle-text").textContent = "Kamera durduruldu. Devam etmek için tekrar aç.";
+    }
+  });
+})();
+</script>
+{% endblock %}

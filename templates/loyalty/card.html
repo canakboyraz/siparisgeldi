@@ -27,6 +27,11 @@
     <div><b>Kartın hazır</b><span>Her ziyaretinde kasadaki kodu okut.</span></div>
   {% endif %}
 </section>
+{% if wallet_ready %}
+<a class="lc-wallet-btn" id="lc-wallet" href="{{ url_for('loyalty_public.wallet_pass', token=program.token, key=card_key) }}" hidden>
+  <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 9h19M15 14.5h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+  <span>Apple Cüzdan'a Ekle</span></a>
+{% endif %}
 <section class="lc-card lc-save" id="lc-save">
   <b>Kartını telefonuna kaydet</b>
   <p>Ana ekrana eklersen kaç damgan olduğuna istediğin an bakarsın. Buradan açmak damga istemez; damga için kasadaki kodu okut.</p>
@@ -44,6 +49,11 @@
   </div>
   <p class="lc-hint" id="lc-share-msg">Kod okuyucunun içinde açıldıysa linki kopyalayıp Safari ya da Chrome'da aç.</p>
 </section>
+<section class="lc-card lc-myqr-card">
+<details class="lc-myqr"><summary>Kart kodumu göster</summary>
+  <p>Telefonun seni tanımazsa bu kodu kasaya göster, damgan hemen işlenir.</p>
+  <div id="lc-myqr" data-url="{{ card_url }}"></div></details>
+</section>
 <form method="post" action="{{ url_for('loyalty_public.forget', token=program.token) }}" class="lc-forget">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <button type="submit">Bu cihazda ben değilim</button>
@@ -52,9 +62,11 @@
 (function () {
   var box = document.getElementById("lc-save"), link = {{ card_url|tojson }}, deferred = null;
   var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone;
-  try { if (standalone) { box.hidden = true; return; } } catch (e) {}
   var ua = navigator.userAgent || "";
   var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && "ontouchend" in document);
+  var walletBtn = document.getElementById("lc-wallet");
+  if (walletBtn && (ios || /Macintosh/.test(ua))) walletBtn.hidden = false;
+  try { if (standalone) { box.hidden = true; return; } } catch (e) {}
   document.getElementById(ios ? "lc-save-ios" : "lc-save-android").hidden = !(ios || /Android/.test(ua));
   window.addEventListener("beforeinstallprompt", function (e) {
     e.preventDefault(); deferred = e;
@@ -100,6 +112,15 @@
       fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(render).catch(function () {});
     }, 2500);
   }
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+(function () {
+  var el = document.getElementById("lc-myqr");
+  if (!el || typeof qrcode !== "function") return;
+  var qr = qrcode(0, "M"); qr.addData(el.getAttribute("data-url")); qr.make();
+  el.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
 })();
 </script>
 {% endblock %}
