@@ -27,8 +27,8 @@ def _active_program(token):
     return program
 
 
-def _cookie_customer(program):
-    raw = request.cookies.get(f"{loyalty.COOKIE_PREFIX}{program.id}")
+def _customer_from_key(program, raw):
+    """İmzalı kart anahtarından (çerez ya da kişiye özel link) müşteriyi bulur."""
     if not raw:
         return None
     try:
@@ -40,8 +40,20 @@ def _cookie_customer(program):
     return loyalty.find_customer(program, data.get("c"))
 
 
+def _cookie_customer(program):
+    return _customer_from_key(program, request.cookies.get(f"{loyalty.COOKIE_PREFIX}{program.id}"))
+
+
+def card_key(program, customer) -> str:
+    return _serializer().dumps({"p": program.id, "c": customer.id})
+
+
+def _card_url(program, customer):
+    return url_for("loyalty_public.my_card", token=program.token, key=card_key(program, customer))
+
+
 def _with_cookie(response, program, customer):
-    response.set_cookie(f"{loyalty.COOKIE_PREFIX}{program.id}", _serializer().dumps({"p": program.id, "c": customer.id}),
+    response.set_cookie(f"{loyalty.COOKIE_PREFIX}{program.id}", card_key(program, customer),
                         max_age=loyalty.COOKIE_MAX_AGE, httponly=True, samesite="Lax",
                         secure=bool(current_app.config.get("SESSION_COOKIE_SECURE")))
     return response
@@ -57,22 +69,24 @@ def join(token):
     if request.method == "GET":
         if customer:
             loyalty.request_stamp(program, customer, "visit")
-            return redirect(url_for("loyalty_public.card", token=token))
+            return _with_cookie(redirect(_card_url(program, customer)), program, customer)
         return render_template("loyalty/join.html", program=program, form={})
 
     name = " ".join((request.form.get("name") or "").split())[:40]
     phone = loyalty.normalize_phone(request.form.get("phone"))
+    existing = LoyaltyCustomer.query.filter_by(program_id=program.id, phone=phone).first() if phone else None
     error = None
-    if len(name) < 2:
-        error = "Adını yaz."
-    elif not phone:
+    if not phone:
         error = "Telefon numaranı 05XX XXX XX XX şeklinde yaz."
+    elif existing:
+        pass  # Kayıtlı numara: ad ve onay ilk kayıtta alındı, sadece telefon yeterli.
+    elif len(name) < 2:
+        error = "Bu numarayla kart yok. Yeni kart için adını da yaz."
     elif request.form.get("consent") != "1":
         error = "Devam etmek için aydınlatma metnini onayla."
     if error:
         return render_template("loyalty/join.html", program=program, error=error,
                                form={"name": name, "phone": request.form.get("phone", "")}), 400
-    existing = LoyaltyCustomer.query.filter_by(program_id=program.id, phone=phone).first()
     if existing:
         # Daha önce katılmış (ör. yeni telefon): hoş geldin damgası verilmez, normal ziyaret isteği oluşur.
         customer = existing
@@ -82,7 +96,14 @@ def join(token):
         db.session.add(customer)
         db.session.commit()
         loyalty.request_stamp(program, customer, "welcome")
-    return _with_cookie(redirect(url_for("loyalty_public.card", token=token)), program, customer)
+    return _with_cookie(redirect(_card_url(program, customer)), program, customer)
+
+
+def _render_card(program, customer):
+    key = card_key(program, customer)
+    return render_template("loyalty/card.html", program=program, customer=customer, card_key=key,
+                           card_url=url_for("loyalty_public.my_card", token=program.token, key=key, _external=True),
+                           state=loyalty.card_state(program, customer))
 
 
 @loyalty_public_bp.route("/k/<token>/kart")
@@ -91,14 +112,37 @@ def card(token):
     customer = _cookie_customer(program)
     if not customer:
         return redirect(url_for("loyalty_public.join", token=token))
-    return render_template("loyalty/card.html", program=program, customer=customer,
-                           state=loyalty.card_state(program, customer))
+    return _render_card(program, customer)
+
+
+@loyalty_public_bp.route("/k/<token>/kartim/<key>")
+def my_card(token, key):
+    """Kişiye özel kart linki: sadece kartı gösterir, damga isteği oluşturmaz (ana ekrana eklenen adres)."""
+    program = _active_program(token)
+    customer = _customer_from_key(program, key)
+    if not customer:
+        return redirect(url_for("loyalty_public.join", token=token))
+    return _with_cookie(make_response(_render_card(program, customer)), program, customer)
+
+
+@loyalty_public_bp.route("/k/<token>/kartim/<key>/manifest.webmanifest")
+def card_manifest(token, key):
+    program = _active_program(token)
+    customer = _customer_from_key(program, key)
+    if not customer:
+        abort(404)
+    start = url_for("loyalty_public.my_card", token=token, key=key)
+    response = jsonify({"name": f"{program.name} damga kartım", "short_name": program.name[:12],
+                        "start_url": start, "scope": start, "display": "standalone",
+                        "background_color": "#FBF7F2", "theme_color": "#D4411F"})
+    response.mimetype = "application/manifest+json"
+    return response
 
 
 @loyalty_public_bp.route("/k/<token>/durum")
 def status(token):
     program = _active_program(token)
-    customer = _cookie_customer(program)
+    customer = _customer_from_key(program, request.args.get("a")) or _cookie_customer(program)
     if not customer:
         return jsonify({"error": "unknown"}), 404
     response = jsonify(loyalty.card_state(program, customer))

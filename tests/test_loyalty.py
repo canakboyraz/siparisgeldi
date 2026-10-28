@@ -81,7 +81,7 @@ class LoyaltyTest(unittest.TestCase):
     def test_full_flow_welcome_visit_cooldown_reward(self):
         program = self._start_program()
         page = self.phone.get(f"/k/{program.token}").get_data(as_text=True)
-        self.assertIn("Kartımı oluştur", page)
+        self.assertIn("Kartımı aç", page)
         self.assertIn("2 damga", page)
 
         r = self._join(program)
@@ -183,6 +183,51 @@ class LoyaltyTest(unittest.TestCase):
         r = self.staff.post(f"/panel/sadakat/istek/{req.id}/onay",
                             data={"_csrf_token": token, "next": "//kotu.site"})
         self.assertTrue(r.headers["Location"].endswith("/panel/sadakat"))
+
+    def test_personal_link_shows_card_without_request(self):
+        program = self._start_program()
+        r = self._join(program)
+        self.assertIn("/kartim/", r.headers["Location"])
+        link = r.headers["Location"]
+        req = LoyaltyRequest.query.one()
+        self._decide(req.id, "onay")
+        # Çerezi tutmayan tarayıcı (ör. kod okuyucu içi): kişisel link yine kartı gösterir, istek açmaz.
+        fresh = self.app.test_client()
+        page = fresh.get(link).get_data(as_text=True)
+        self.assertIn("2</b>/6 damga", page)
+        self.assertIn("Kartını telefonuna kaydet", page)
+        self.assertIn("manifest.webmanifest", page)
+        customer = LoyaltyCustomer.query.one()
+        customer.last_visit_at = datetime.utcnow() - timedelta(hours=2)
+        db.session.commit()
+        fresh.get(link)
+        self.assertEqual(LoyaltyRequest.query.count(), 1)
+        key = link.rsplit("/", 1)[1]
+        status = self.app.test_client().get(f"/k/{program.token}/durum?a={key}").get_json()
+        self.assertEqual(status["stamps"], 2)
+        manifest = fresh.get(link + "/manifest.webmanifest").get_json()
+        self.assertTrue(manifest["start_url"].endswith(key))
+        self.assertEqual(self.app.test_client().get(f"/k/{program.token}/kartim/sahte").status_code, 302)
+        # Link sonrası çerez yazıldı: aynı tarayıcıda QR okutmak damga ister.
+        fresh.get(f"/k/{program.token}")
+        self.assertEqual(LoyaltyRequest.query.filter_by(status="pending").count(), 1)
+
+    def test_returning_customer_needs_only_phone(self):
+        program = self._start_program()
+        self._join(program)
+        self._decide(LoyaltyRequest.query.one().id, "onay")
+        customer = LoyaltyCustomer.query.one()
+        customer.last_visit_at = datetime.utcnow() - timedelta(hours=1)
+        db.session.commit()
+        self.phone = self.app.test_client()   # tanımayan tarayıcı
+        token = self._csrf(self.phone, f"/k/{program.token}")
+        r = self.phone.post(f"/k/{program.token}", data={"_csrf_token": token, "phone": "0532 123 45 67"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(LoyaltyCustomer.query.count(), 1)
+        self.assertEqual(LoyaltyRequest.query.order_by(LoyaltyRequest.id.desc()).first().kind, "visit")
+        r = self.phone.post(f"/k/{program.token}", data={"_csrf_token": token, "phone": "0555 000 00 00"})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("adını da yaz", r.get_data(as_text=True))
 
     def test_panel_pages_and_closed_program(self):
         self.assertIn("Damga kartını başlat", self.staff.get("/panel/sadakat").get_data(as_text=True))

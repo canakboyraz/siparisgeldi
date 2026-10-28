@@ -1436,3 +1436,14 @@ body{line-height:1.5}
 .lc-history-filter .field{min-width:0}
 .lc-history-filter input[type=date]{max-width:100%}
 @media(max-width:760px){.lc-history-filter{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+
+/* Damga kartı: kartı kaydet + tekrar gelen müşteri */
+.lc-save>b{display:block;margin-bottom:4px}
+.lc-save p{color:var(--muted);font-size:.9rem;margin:0 0 10px}
+.lc-save-steps{margin:0 0 12px;padding-left:1.2rem;font-size:.92rem}
+.lc-save-steps li{margin:3px 0}
+.lc-save-steps[hidden],.lc-save[hidden],#lc-install[hidden]{display:none}
+.lc-save-actions{display:flex;gap:8px;flex-wrap:wrap}
+.lc-save .lc-hint{margin:10px 0 0}
+.lc-returning{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#FFF5F1;color:var(--ink)}
+.lc-opt{color:var(--muted);font-weight:400;font-size:.85em}

@@ -9,13 +9,14 @@
 <form method="post" class="lc-card lc-form" novalidate>
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   {% if error %}<p class="lc-error" role="alert">{{ error }}</p>{% endif %}
-  <label for="lc-name">Adın</label>
-  <input id="lc-name" type="text" name="name" autocomplete="given-name" required maxlength="40" value="{{ form.name or '' }}" placeholder="Ayşe">
+  <p class="lc-hint lc-returning">Daha önce kayıt olduysan <b>sadece telefonunu yaz</b>, kartın açılır.</p>
   <label for="lc-phone">Telefonun</label>
   <input id="lc-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required value="{{ form.phone or '' }}" placeholder="05XX XXX XX XX">
-  <label class="lc-consent"><input type="checkbox" name="consent" value="1" required>
+  <label for="lc-name">Adın <span class="lc-opt">(ilk kayıtta)</span></label>
+  <input id="lc-name" type="text" name="name" autocomplete="given-name" maxlength="40" value="{{ form.name or '' }}" placeholder="Ayşe">
+  <label class="lc-consent"><input type="checkbox" name="consent" value="1">
     <span>Adım ve telefonumun yalnızca {{ program.name }} damga kartım için saklanmasını kabul ediyorum. <a href="{{ url_for('public.kvkk_notice') }}" target="_blank" rel="noopener">Aydınlatma metni</a></span></label>
-  <button class="btn btn-primary btn-block btn-lg" type="submit">Kartımı oluştur</button>
-  <p class="lc-hint">Kayıt bir kez yapılır. Sonraki ziyaretlerinde sadece okutman yeterli.</p>
+  <button class="btn btn-primary btn-block btn-lg" type="submit">Kartımı aç</button>
+  <p class="lc-hint">Kayıt bir kez yapılır. Telefonun seni hatırlamazsa numaranı yazman yeterli.</p>
 </form>
 {% endblock %}

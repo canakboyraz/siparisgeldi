@@ -1,7 +1,14 @@
 {% extends "loyalty/_shell.html" %}
 {% block title %}{{ program.name }} · Kartım{% endblock %}
+{% block lc_head %}
+<link rel="manifest" href="{{ url_for('loyalty_public.card_manifest', token=program.token, key=card_key) }}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="{{ program.name[:14] }}">
+<meta name="theme-color" content="#D4411F">
+{% endblock %}
 {% block card %}
-<section class="lc-card lc-stampcard" id="lc-card" data-status-url="{{ url_for('loyalty_public.status', token=program.token) }}" data-last-id="{{ state.last_id }}">
+<section class="lc-card lc-stampcard" id="lc-card" data-status-url="{{ url_for('loyalty_public.status', token=program.token, a=card_key) }}" data-last-id="{{ state.last_id }}">
   <div class="lc-row"><div><div class="lc-hello">Merhaba {{ customer.name }}</div><div class="lc-count"><b id="lc-stamps">{{ state.shown }}</b>/{{ state.required }} damga</div></div>
     <div class="lc-reward-pill">{{ program.reward }}</div></div>
   <div class="lc-dots" id="lc-dots">{% for i in range(state.required) %}<span class="{{ 'on' if i < state.shown else ('add' if state.pending and i < state.shown + state.pending_stamps else '') }}"></span>{% endfor %}</div>
@@ -20,11 +27,51 @@
     <div><b>Kartın hazır</b><span>Her ziyaretinde kasadaki kodu okut.</span></div>
   {% endif %}
 </section>
+<section class="lc-card lc-save" id="lc-save">
+  <b>Kartını telefonuna kaydet</b>
+  <p>Ana ekrana eklersen kaç damgan olduğuna istediğin an bakarsın. Buradan açmak damga istemez; damga için kasadaki kodu okut.</p>
+  <ol class="lc-save-steps" id="lc-save-ios" hidden>
+    <li>Safari'de alttaki <b>Paylaş</b> düğmesine dokun</li>
+    <li><b>Ana Ekrana Ekle</b>'yi seç</li>
+  </ol>
+  <ol class="lc-save-steps" id="lc-save-android" hidden>
+    <li>Sağ üstteki <b>⋮</b> menüsüne dokun</li>
+    <li><b>Ana ekrana ekle</b>'yi seç</li>
+  </ol>
+  <div class="lc-save-actions">
+    <button class="btn btn-primary" type="button" id="lc-install" hidden>Ana ekrana ekle</button>
+    <button class="btn btn-ghost" type="button" id="lc-share">Kart linkimi kaydet</button>
+  </div>
+  <p class="lc-hint" id="lc-share-msg">Kod okuyucunun içinde açıldıysa linki kopyalayıp Safari ya da Chrome'da aç.</p>
+</section>
 <form method="post" action="{{ url_for('loyalty_public.forget', token=program.token) }}" class="lc-forget">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <button type="submit">Bu cihazda ben değilim</button>
 </form>
 <script>
+(function () {
+  var box = document.getElementById("lc-save"), link = {{ card_url|tojson }}, deferred = null;
+  var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone;
+  try { if (standalone) { box.hidden = true; return; } } catch (e) {}
+  var ua = navigator.userAgent || "";
+  var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && "ontouchend" in document);
+  document.getElementById(ios ? "lc-save-ios" : "lc-save-android").hidden = !(ios || /Android/.test(ua));
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault(); deferred = e;
+    document.getElementById("lc-install").hidden = false;
+    document.getElementById("lc-save-android").hidden = true;
+  });
+  document.getElementById("lc-install").addEventListener("click", function () {
+    if (!deferred) return; deferred.prompt(); deferred = null; this.hidden = true;
+  });
+  document.getElementById("lc-share").addEventListener("click", function () {
+    var msg = document.getElementById("lc-share-msg");
+    if (navigator.share) { navigator.share({ title: document.title, url: link }).catch(function () {}); return; }
+    var done = function () { msg.textContent = "Link kopyalandı. Kendine gönder ya da yer imlerine ekle."; };
+    if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, function () { window.prompt("Kart linkin:", link); });
+    else window.prompt("Kart linkin:", link);
+  });
+})();
 (function () {
   var card = document.getElementById("lc-card"), statusBox = document.getElementById("lc-status");
   var url = card.getAttribute("data-status-url"), lastId = Number(card.getAttribute("data-last-id")) || 0;
