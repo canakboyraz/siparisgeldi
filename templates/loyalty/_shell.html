@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block head %}<meta name="robots" content="noindex">{% endblock %}
+{% block body %}
+<div class="lc-wrap">
+  <header class="lc-head">
+    <div class="lc-logo" aria-hidden="true">{{ program.name[:1]|upper }}</div>
+    <div><div class="lc-biz">{{ program.name }}</div><div class="lc-sub">Damga kartı</div></div>
+  </header>
+  {% block card %}{% endblock %}
+  <footer class="lc-foot">SiparişGeldi ile çalışır</footer>
+</div>
+{% endblock %}

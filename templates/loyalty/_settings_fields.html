@@ -1,0 +1,8 @@
+<div class="field"><label>Kartta görünecek işletme adı</label><input type="text" name="name" maxlength="80" required value="{{ program.name if program else current_user.name }}"></div>
+<div class="field"><label>Ödül</label><input type="text" name="reward" maxlength="80" required value="{{ program.reward if program else '1 kahve bedava' }}" placeholder="1 kahve bedava"></div>
+<div class="lc-fields">
+  <div class="field"><label>Kaç damgada ödül?</label><input name="stamps_required" type="number" min="2" max="30" value="{{ program.stamps_required if program else 6 }}"></div>
+  <div class="field"><label>İlk kayıtta damga</label><input name="welcome_stamps" type="number" min="1" max="10" value="{{ program.welcome_stamps if program else 2 }}"></div>
+  <div class="field"><label>Her ziyarette damga</label><input name="stamps_per_visit" type="number" min="1" max="5" value="{{ program.stamps_per_visit if program else 1 }}"></div>
+  <div class="field"><label>İki damga arası (dk)</label><input name="cooldown_minutes" type="number" min="0" max="1440" value="{{ program.cooldown_minutes if program else 30 }}"><p class="hint">Aynı kişi bu süre dolmadan yeni damga isteyemez.</p></div>
+</div>

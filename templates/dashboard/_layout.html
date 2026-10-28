@@ -51,6 +51,7 @@
           <a href="{{ url_for('dashboard.connect_whatsapp') }}" class="{{ 'active' if request.endpoint=='dashboard.connect_whatsapp' }}">WhatsApp</a>
         </div>
       </details>
+      <a href="{{ url_for('loyalty.setup') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('loyalty.') }}">{{ icon('coffee') }}<span>Damga kartı</span></a>
       <a href="{{ url_for('dashboard.subscription') }}" class="{{ 'active' if request.endpoint=='dashboard.subscription' }}">{{ icon('card') }}<span>Abonelik</span></a>
       <a href="{{ url_for('dashboard.profile') }}" class="{{ 'active' if request.endpoint=='dashboard.profile' }}">{{ icon('user') }}<span>Profil</span></a>
       {% if user_is_admin %}
@@ -83,6 +84,7 @@
     {% if request.endpoint != 'dashboard.active_orders' %}{% include "dashboard/_account_banners.html" %}{% endif %}
     {% block panel %}{% endblock %}
   </main>
+  {% if loyalty_active %}{% include "dashboard/_loyalty_alert.html" %}{% endif %}
   <nav class="tabbar" aria-label="Hızlı menü">
     <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint=='dashboard.index' }}">{{ icon('home', 22) }}<span>Panel</span></a>
     <a href="{{ url_for('dashboard.active_orders') }}" class="{{ 'active' if request.endpoint=='dashboard.active_orders' }}">{{ icon('bolt', 22) }}<span>Aktif</span></a>

@@ -1,0 +1,127 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Damga kartı · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Damga kartı</h1><p class="muted page-sub">Müşterin kasadaki QR'ı ya da NFC etiketi okutur, onay burada çıkar, damga kartına işlenir.</p></div>
+</div>
+
+{% if not program %}
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Nasıl çalışır?</div>
+    <ol class="lc-steps">
+      <li><b>Kasaya QR ve NFC etiketi koy.</b> Afişi buradan yazdırırsın, NFC etikete aynı bağlantıyı yazarsın.</li>
+      <li><b>Müşteri telefonuyla okutur.</b> İlk seferde adını ve telefonunu yazar, hoş geldin damgalarını kazanır.</li>
+      <li><b>Onay bu panelde açılır.</b> Hangi sayfada olursan ol pencere çıkar; tek dokunuşla onaylarsın.</li>
+      <li><b>Kart dolunca ödül.</b> Müşterinin kartında "ödülün hazır" yazar, sen de buradan ödülü verirsin.</li>
+    </ol>
+  </div>
+  <form method="post" class="card">
+    <div class="card-title">Programı başlat</div>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    {% include "loyalty/_settings_fields.html" %}
+    <button class="btn btn-primary btn-lg" type="submit">Damga kartını başlat</button>
+  </form>
+</div>
+{% else %}
+
+<div class="stats">
+  <div class="stat"><div class="v">{{ stats.customers }}</div><div class="l">Kayıtlı müşteri</div></div>
+  <div class="stat"><div class="v">{{ stats.stamps }}</div><div class="l">Verilen damga</div></div>
+  <div class="stat"><div class="v">{{ stats.rewards }}</div><div class="l">Kullanılan ödül</div></div>
+  <div class="stat"><div class="v">{{ stats.ready }}</div><div class="l">Ödülü hazır</div></div>
+</div>
+
+{% if pending %}
+<div class="card lc-pending-card">
+  <div class="card-title">Onay bekleyen ({{ pending|length }})</div>
+  {% for req in pending %}
+  <div class="lc-pending-row">
+    <div><b>{{ req.customer.name }}</b> <span class="muted">{{ mask_phone(req.customer.phone) }}</span><br>
+      <span class="hint">Kod {{ req.code }} · +{{ req.stamps }} damga{% if req.kind == 'welcome' %} (ilk ziyaret){% endif %} · kartta {{ req.customer.stamps }}/{{ program.stamps_required }}</span></div>
+    <div class="lc-actions">
+      <form method="post" action="{{ url_for('loyalty.decide', req_id=req.id, action='onay') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-primary btn-sm" type="submit">Onayla</button></form>
+      <form method="post" action="{{ url_for('loyalty.decide', req_id=req.id, action='red') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit">Reddet</button></form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="grid-2" style="margin-top:1rem">
+  <div class="card lc-qr-card">
+    <div class="card-title">{{ icon('qr') }} Kasa QR'ı ve NFC</div>
+    {% if not program.is_active %}<p class="lc-error">Program kapalı. Okutan müşteriler "şu an kapalı" mesajı görür.</p>{% endif %}
+    <div class="lc-qr" id="lc-qr" data-url="{{ join_url }}" aria-label="QR kod"></div>
+    <div class="lc-link"><code id="lc-link">{{ join_url }}</code><button class="btn btn-ghost btn-sm" type="button" id="lc-copy">Kopyala</button></div>
+    <div class="lc-qr-actions">
+      <button class="btn btn-primary" type="button" id="lc-download">QR'ı indir (PNG)</button>
+      <a class="btn btn-ghost" href="{{ url_for('loyalty.poster') }}" target="_blank" rel="noopener">{{ icon('printer', 16) }} Kasa afişini yazdır</a>
+    </div>
+    <details class="lc-nfc"><summary>NFC etiketi nasıl hazırlanır?</summary>
+      <ol>
+        <li>NTAG213 / NTAG215 bir NFC etiket ya da kart al (kırtasiye ve internette ucuza bulunur).</li>
+        <li>Telefonuna ücretsiz "NFC Tools" uygulamasını kur → Yaz → Kayıt ekle → URL.</li>
+        <li>Yukarıdaki bağlantıyı yapıştır, etiketi telefonunun arkasına tutup yaz.</li>
+        <li>Etiketi kasaya, QR afişin yanına yapıştır. Müşteri telefonunu dokundurunca kart açılır.</li>
+      </ol>
+    </details>
+  </div>
+  <form method="post" class="card">
+    <div class="card-title">Ayarlar</div>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    {% include "loyalty/_settings_fields.html" %}
+    <div class="field"><label>Durum</label><select name="is_active"><option value="1" {{ 'selected' if program.is_active }}>Açık</option><option value="0" {{ 'selected' if not program.is_active }}>Kapalı</option></select></div>
+    <button class="btn btn-primary" type="submit">Kaydet</button>
+  </form>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <div class="section-head"><div class="card-title">Müşteriler</div>
+    <form method="get" class="inline lc-search"><input type="search" name="q" value="{{ q }}" placeholder="Ad ya da telefon ara"><button class="btn btn-ghost btn-sm" type="submit">{{ icon('search', 16) }}</button></form></div>
+  {% if customers %}
+  <div class="table-wrap"><table class="lc-table">
+    <thead><tr><th>Müşteri</th><th>Damga</th><th>Ödül</th><th>Son ziyaret</th><th></th></tr></thead>
+    <tbody>
+    {% for c in customers %}
+      <tr>
+        <td><b>{{ c.name }}</b><br><span class="hint">{{ mask_phone(c.phone) }}</span></td>
+        <td><span class="lc-mini">{% for i in range(program.stamps_required) %}<i class="{{ 'on' if i < c.stamps }}"></i>{% endfor %}</span> {{ c.stamps }}/{{ program.stamps_required }}</td>
+        <td>{{ c.rewards_redeemed }}</td>
+        <td class="muted">{{ (c.last_visit_at|yerel).strftime('%d.%m %H:%M') if c.last_visit_at else '—' }}</td>
+        <td><div class="lc-actions">
+          {% if c.stamps >= program.stamps_required %}
+          <form method="post" action="{{ url_for('loyalty.give_reward', customer_id=c.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-accent btn-sm" type="submit">Ödülü ver</button></form>
+          {% endif %}
+          <form method="post" action="{{ url_for('loyalty.delete_customer', customer_id=c.id) }}" onsubmit="return window.confirm('{{ c.name }} ve damga geçmişi silinsin mi?');"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit" title="Sil" aria-label="{{ c.name }} kaydını sil">{{ icon('x', 15) }}</button></form>
+        </div></td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+  <p class="muted">{{ 'Aramana uyan müşteri yok.' if q else 'Henüz kayıtlı müşteri yok. QR afişini kasaya koyduğunda ilk kayıtlar burada görünür.' }}</p>
+  {% endif %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+(function () {
+  var box = document.getElementById("lc-qr"), url = box.getAttribute("data-url");
+  function make() { var qr = qrcode(0, "M"); qr.addData(url); qr.make(); return qr; }
+  if (window.qrcode) { box.innerHTML = make().createSvgTag({ cellSize: 6, margin: 2, scalable: true }); }
+  else { box.textContent = "QR yüklenemedi; bağlantıyı kullan."; }
+  document.getElementById("lc-copy").addEventListener("click", function () {
+    var b = this; (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { b.textContent = "Kopyalandı"; }).catch(function () {});
+  });
+  document.getElementById("lc-download").addEventListener("click", function () {
+    if (!window.qrcode) return;
+    var qr = make(), n = qr.getModuleCount(), cell = 24, pad = cell * 4, size = n * cell + pad * 2;
+    var c = document.createElement("canvas"); c.width = c.height = size; var g = c.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, size, size); g.fillStyle = "#133126";
+    for (var r = 0; r < n; r++) for (var k = 0; k < n; k++) if (qr.isDark(r, k)) g.fillRect(pad + k * cell, pad + r * cell, cell, cell);
+    var a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = "damga-karti-qr.png"; a.click();
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

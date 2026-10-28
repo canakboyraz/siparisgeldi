@@ -1,0 +1,60 @@
+{% extends "loyalty/_shell.html" %}
+{% block title %}{{ program.name }} · Kartım{% endblock %}
+{% block card %}
+<section class="lc-card lc-stampcard" id="lc-card" data-status-url="{{ url_for('loyalty_public.status', token=program.token) }}" data-last-id="{{ state.last_id }}">
+  <div class="lc-row"><div><div class="lc-hello">Merhaba {{ customer.name }}</div><div class="lc-count"><b id="lc-stamps">{{ state.shown }}</b>/{{ state.required }} damga</div></div>
+    <div class="lc-reward-pill">{{ program.reward }}</div></div>
+  <div class="lc-dots" id="lc-dots">{% for i in range(state.required) %}<span class="{{ 'on' if i < state.shown else ('add' if state.pending and i < state.shown + state.pending_stamps else '') }}"></span>{% endfor %}</div>
+  <p class="lc-left" id="lc-left">{% if state.reward_ready %}Ödülün hazır! Kasada söyle.{% else %}{{ program.reward }} için {{ state.left }} damga kaldı.{% endif %}</p>
+</section>
+
+<section class="lc-card lc-status {{ 'is-pending' if state.pending }}" id="lc-status" aria-live="polite">
+  {% if state.pending %}
+    <div class="lc-pulse" aria-hidden="true"></div>
+    <div><b>Kasada onay bekleniyor</b><span>Ekranı kasaya göster · kod <b class="lc-code">{{ state.code }}</b></span></div>
+  {% elif state.cooldown %}
+    <div><b>Bugünkü damgan işlendi</b><span>Yeni damga için {{ state.cooldown }} dk sonra tekrar okut.</span></div>
+  {% elif state.last_status == 'approved' %}
+    <div><b>+{{ state.last_stamps }} damga eklendi</b><span>Bir sonraki ziyaretinde yine okut.</span></div>
+  {% else %}
+    <div><b>Kartın hazır</b><span>Her ziyaretinde kasadaki kodu okut.</span></div>
+  {% endif %}
+</section>
+<form method="post" action="{{ url_for('loyalty_public.forget', token=program.token) }}" class="lc-forget">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <button type="submit">Bu cihazda ben değilim</button>
+</form>
+<script>
+(function () {
+  var card = document.getElementById("lc-card"), statusBox = document.getElementById("lc-status");
+  var url = card.getAttribute("data-status-url"), lastId = Number(card.getAttribute("data-last-id")) || 0;
+  var wasPending = statusBox.classList.contains("is-pending"), timer = null;
+  function render(s) {
+    document.getElementById("lc-stamps").textContent = s.shown;
+    var dots = document.getElementById("lc-dots").children;
+    for (var i = 0; i < dots.length; i++) {
+      dots[i].className = i < s.shown ? "on" : (s.pending && i < s.shown + s.pending_stamps ? "add" : "");
+    }
+    document.getElementById("lc-left").textContent = s.reward_ready ? "Ödülün hazır! Kasada söyle." :
+      ({{ program.reward|tojson }} + " için " + s.left + " damga kaldı.");
+    if (s.pending) return;
+    statusBox.classList.remove("is-pending");
+    if (s.last_id !== lastId && s.last_status === "approved") {
+      statusBox.innerHTML = '<div><b>+' + s.last_stamps + ' damga eklendi 🎉</b><span>Afiyet olsun! Bir sonraki ziyaretinde yine okut.</span></div>';
+      statusBox.classList.add("is-done");
+      if (navigator.vibrate) { try { navigator.vibrate([60, 40, 60]); } catch (e) {} }
+    } else if (s.last_id !== lastId && s.last_status === "rejected") {
+      statusBox.innerHTML = '<div><b>İstek onaylanmadı</b><span>Bir sorun varsa kasaya sorabilirsin.</span></div>';
+    } else if (wasPending) {
+      statusBox.innerHTML = '<div><b>Onay süresi doldu</b><span>Kodu yeniden okutabilirsin.</span></div>';
+    }
+    window.clearInterval(timer);
+  }
+  if (wasPending) {
+    timer = window.setInterval(function () {
+      fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(render).catch(function () {});
+    }, 2500);
+  }
+})();
+</script>
+{% endblock %}

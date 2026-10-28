@@ -1,0 +1,100 @@
+{#- Kasada damga onayı: müşteri QR/NFC okuttuğunda her panel sayfasında açılır. -#}
+<div class="order-alert-backdrop loyalty-alert-backdrop" id="loyalty-alert" hidden>
+  <div class="order-alert loyalty-alert" role="alertdialog" aria-modal="true" aria-labelledby="loyalty-alert-title">
+    <div class="order-alert-kicker">{{ icon('coffee', 16) }} Damga kartı</div>
+    <h2 id="loyalty-alert-title">Damga onayı</h2>
+    <div class="loyalty-alert-who">
+      <div><strong id="loyalty-alert-name"></strong><span id="loyalty-alert-phone"></span></div>
+      <div class="loyalty-alert-code"><span>Kod</span><b id="loyalty-alert-code"></b></div>
+    </div>
+    <div class="loyalty-alert-stamps" id="loyalty-alert-stamps"></div>
+    <p class="loyalty-alert-note" id="loyalty-alert-note"></p>
+    <div class="order-alert-actions">
+      <button class="btn btn-primary btn-lg" id="loyalty-alert-approve" type="button"></button>
+      <button class="btn btn-ghost" id="loyalty-alert-reject" type="button">Reddet</button>
+    </div>
+    <button class="btn btn-accent btn-block loyalty-alert-reward" id="loyalty-alert-reward" type="button" hidden></button>
+    <p class="hint" id="loyalty-alert-more" style="margin:.7rem 0 0"></p>
+  </div>
+</div>
+<script>
+(function () {
+  var pollUrl = "{{ url_for('loyalty.pending_json') }}";
+  var decideBase = "{{ url_for('loyalty.decide', req_id=0, action='onay') }}".replace("/0/onay", "/");
+  var rewardBase = "{{ url_for('loyalty.give_reward', customer_id=0) }}".replace("/0/odul", "/");
+  var csrf = "{{ csrf_token() }}";
+  var box = document.getElementById("loyalty-alert");
+  var current = null, busy = false, lastBeep = 0, dismissed = {};
+  function el(id) { return document.getElementById(id); }
+  function beep() {
+    var now = Date.now(); if (now - lastBeep < 8000) return; lastBeep = now;
+    try {
+      var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      var ctx = new C(), o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = 880; g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.4);
+    } catch (e) {}
+    if (navigator.vibrate) { try { navigator.vibrate(120); } catch (e) {} }
+  }
+  function dots(n, total, add) {
+    var html = "";
+    for (var i = 0; i < total; i++) {
+      var cls = i < n ? "on" : (i < n + add ? "add" : "");
+      html += '<span class="' + cls + '"></span>';
+    }
+    return html;
+  }
+  function show(item, rest) {
+    current = item;
+    el("loyalty-alert-name").textContent = item.name;
+    el("loyalty-alert-phone").textContent = item.phone;
+    el("loyalty-alert-code").textContent = item.code;
+    el("loyalty-alert-stamps").innerHTML = dots(Math.min(item.current, item.required), item.required, item.stamps);
+    el("loyalty-alert-note").textContent = (item.kind === "welcome" ? "İlk ziyaret · hoş geldin damgası. " : "") +
+      "Kartta " + item.current + "/" + item.required + " damga var.";
+    el("loyalty-alert-approve").textContent = "Onayla · +" + item.stamps + " damga";
+    var reward = el("loyalty-alert-reward");
+    reward.hidden = !item.reward_ready;
+    reward.textContent = "Ödülü ver: " + item.reward;
+    el("loyalty-alert-more").textContent = rest > 0 ? ("Sırada " + rest + " istek daha var.") : "";
+    if (box.hidden) { box.hidden = false; beep(); }
+  }
+  function hide() { box.hidden = true; current = null; }
+  function poll() {
+    if (busy || document.hidden) return;
+    fetch(pollUrl, { headers: { "Accept": "application/json" }, credentials: "same-origin", cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+      .then(function (data) {
+        var items = (data.items || []).filter(function (it) { return !dismissed[it.id]; });
+        if (!items.length) { hide(); return; }
+        if (!current || current.id !== items[0].id || box.hidden) show(items[0], items.length - 1);
+        else el("loyalty-alert-more").textContent = items.length > 1 ? ("Sırada " + (items.length - 1) + " istek daha var.") : "";
+      }).catch(function () {});
+  }
+  function post(url) {
+    busy = true;
+    return fetch(url, { method: "POST", credentials: "same-origin",
+      headers: { "X-CSRF-Token": csrf, "X-Requested-With": "fetch", "Accept": "application/json" } })
+      .then(function (r) { return r.json(); })
+      .finally(function () { busy = false; });
+  }
+  el("loyalty-alert-approve").addEventListener("click", function () {
+    if (!current) return; var id = current.id;
+    post(decideBase + id + "/onay").then(function () { hide(); poll(); });
+  });
+  el("loyalty-alert-reject").addEventListener("click", function () {
+    if (!current) return; var id = current.id;
+    post(decideBase + id + "/red").then(function () { hide(); poll(); });
+  });
+  el("loyalty-alert-reward").addEventListener("click", function () {
+    if (!current) return; var btn = this;
+    post(rewardBase + current.customer_id + "/odul").then(function (res) {
+      if (res && res.ok) { current.current = res.current; current.reward_ready = res.current >= current.required; show(current, 0); btn.hidden = true; }
+    });
+  });
+  poll();
+  window.setInterval(poll, 4000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
+})();
+</script>

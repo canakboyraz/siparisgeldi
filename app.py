@@ -228,6 +228,7 @@ def create_app(config_class=Config, start_scheduler=None):
     from routes.adisyo import adisyo_bp
     from routes.admin import admin_bp
     from routes.paytr import paytr_bp
+    from routes.loyalty import loyalty_bp, loyalty_public_bp
 
     app.register_blueprint(public_bp)
     app.register_blueprint(auth_bp)
@@ -236,6 +237,8 @@ def create_app(config_class=Config, start_scheduler=None):
     app.register_blueprint(adisyo_bp, url_prefix="/panel/adisyo")
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(paytr_bp, url_prefix="/payment/paytr")
+    app.register_blueprint(loyalty_public_bp)
+    app.register_blueprint(loyalty_bp, url_prefix="/panel/sadakat")
 
     # Şablonlarda kullanılacak yardımcılar
     from datetime import datetime
@@ -299,7 +302,7 @@ def create_app(config_class=Config, start_scheduler=None):
         if request.is_secure:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         # Panel sayfaları kişiye özel ve canlı: tarayıcı (özellikle mobil) eski kopyayı göstermesin.
-        if request.blueprint in ("dashboard", "adisyo") and response.mimetype == "text/html":
+        if request.blueprint in ("dashboard", "adisyo", "loyalty", "loyalty_public") and response.mimetype == "text/html":
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -308,6 +311,11 @@ def create_app(config_class=Config, start_scheduler=None):
     @app.context_processor
     def inject_helpers():
         dashboard_latest_order_id = 0
+        loyalty_active = False
+        if current_user.is_authenticated and request.blueprint in ("dashboard", "adisyo", "loyalty"):
+            from models import LoyaltyProgram
+            loyalty_active = db.session.query(LoyaltyProgram.id).filter_by(
+                user_id=current_user.id, is_active=True).first() is not None
         if current_user.is_authenticated and request.blueprint == "dashboard":
             from sqlalchemy import func
             from models import Order
@@ -319,6 +327,7 @@ def create_app(config_class=Config, start_scheduler=None):
             )
         return {
             "now": datetime.utcnow,
+            "loyalty_active": loyalty_active,
             "status_label": utils.status_label,
             "status_color": utils.status_color,
             "platform_label": utils.platform_label,

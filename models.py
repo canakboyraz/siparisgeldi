@@ -425,3 +425,57 @@ class AppState(db.Model):
         else:
             db.session.add(AppState(key=key, value=str(value)))
         db.session.commit()
+
+
+class LoyaltyProgram(db.Model):
+    """İşletmenin damga kartı programı (QR/NFC ile katılım, kasada onay)."""
+    __tablename__ = "loyalty_programs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+    token = db.Column(db.String(24), unique=True, nullable=False, index=True)  # QR/NFC bağlantısındaki kod
+    name = db.Column(db.String(80), nullable=False)               # müşteriye görünen işletme adı
+    reward = db.Column(db.String(80), nullable=False, default="1 kahve bedava")
+    stamps_required = db.Column(db.Integer, nullable=False, default=6)
+    welcome_stamps = db.Column(db.Integer, nullable=False, default=2)
+    stamps_per_visit = db.Column(db.Integer, nullable=False, default=1)
+    cooldown_minutes = db.Column(db.Integer, nullable=False, default=30)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", backref=db.backref("loyalty_program", uselist=False, cascade="all, delete-orphan"))
+
+
+class LoyaltyCustomer(db.Model):
+    __tablename__ = "loyalty_customers"
+
+    id = db.Column(db.Integer, primary_key=True)
+    program_id = db.Column(db.Integer, db.ForeignKey("loyalty_programs.id"), nullable=False, index=True)
+    name = db.Column(db.String(60), nullable=False)
+    phone = db.Column(db.String(15), nullable=False)               # 5XXXXXXXXX
+    stamps = db.Column(db.Integer, nullable=False, default=0)       # karttaki güncel damga
+    lifetime_stamps = db.Column(db.Integer, nullable=False, default=0)
+    rewards_redeemed = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_visit_at = db.Column(db.DateTime)
+
+    program = db.relationship("LoyaltyProgram", backref=db.backref("customers", lazy="dynamic", cascade="all, delete-orphan"))
+    __table_args__ = (db.UniqueConstraint("program_id", "phone", name="uq_loyalty_program_phone"),)
+
+
+class LoyaltyRequest(db.Model):
+    """Damga isteği (kasada onay bekler) ya da ödül kullanımı kaydı."""
+    __tablename__ = "loyalty_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    program_id = db.Column(db.Integer, db.ForeignKey("loyalty_programs.id"), nullable=False, index=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey("loyalty_customers.id"), nullable=False, index=True)
+    kind = db.Column(db.String(10), nullable=False)     # welcome | visit | reward
+    stamps = db.Column(db.Integer, nullable=False)       # ödülde eksi
+    status = db.Column(db.String(10), nullable=False, default="pending", index=True)  # pending|approved|rejected|expired
+    code = db.Column(db.String(3), nullable=False, default="000")  # kasada eşleştirmek için 3 haneli kod
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    decided_at = db.Column(db.DateTime)
+
+    customer = db.relationship("LoyaltyCustomer", backref=db.backref("requests", lazy="dynamic", cascade="all, delete-orphan"))
+
