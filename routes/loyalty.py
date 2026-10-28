@@ -134,10 +134,48 @@ def card_manifest(token, key):
     if not customer:
         abort(404)
     start = url_for("loyalty_public.my_card", token=token, key=key)
+    icons = [{"src": url_for("loyalty_public.app_icon", size=px), "sizes": f"{px}x{px}", "type": "image/png",
+              "purpose": "any maskable"} for px in (192, 512)]
     response = jsonify({"name": f"{program.name} damga kartım", "short_name": program.name[:12],
-                        "start_url": start, "scope": start, "display": "standalone",
-                        "background_color": "#FBF7F2", "theme_color": "#D4411F"})
+                        "id": start, "start_url": start, "scope": "/k/", "display": "standalone",
+                        "background_color": "#153028", "theme_color": "#153028", "icons": icons})
     response.mimetype = "application/manifest+json"
+    return response
+
+
+@loyalty_public_bp.route("/k/ikon-<int:size>.png")
+def app_icon(size):
+    """Ana ekran / uygulama simgesi (damga işareti)."""
+    import wallet
+    if size not in (180, 192, 512):
+        abort(404)
+    response = make_response(wallet.app_icon_png(size))
+    response.mimetype = "image/png"
+    response.headers["Cache-Control"] = "public, max-age=604800"
+    return response
+
+
+SERVICE_WORKER_JS = """// SiparişGeldi damga kartı: ana ekrana eklenebilir uygulama + çevrimdışı son görünüm
+const CACHE = "sg-kart-v1";
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "GET" || req.mode !== "navigate") return;
+  e.respondWith(fetch(req).then((res) => {
+    const copy = res.clone();
+    caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+    return res;
+  }).catch(() => caches.match(req)));
+});
+"""
+
+
+@loyalty_public_bp.route("/k/sw.js")
+def service_worker():
+    response = make_response(SERVICE_WORKER_JS)
+    response.mimetype = "application/javascript"
+    response.headers["Cache-Control"] = "no-cache"
     return response
 
 

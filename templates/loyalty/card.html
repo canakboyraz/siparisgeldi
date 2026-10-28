@@ -5,7 +5,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="{{ program.name[:14] }}">
-<meta name="theme-color" content="#D4411F">
+<meta name="theme-color" content="#153028">
+<link rel="apple-touch-icon" href="{{ url_for('loyalty_public.app_icon', size=180) }}">
 {% endblock %}
 {% block card %}
 <section class="lc-card lc-stampcard" id="lc-card" data-status-url="{{ url_for('loyalty_public.status', token=program.token, a=card_key) }}" data-last-id="{{ state.last_id }}">
@@ -33,22 +34,50 @@
   <span>Apple Cüzdan'a Ekle</span></a>
 {% endif %}
 <section class="lc-card lc-save" id="lc-save">
-  <b>Kartını telefonuna kaydet</b>
-  <p>Ana ekrana eklersen kaç damgan olduğuna istediğin an bakarsın. Buradan açmak damga istemez; damga için kasadaki kodu okut.</p>
-  <ol class="lc-save-steps" id="lc-save-ios" hidden>
-    <li>Safari'de alttaki <b>Paylaş</b> düğmesine dokun</li>
-    <li><b>Ana Ekrana Ekle</b>'yi seç</li>
-  </ol>
-  <ol class="lc-save-steps" id="lc-save-android" hidden>
-    <li>Sağ üstteki <b>⋮</b> menüsüne dokun</li>
-    <li><b>Ana ekrana ekle</b>'yi seç</li>
-  </ol>
-  <div class="lc-save-actions">
-    <button class="btn btn-primary" type="button" id="lc-install" hidden>Ana ekrana ekle</button>
-    <button class="btn btn-ghost" type="button" id="lc-share">Kart linkimi kaydet</button>
+  <div class="lc-save-head">
+    <img src="{{ url_for('loyalty_public.app_icon', size=180) }}" alt="" width="48" height="48">
+    <div><b>Kartını ana ekrana ekle</b>
+      <p>Uygulama gibi tek dokunuşla açılır; kaç damgan olduğunu istediğin an görürsün. Buradan açmak damga istemez.</p></div>
   </div>
-  <p class="lc-hint" id="lc-share-msg">Kod okuyucunun içinde açıldıysa linki kopyalayıp Safari ya da Chrome'da aç.</p>
+  <div class="lc-save-actions">
+    <button class="btn btn-primary btn-block" type="button" id="lc-install">Ana ekrana ekle</button>
+    <button class="btn btn-ghost btn-block" type="button" id="lc-copy">Kart linkimi kopyala</button>
+  </div>
+  <p class="lc-hint" id="lc-copy-msg" hidden></p>
 </section>
+
+<div class="lc-sheet-backdrop" id="lc-sheet" hidden>
+  <div class="lc-sheet" role="dialog" aria-modal="true" aria-labelledby="lc-sheet-title">
+    <button class="lc-sheet-close" type="button" id="lc-sheet-close" aria-label="Kapat">×</button>
+    <h2 id="lc-sheet-title">Ana ekrana ekle</h2>
+    <div id="lc-guide-inapp" hidden>
+      <p class="lc-sheet-warn">Bu sayfa bir uygulamanın içinde açıldı. Ana ekrana eklemek için önce <b id="lc-browser-name">Safari</b>'de aç:</p>
+      <ol class="lc-guide">
+        <li><span class="lc-guide-ico">⋯</span><span>Sağ üstteki / alttaki menüden <b>“Tarayıcıda aç”</b>ı seç</span></li>
+        <li><span class="lc-guide-ico">↗</span><span>Ya da <b>linki kopyala</b>, tarayıcıyı açıp adres çubuğuna yapıştır</span></li>
+      </ol>
+      <button class="btn btn-primary btn-block" type="button" id="lc-sheet-copy">Linki kopyala</button>
+    </div>
+    <div id="lc-guide-ios" hidden>
+      <ol class="lc-guide">
+        <li><span class="lc-guide-ico"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8a1.5 1.5 0 0 0-1.5-1.5H16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+          <span>Safari'nin <b>altındaki Paylaş</b> simgesine dokun <small>(adres çubuğu üstteyse sağ üstte)</small></span></li>
+        <li><span class="lc-guide-ico"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8.5v7M8.5 12h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+          <span>Listeyi biraz kaydır, <b>Ana Ekrana Ekle</b>'yi seç</span></li>
+        <li><span class="lc-guide-ico">✓</span><span>Sağ üstteki <b>Ekle</b>'ye dokun. Kartın ana ekranında!</span></li>
+      </ol>
+      <div class="lc-sheet-arrow" aria-hidden="true">↓</div>
+    </div>
+    <div id="lc-guide-android" hidden>
+      <ol class="lc-guide">
+        <li><span class="lc-guide-ico">⋮</span><span>Chrome'da sağ üstteki <b>üç nokta</b> menüsüne dokun</span></li>
+        <li><span class="lc-guide-ico"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8.5v7M8.5 12h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+          <span><b>Ana ekrana ekle</b> ya da <b>Uygulamayı yükle</b>'yi seç</span></li>
+        <li><span class="lc-guide-ico">✓</span><span><b>Ekle / Yükle</b>'ye dokun. Kartın ana ekranında!</span></li>
+      </ol>
+    </div>
+  </div>
+</div>
 <section class="lc-card lc-myqr-card">
 <details class="lc-myqr"><summary>Kart kodumu göster</summary>
   <p>Telefonun seni tanımazsa bu kodu kasaya göster, damgan hemen işlenir.</p>
@@ -61,41 +90,93 @@
 <script>
 (function () {
   var box = document.getElementById("lc-save"), link = {{ card_url|tojson }}, deferred = null;
-  var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone;
   var ua = navigator.userAgent || "";
   var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && "ontouchend" in document);
+  var android = /Android/.test(ua);
+  var inApp = /Instagram|FBAN|FBAV|FB_IAB|Line\/|Twitter|TikTok|Snapchat|GSA\/|WhatsApp|LinkedInApp/.test(ua) ||
+              (ios && !/Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua));
   var walletBtn = document.getElementById("lc-wallet");
   if (walletBtn && (ios || /Macintosh/.test(ua))) walletBtn.hidden = false;
-  try { if (standalone) { box.hidden = true; return; } } catch (e) {}
-  document.getElementById(ios ? "lc-save-ios" : "lc-save-android").hidden = !(ios || /Android/.test(ua));
-  window.addEventListener("beforeinstallprompt", function (e) {
-    e.preventDefault(); deferred = e;
-    document.getElementById("lc-install").hidden = false;
-    document.getElementById("lc-save-android").hidden = true;
-  });
-  document.getElementById("lc-install").addEventListener("click", function () {
-    if (!deferred) return; deferred.prompt(); deferred = null; this.hidden = true;
-  });
-  document.getElementById("lc-share").addEventListener("click", function () {
-    var msg = document.getElementById("lc-share-msg");
-    if (navigator.share) { navigator.share({ title: document.title, url: link }).catch(function () {}); return; }
-    var done = function () { msg.textContent = "Link kopyalandı. Kendine gönder ya da yer imlerine ekle."; };
+  var standalone = false;
+  try { standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone; } catch (e) {}
+  if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register("{{ url_for('loyalty_public.service_worker') }}", { scope: "/k/" }); } catch (e) {} }
+  if (standalone) { box.hidden = true; return; }
+
+  var sheet = document.getElementById("lc-sheet");
+  function openGuide() {
+    var which = inApp ? "inapp" : (ios ? "ios" : "android");
+    ["inapp", "ios", "android"].forEach(function (k) { document.getElementById("lc-guide-" + k).hidden = k !== which; });
+    if (inApp) document.getElementById("lc-browser-name").textContent = ios ? "Safari" : "Chrome";
+    sheet.hidden = false;
+    window.requestAnimationFrame(function () { sheet.classList.add("is-open"); });
+  }
+  function closeGuide() { sheet.classList.remove("is-open"); window.setTimeout(function () { sheet.hidden = true; }, 220); }
+  function copyLink(msgEl) {
+    var done = function () { if (msgEl) { msgEl.hidden = false; msgEl.textContent = "Link kopyalandı."; } };
     if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, function () { window.prompt("Kart linkin:", link); });
     else window.prompt("Kart linkin:", link);
+  }
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferred = e; });
+  document.getElementById("lc-install").addEventListener("click", function () {
+    if (deferred) {
+      deferred.prompt();
+      deferred.userChoice.then(function (c) { if (c && c.outcome === "accepted") box.hidden = true; }).catch(function () {});
+      deferred = null; return;
+    }
+    openGuide();
   });
+  window.addEventListener("appinstalled", function () { box.hidden = true; closeGuide(); });
+  document.getElementById("lc-copy").addEventListener("click", function () { copyLink(document.getElementById("lc-copy-msg")); });
+  document.getElementById("lc-sheet-copy").addEventListener("click", function () { copyLink(null); this.textContent = "Kopyalandı ✓"; });
+  document.getElementById("lc-sheet-close").addEventListener("click", closeGuide);
+  sheet.addEventListener("click", function (e) { if (e.target === sheet) closeGuide(); });
 })();
 (function () {
   var card = document.getElementById("lc-card"), statusBox = document.getElementById("lc-status");
   var url = card.getAttribute("data-status-url"), lastId = Number(card.getAttribute("data-last-id")) || 0;
-  var wasPending = statusBox.classList.contains("is-pending"), timer = null;
-  function render(s) {
-    document.getElementById("lc-stamps").textContent = s.shown;
-    var dots = document.getElementById("lc-dots").children;
-    for (var i = 0; i < dots.length; i++) {
-      dots[i].className = i < s.shown ? "on" : (s.pending && i < s.shown + s.pending_stamps ? "add" : "");
+  var dotsBox = document.getElementById("lc-dots"), countEl = document.getElementById("lc-stamps");
+  var shownNow = Number(countEl.textContent) || 0, readyNow = {{ 'true' if state.reward_ready else 'false' }};
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var reward = {{ program.reward|tojson }};
+
+  // Açılışta damgalar sırayla dolar.
+  Array.prototype.forEach.call(dotsBox.children, function (dot, i) { dot.style.setProperty("--i", i); });
+  card.classList.add("is-intro");
+  if (readyNow) card.classList.add("is-ready");
+
+  function confetti() {
+    if (reduce) return;
+    var colors = ["#FF8A65", "#1E5B47", "#F4C152", "#7FC8A9", "#D4411F"];
+    for (var i = 0; i < 28; i++) {
+      var p = document.createElement("i");
+      p.className = "lc-confetti";
+      p.style.left = (10 + Math.random() * 80) + "%";
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty("--dx", (Math.random() * 160 - 80).toFixed(0) + "px");
+      p.style.setProperty("--rot", (Math.random() * 720 - 360).toFixed(0) + "deg");
+      p.style.animationDelay = (Math.random() * 0.25).toFixed(2) + "s";
+      card.appendChild(p);
+      window.setTimeout(function (el) { el.remove(); }, 1800, p);
     }
+  }
+
+  function render(s) {
+    var dots = dotsBox.children;
+    for (var i = 0; i < dots.length; i++) {
+      var cls = i < s.shown ? "on" : (s.pending && i < s.shown + s.pending_stamps ? "add" : "");
+      if (i < s.shown && i >= shownNow && !reduce) cls += " just";
+      dots[i].className = cls;
+    }
+    if (s.shown !== shownNow) {
+      countEl.textContent = s.shown;
+      countEl.classList.remove("bump"); void countEl.offsetWidth; countEl.classList.add("bump");
+      if (s.shown > shownNow) { card.classList.remove("is-stamped"); void card.offsetWidth; card.classList.add("is-stamped"); }
+    }
+    if (s.reward_ready && !readyNow) { card.classList.add("is-ready"); confetti(); }
+    if (!s.reward_ready) card.classList.remove("is-ready");
+    shownNow = s.shown; readyNow = s.reward_ready;
     document.getElementById("lc-left").textContent = s.reward_ready ? "Ödülün hazır! Kasada söyle." :
-      ({{ program.reward|tojson }} + " için " + s.left + " damga kaldı.");
+      (reward + " için " + s.left + " damga kaldı.");
     if (s.pending) return;
     statusBox.classList.remove("is-pending");
     if (s.last_id !== lastId && s.last_status === "approved") {
@@ -105,13 +186,19 @@
     } else if (s.last_id !== lastId && s.last_status === "rejected") {
       statusBox.innerHTML = '<div><b>İstek onaylanmadı</b><span>Bir sorun varsa kasaya sorabilirsin.</span></div>';
     }
-    window.clearInterval(timer);
+    lastId = s.last_id;
   }
-  if (wasPending) {
-    timer = window.setInterval(function () {
-      fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(render).catch(function () {});
-    }, 2500);
+  // Sayfa açıkken kart canlı: kasada onay ya da kart okutma birkaç saniyede yansır.
+  var pending = statusBox.classList.contains("is-pending"), polls = 0;
+  function poll() {
+    if (document.hidden) return;
+    polls++;
+    if (!pending && polls % 2) return;   // bekleyen istek yoksa daha seyrek sor
+    fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); })
+      .then(function (s) { pending = s.pending; render(s); }).catch(function () {});
   }
+  window.setInterval(poll, 2500);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { polls = 1; poll(); } });
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>

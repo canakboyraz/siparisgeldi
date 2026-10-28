@@ -178,6 +178,15 @@ def icon_png(px: int) -> bytes:
 
 
 @lru_cache(maxsize=8)
+def app_icon_png(px: int) -> bytes:
+    """Ana ekran simgesi: kenara kadar dolu kare (iOS/Android kendi köşe maskesini uygular)."""
+    def draw(d, w, h):
+        d.rectangle((0, 0, w, h), fill=BG + (255,))
+        _stamp(d, w / 2, h / 2, w * 0.28, True)
+    return _png(_render((px, px), draw, scale=2 if px > 256 else 4))
+
+
+@lru_cache(maxsize=8)
 def logo_png(px: int) -> bytes:
     def draw(d, w, h):
         _stamp(d, w / 2, h / 2, w * 0.46, True)
