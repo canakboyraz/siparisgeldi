@@ -1067,6 +1067,11 @@ def start_scheduler(app):
     scheduler.add_job(monitoring.send_weekly_profit_cards, "cron", day_of_week="mon", hour=9, minute=30,
                       args=[app], id="weekly_profit_card", replace_existing=True)
 
+    # Damga kartı: Cüzdan'da kartı olup bir süredir gelmeyene hatırlatma (her gün 12:40)
+    import loyalty_notify
+    scheduler.add_job(loyalty_notify.send_reminders, "cron", hour=12, minute=40,
+                      args=[app], id="loyalty_reminders", replace_existing=True)
+
     scheduler.start()
     try:
         monitoring.heartbeat(app)

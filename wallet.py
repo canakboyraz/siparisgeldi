@@ -119,8 +119,8 @@ def updated_at(customer) -> datetime:
     from models import LoyaltyRequest
     last = (db.session.query(db.func.max(LoyaltyRequest.decided_at))
             .filter(LoyaltyRequest.customer_id == customer.id).scalar())
-    created = customer.created_at or datetime(2026, 1, 1)
-    return max(created, last) if last else created
+    times = [t for t in (customer.created_at, last, getattr(customer, "wallet_message_at", None)) if t]
+    return max(times) if times else datetime(2026, 1, 1)
 
 
 # ── Görseller (Pillow) ──────────────────────────────────────────────────────
@@ -228,6 +228,9 @@ def pass_json(program, customer, card_url: str, web_service_url: str) -> dict:
                 {"key": "how", "label": "Nasıl çalışır?",
                  "value": (f"Her ziyaretinde kasadaki kodu okut ya da bu kartın QR kodunu kasaya göster. "
                            f"{required} damgada {program.reward}.")},
+                {"key": "msg", "label": "Mesaj",
+                 "value": customer.wallet_message or f"{program.name} damga kartına hoş geldin!",
+                 "changeMessage": "%@"},
                 {"key": "link", "label": "Kartım", "value": card_url,
                  "attributedValue": f"<a href='{card_url}'>Kartımı aç</a>"},
                 {"key": "by", "label": "", "value": "SiparişGeldi ile çalışır"},
@@ -290,11 +293,11 @@ def _client_cert_files():
     return paths
 
 
-def _push(app, customer_id: int):
+def _push(app, customer_ids):
     from extensions import db
     from models import WalletRegistration
     with app.app_context():
-        regs = WalletRegistration.query.filter_by(customer_id=customer_id).all()
+        regs = WalletRegistration.query.filter(WalletRegistration.customer_id.in_(list(customer_ids))).all()
         if not regs:
             return
         try:
@@ -314,7 +317,7 @@ def _push(app, customer_id: int):
             db.session.commit()
         except Exception:  # noqa: BLE001 — bildirim hatası damga işlemini bozmasın
             db.session.rollback()
-            log.exception("[WALLET] APNs bildirimi gönderilemedi customer=%s", customer_id)
+            log.exception("[WALLET] APNs bildirimi gönderilemedi customers=%s", list(customer_ids)[:20])
 
 
 def notify(customer) -> None:
@@ -325,7 +328,17 @@ def notify(customer) -> None:
         from models import WalletRegistration
         if not WalletRegistration.query.filter_by(customer_id=customer.id).first():
             return
-        app = current_app._get_current_object()
-        threading.Thread(target=_push, args=(app, customer.id), daemon=True).start()
+        push_customers(current_app._get_current_object(), [customer.id])
     except Exception:  # noqa: BLE001
         log.exception("[WALLET] bildirim başlatılamadı")
+
+
+def push_customers(app, customer_ids) -> None:
+    """Birden çok kart için güncelleme sinyali (arka planda, tek APNs bağlantısıyla)."""
+    ids = list(dict.fromkeys(customer_ids))
+    if not ids or app.config.get("TESTING"):
+        return
+    with app.app_context():
+        if not is_configured():
+            return
+    threading.Thread(target=_push, args=(app, ids), daemon=True).start()

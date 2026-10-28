@@ -264,9 +264,54 @@ def setup():
                        .filter(LoyaltyCustomer.program_id == program.id).scalar(),
             "ready": base.filter(LoyaltyCustomer.stamps >= program.stamps_required).count(),
         }
+    import wallet
+    import loyalty_notify
+    wallet_info = {}
+    if program:
+        holders = loyalty_notify.wallet_customers(program)
+        wallet_info = {
+            "ready": wallet.is_configured(),
+            "holders": holders.count(),
+            "due": len(loyalty_notify.due_reminders(program)),
+            "last": holders.filter(LoyaltyCustomer.wallet_message_at.isnot(None))
+                    .order_by(LoyaltyCustomer.wallet_message_at.desc()).first(),
+        }
     return render_template("loyalty/setup.html", program=program, customers=customers, pending=pending,
-                           stats=stats, q=q, mask_phone=loyalty.mask_phone,
+                           stats=stats, q=q, mask_phone=loyalty.mask_phone, wallet_info=wallet_info,
                            join_url=url_for("loyalty_public.join", token=program.token, _external=True) if program else "")
+
+
+@loyalty_bp.post("/bildirim")
+@login_required
+def notify_settings():
+    program = loyalty.get_program(current_user) or abort(404)
+    program.notify_enabled = request.form.get("notify_enabled") == "1"
+    program.notify_inactive_days = _int("notify_inactive_days", 7, 1, 90)
+    program.notify_min_hours = 24 if request.form.get("notify_min_hours") not in ("72", "168") else int(request.form["notify_min_hours"])
+    program.notify_max_reminders = _int("notify_max_reminders", 3, 1, 30)
+    db.session.commit()
+    flash("Bildirim ayarları kaydedildi.", "success")
+    return redirect(url_for("loyalty.setup") + "#bildirimler")
+
+
+@loyalty_bp.post("/duyuru")
+@login_required
+def announce():
+    import loyalty_notify
+    program = loyalty.get_program(current_user) or abort(404)
+    text = " ".join((request.form.get("message") or "").split())[:140]
+    if len(text) < 5:
+        flash("Duyuru metni en az 5 karakter olmalı.", "error")
+        return redirect(url_for("loyalty.setup") + "#bildirimler")
+    sent, skipped = loyalty_notify.broadcast(program, text)
+    if sent:
+        msg = f"Duyuru {sent} kişinin Cüzdan kartına gönderildi."
+        if skipped:
+            msg += f" {skipped} kişi son bildirimini yakın zamanda aldığı için atlandı."
+        flash(msg, "success")
+    else:
+        flash("Duyuru gönderilmedi: Cüzdan'da kartı olan ya da sıklık sınırına uyan müşteri yok.", "error")
+    return redirect(url_for("loyalty.setup") + "#bildirimler")
 
 
 def _request_json(req, program):

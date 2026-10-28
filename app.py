@@ -70,6 +70,13 @@ def _ensure_schema():
             ON integrations (migros_store_id)
             WHERE platform = 'migros' AND migros_store_id IS NOT NULL
             """,
+            "ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS notify_enabled BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS notify_inactive_days INTEGER DEFAULT 7",
+            "ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS notify_min_hours INTEGER DEFAULT 24",
+            "ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS notify_max_reminders INTEGER DEFAULT 3",
+            "ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS wallet_message VARCHAR(200)",
+            "ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS wallet_message_at TIMESTAMP",
+            "ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS reminders_since_visit INTEGER DEFAULT 0",
         ]
     elif backend.startswith("sqlite"):
         with db.engine.begin() as conn:
@@ -168,6 +175,15 @@ def _ensure_schema():
             order_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(orders)")).fetchall()} if conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='orders'")).fetchone() else set()
             if order_cols and "active_hidden_at" not in order_cols:
                 stmts.append("ALTER TABLE orders ADD COLUMN active_hidden_at DATETIME")
+            for table, cols in (("loyalty_programs", (("notify_enabled", "BOOLEAN DEFAULT 1"),
+                                                      ("notify_inactive_days", "INTEGER DEFAULT 7"),
+                                                      ("notify_min_hours", "INTEGER DEFAULT 24"),
+                                                      ("notify_max_reminders", "INTEGER DEFAULT 3"))),
+                                ("loyalty_customers", (("wallet_message", "VARCHAR(200)"),
+                                                       ("wallet_message_at", "DATETIME"),
+                                                       ("reminders_since_visit", "INTEGER DEFAULT 0")))):
+                have = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+                stmts += [f"ALTER TABLE {table} ADD COLUMN {c} {t}" for c, t in cols if have and c not in have]
             for s in stmts:
                 try:
                     conn.execute(text(s))

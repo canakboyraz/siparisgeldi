@@ -76,6 +76,7 @@ def approve(req):
     customer.stamps += req.stamps
     customer.lifetime_stamps += req.stamps
     customer.last_visit_at = datetime.utcnow()
+    customer.reminders_since_visit = 0
     req.status, req.decided_at = "approved", datetime.utcnow()
     db.session.commit()
     _changed(customer)

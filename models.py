@@ -441,6 +441,11 @@ class LoyaltyProgram(db.Model):
     stamps_per_visit = db.Column(db.Integer, nullable=False, default=1)
     cooldown_minutes = db.Column(db.Integer, nullable=False, default=30)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    # Apple Cüzdan bildirimleri
+    notify_enabled = db.Column(db.Boolean, default=True)            # gelmeyene hatırlatma
+    notify_inactive_days = db.Column(db.Integer, default=7)         # kaç gün gelmeyene
+    notify_min_hours = db.Column(db.Integer, default=24)            # kişi başı iki bildirim arası en az
+    notify_max_reminders = db.Column(db.Integer, default=3)         # ziyaret gelene kadar en fazla hatırlatma
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", backref=db.backref("loyalty_program", uselist=False, cascade="all, delete-orphan"))
@@ -458,6 +463,9 @@ class LoyaltyCustomer(db.Model):
     rewards_redeemed = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_visit_at = db.Column(db.DateTime)
+    wallet_message = db.Column(db.String(200))                      # Cüzdan kartındaki son mesaj
+    wallet_message_at = db.Column(db.DateTime)                      # son bildirim zamanı
+    reminders_since_visit = db.Column(db.Integer, default=0)
 
     program = db.relationship("LoyaltyProgram", backref=db.backref("customers", lazy="dynamic", cascade="all, delete-orphan"))
     __table_args__ = (db.UniqueConstraint("program_id", "phone", name="uq_loyalty_program_phone"),)

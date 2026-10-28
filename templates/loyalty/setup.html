@@ -79,6 +79,39 @@
   </form>
 </div>
 
+<div class="card lc-notify" id="bildirimler" style="margin-top:1rem">
+  <div class="section-head"><div class="card-title">{{ icon('bell') }} Cüzdan bildirimleri</div>
+    <span class="badge {{ 'green' if wallet_info.holders else '' }}">{{ wallet_info.holders }} kişi Apple Cüzdan'da</span></div>
+  {% if not wallet_info.ready %}
+    <p class="muted">Apple Cüzdan bağlantısı kurulmadığı için bildirim gönderilemiyor.</p>
+  {% else %}
+  <p class="muted page-sub">Bildirim, kartını iPhone'da Apple Cüzdan'a ekleyen müşterilerin kilit ekranına düşer. Damga eklendi ve ödül hazır bildirimleri kasadaki işlemle anında gider; aşağıdakiler hatırlatma ve duyurular içindir.</p>
+  <div class="lc-notify-grid">
+    <form method="post" action="{{ url_for('loyalty.notify_settings') }}" class="lc-notify-box">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <b>Otomatik hatırlatma</b>
+      <label class="lc-switch"><input type="checkbox" name="notify_enabled" value="1" {{ 'checked' if program.notify_enabled }}> Gelmeyen müşteriye hatırlat (her gün 12:40)</label>
+      <div class="lc-fields">
+        <div class="field"><label>Kaç gün gelmeyene?</label><input type="number" name="notify_inactive_days" min="1" max="90" value="{{ program.notify_inactive_days or 7 }}"></div>
+        <div class="field"><label>Kişi başı en sık</label><select name="notify_min_hours">
+          {% for h, label in ((24, 'Günde 1'), (72, '3 günde 1'), (168, 'Haftada 1')) %}<option value="{{ h }}" {{ 'selected' if (program.notify_min_hours or 24) == h }}>{{ label }}</option>{% endfor %}</select></div>
+        <div class="field"><label>Gelene kadar en fazla</label><input type="number" name="notify_max_reminders" min="1" max="30" value="{{ program.notify_max_reminders or 3 }}"><p class="hint">Bu kadar hatırlatmaya rağmen gelmezse durur; geldiğinde sıfırlanır.</p></div>
+      </div>
+      <p class="hint">Örnek: “{{ (customers[0].name.split(' ')[0] if customers else 'Ayşe') }}, {{ program.reward }} için 2 damga kaldı. Seni bekliyoruz ☕” · Bugün sırada: {{ wallet_info.due }} kişi</p>
+      <button class="btn btn-primary" type="submit">Kaydet</button>
+    </form>
+    <form method="post" action="{{ url_for('loyalty.announce') }}" class="lc-notify-box" onsubmit="return window.confirm('Duyuru Cüzdan kartı olan müşterilere gönderilsin mi?');">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <b>Duyuru gönder</b>
+      <textarea name="message" maxlength="140" rows="3" required placeholder="Bugün 15:00–17:30 öğrenci menüsü 150 TL ☕"></textarea>
+      <p class="hint">En fazla 140 karakter. Kişi başı sıklık sınırına uyar: son bildirimini yakın zamanda alanlar atlanır.</p>
+      {% if wallet_info.last %}<p class="hint">Son giden: “{{ wallet_info.last.wallet_message }}” · {{ (wallet_info.last.wallet_message_at|yerel).strftime('%d.%m %H:%M') }}</p>{% endif %}
+      <button class="btn btn-primary" type="submit" {{ 'disabled' if not wallet_info.holders }}>Gönder</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
 <div class="card" style="margin-top:1rem">
   <div class="section-head"><div class="card-title">Müşteriler</div>
     <form method="get" class="inline lc-search"><input type="search" name="q" value="{{ q }}" placeholder="Ad ya da telefon ara"><button class="btn btn-ghost btn-sm" type="submit">{{ icon('search', 16) }}</button></form></div>

@@ -201,3 +201,59 @@ class WalletTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NotifyTest(WalletTest):
+    def test_reminders_and_broadcast(self):
+        import loyalty_notify
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        db.session.add(WalletRegistration(device_id="d1", push_token="t1", serial=self.serial, customer_id=self.customer.id))
+        self.customer.last_visit_at = now - timedelta(days=8)
+        db.session.commit()
+        due = loyalty_notify.due_reminders(self.program, now)
+        self.assertEqual([c.id for c in due], [self.customer.id])
+        self.assertEqual(loyalty_notify.send_reminders(self.app), 1)
+        db.session.expire_all()
+        self.assertIn("2 damga kaldı", self.customer.wallet_message)
+        self.assertEqual(self.customer.reminders_since_visit, 1)
+        # Aynı gün ikinci hatırlatma yok; 24 saat sonra var, en fazla 3 kez.
+        self.assertEqual(loyalty_notify.due_reminders(self.program, datetime.utcnow()), [])
+        later = now + timedelta(hours=25)
+        self.assertEqual(len(loyalty_notify.due_reminders(self.program, later)), 1)
+        self.customer.reminders_since_visit = 3
+        db.session.commit()
+        self.assertEqual(loyalty_notify.due_reminders(self.program, later + timedelta(days=5)), [])
+        # Kart mesajı pass.json'da ve değişince kart "güncellendi" listesine girer.
+        r = self.app.test_client().get(self.link + "/cuzdan.pkpass")
+        data = json.loads(zipfile.ZipFile(io.BytesIO(r.data)).read("pass.json"))
+        msg = [f for f in data["storeCard"]["backFields"] if f["key"] == "msg"][0]
+        self.assertEqual((msg["value"], msg["changeMessage"]), (self.customer.wallet_message, "%@"))
+        # Duyuru: sıklık sınırı içinde olan atlanır, sonra gider.
+        token = self._csrf(self.staff, "/panel/sadakat")
+        r = self.staff.post("/panel/sadakat/duyuru", data={"_csrf_token": token, "message": "Bugün öğrenci menüsü 150 TL"})
+        self.assertEqual(r.status_code, 302)
+        db.session.expire_all()
+        self.assertNotEqual(self.customer.wallet_message, "Bugün öğrenci menüsü 150 TL")
+        self.customer.wallet_message_at = now - timedelta(days=2)
+        db.session.commit()
+        self.assertEqual(loyalty_notify.broadcast(self.program, "Bugün öğrenci menüsü 150 TL"), (1, 0))
+        db.session.expire_all()
+        self.assertEqual(self.customer.wallet_message, "Bugün öğrenci menüsü 150 TL")
+        # Aynı metin tekrar gönderilirse bildirim çıksın diye küçük fark eklenir.
+        loyalty_notify.set_message(self.customer, "Bugün öğrenci menüsü 150 TL")
+        self.assertNotEqual(self.customer.wallet_message, "Bugün öğrenci menüsü 150 TL")
+        # Ziyaret onaylanınca hatırlatma sayacı sıfırlanır.
+        self._scan(code=self.link, force=True)
+        db.session.expire_all()
+        self.assertEqual(self.customer.reminders_since_visit, 0)
+        # Panel ayarları
+        page = self.staff.get("/panel/sadakat").get_data(as_text=True)
+        self.assertIn("Cüzdan bildirimleri", page)
+        self.assertIn("1 kişi Apple Cüzdan'da", page)
+        r = self.staff.post("/panel/sadakat/bildirim", data={"_csrf_token": token, "notify_enabled": "1",
+                                                            "notify_inactive_days": "5", "notify_min_hours": "72",
+                                                            "notify_max_reminders": "2"})
+        db.session.expire_all()
+        self.assertEqual((self.program.notify_inactive_days, self.program.notify_min_hours,
+                          self.program.notify_max_reminders), (5, 72, 2))
