@@ -56,8 +56,6 @@ def join(token):
     customer = _cookie_customer(program)
     if request.method == "GET":
         if customer:
-            loyalty.expire_old(program.id)
-            db.session.commit()
             loyalty.request_stamp(program, customer, "visit")
             return redirect(url_for("loyalty_public.card", token=token))
         return render_template("loyalty/join.html", program=program, form={})
@@ -147,8 +145,6 @@ def setup():
     customers, pending, stats = [], [], {}
     q = (request.args.get("q") or "").strip()
     if program:
-        loyalty.expire_old(program.id)
-        db.session.commit()
         query = LoyaltyCustomer.query.filter_by(program_id=program.id)
         if q:
             digits = "".join(ch for ch in q if ch.isdigit())
@@ -190,13 +186,16 @@ def pending_json():
     program = loyalty.get_program(current_user)
     if not program:
         return jsonify({"items": []})
-    loyalty.expire_old(program.id)
-    db.session.commit()
     items = (LoyaltyRequest.query.filter_by(program_id=program.id, status="pending")
              .order_by(LoyaltyRequest.id.asc()).limit(10).all())
     response = jsonify({"items": [_request_json(r, program) for r in items]})
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+def _next_url():
+    target = request.form.get("next") or ""
+    return target if target.startswith("/") and not target.startswith("//") else url_for("loyalty.setup")
 
 
 def _wants_json():
@@ -216,7 +215,7 @@ def decide(req_id, action):
         flash(f"{req.customer.name}: +{req.stamps} damga eklendi." if action == "onay" else "İstek reddedildi.", "success")
     else:
         flash("Bu istek zaten sonuçlanmış.", "warning")
-    return redirect(request.form.get("next") or url_for("loyalty.setup"))
+    return redirect(_next_url())
 
 
 @loyalty_bp.post("/musteri/<int:customer_id>/odul")
@@ -228,7 +227,7 @@ def give_reward(customer_id):
     if _wants_json():
         return jsonify({"ok": ok, "current": customer.stamps})
     flash(f"{customer.name}: {program.reward} verildi." if ok else "Ödül için yeterli damga yok.", "success" if ok else "warning")
-    return redirect(request.form.get("next") or url_for("loyalty.setup"))
+    return redirect(_next_url())
 
 
 @loyalty_bp.post("/musteri/<int:customer_id>/sil")
@@ -240,6 +239,66 @@ def delete_customer(customer_id):
     db.session.commit()
     flash("Müşteri ve damga geçmişi silindi.", "success")
     return redirect(url_for("loyalty.setup"))
+
+
+HISTORY_FILTERS = {
+    "": ("Tümü", None),
+    "bekleyen": ("Bekleyen", ("pending", None)),
+    "onay": ("Onaylanan", ("approved", ("welcome", "visit"))),
+    "red": ("Reddedilen", ("rejected", None)),
+    "odul": ("Ödül", ("approved", ("reward",))),
+}
+
+
+@loyalty_bp.route("/hareketler")
+@login_required
+def history():
+    """Tüm damga istekleri ve ödüller: bekleyen, onaylanan, reddedilen; tarih ve müşteri filtresi."""
+    import pytz
+    from datetime import date as _date, timedelta
+    program = loyalty.get_program(current_user) or abort(404)
+    tz = pytz.timezone("Europe/Istanbul")
+    status_key = request.args.get("durum", "")
+    status_key = status_key if status_key in HISTORY_FILTERS else ""
+    q = (request.args.get("q") or "").strip()
+    try:
+        day_from = _date.fromisoformat(request.args.get("baslangic", ""))
+    except ValueError:
+        day_from = None
+    try:
+        day_to = _date.fromisoformat(request.args.get("bitis", ""))
+    except ValueError:
+        day_to = None
+
+    def to_utc(day):
+        return tz.localize(datetime.combine(day, datetime.min.time())).astimezone(pytz.utc).replace(tzinfo=None)
+
+    base = (LoyaltyRequest.query.join(LoyaltyCustomer, LoyaltyRequest.customer_id == LoyaltyCustomer.id)
+            .filter(LoyaltyRequest.program_id == program.id))
+    if day_from:
+        base = base.filter(LoyaltyRequest.created_at >= to_utc(day_from))
+    if day_to:
+        base = base.filter(LoyaltyRequest.created_at < to_utc(day_to + timedelta(days=1)))
+    if q:
+        digits = "".join(ch for ch in q if ch.isdigit())
+        base = base.filter(db.or_(LoyaltyCustomer.name.ilike(f"%{q}%"),
+                                  LoyaltyCustomer.phone.like(f"%{digits}%") if digits else db.false()))
+
+    def apply(query, key):
+        rule = HISTORY_FILTERS[key][1]
+        if not rule:
+            return query
+        status, kinds = rule
+        query = query.filter(LoyaltyRequest.status == status)
+        return query.filter(LoyaltyRequest.kind.in_(kinds)) if kinds else query
+
+    counts = {key: apply(base, key).count() for key in HISTORY_FILTERS}
+    page = request.args.get("page", 1, type=int)
+    rows = apply(base, status_key).order_by(LoyaltyRequest.id.desc()).paginate(page=page, per_page=30, error_out=False)
+    return render_template("loyalty/history.html", program=program, rows=rows, counts=counts,
+                           filters=HISTORY_FILTERS, status_key=status_key, q=q,
+                           day_from=day_from.isoformat() if day_from else "",
+                           day_to=day_to.isoformat() if day_to else "", mask_phone=loyalty.mask_phone)
 
 
 @loyalty_bp.route("/afis")

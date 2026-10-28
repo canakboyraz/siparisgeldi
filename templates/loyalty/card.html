@@ -45,8 +45,6 @@
       if (navigator.vibrate) { try { navigator.vibrate([60, 40, 60]); } catch (e) {} }
     } else if (s.last_id !== lastId && s.last_status === "rejected") {
       statusBox.innerHTML = '<div><b>İstek onaylanmadı</b><span>Bir sorun varsa kasaya sorabilirsin.</span></div>';
-    } else if (wasPending) {
-      statusBox.innerHTML = '<div><b>Onay süresi doldu</b><span>Kodu yeniden okutabilirsin.</span></div>';
     }
     window.clearInterval(timer);
   }

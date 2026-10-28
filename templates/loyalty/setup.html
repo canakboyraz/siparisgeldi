@@ -4,6 +4,7 @@
 {% block panel %}
 <div class="page-head">
   <div><h1>Damga kartı</h1><p class="muted page-sub">Müşterin kasadaki QR'ı ya da NFC etiketi okutur, onay burada çıkar, damga kartına işlenir.</p></div>
+  {% if program %}<a class="btn btn-ghost" href="{{ url_for('loyalty.history') }}">{{ icon('list', 16) }} Hareketler{% if pending %} <span class="badge amber">{{ pending|length }} bekliyor</span>{% endif %}</a>{% endif %}
 </div>
 
 {% if not program %}

@@ -161,6 +161,29 @@ class LoyaltyTest(unittest.TestCase):
         self.assertEqual(self._decide(req.id, "onay", intruder).status_code, 404)
         self.assertEqual(LoyaltyRequest.query.one().status, "pending")
 
+    def test_pending_never_expires_and_history_screen(self):
+        program = self._start_program()
+        self._join(program)
+        req = LoyaltyRequest.query.one()
+        req.created_at = datetime.utcnow() - timedelta(hours=5)
+        db.session.commit()
+        self.phone.get(f"/k/{program.token}")
+        self.assertEqual(self.staff.get("/panel/sadakat/bekleyen").get_json()["items"][0]["id"], req.id)
+        self.assertEqual(LoyaltyRequest.query.one().status, "pending")
+        page = self.staff.get("/panel/sadakat/hareketler?durum=bekleyen").get_data(as_text=True)
+        self.assertIn("Bekliyor", page)
+        self.assertIn("Ayşe", page)
+        token = self._csrf(self.staff, "/panel/sadakat/hareketler")
+        r = self.staff.post(f"/panel/sadakat/istek/{req.id}/red",
+                            data={"_csrf_token": token, "next": "/panel/sadakat/hareketler?durum=red"})
+        self.assertTrue(r.headers["Location"].endswith("/panel/sadakat/hareketler?durum=red"))
+        page = self.staff.get("/panel/sadakat/hareketler?durum=red").get_data(as_text=True)
+        self.assertIn("Reddedildi", page)
+        self.assertIn("Reddedilen <b>1</b>", page)
+        r = self.staff.post(f"/panel/sadakat/istek/{req.id}/onay",
+                            data={"_csrf_token": token, "next": "//kotu.site"})
+        self.assertTrue(r.headers["Location"].endswith("/panel/sadakat"))
+
     def test_panel_pages_and_closed_program(self):
         self.assertIn("Damga kartını başlat", self.staff.get("/panel/sadakat").get_data(as_text=True))
         program = self._start_program()

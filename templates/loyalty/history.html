@@ -1,0 +1,68 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Damga hareketleri · SiparişGeldi{% endblock %}
+{% block panel %}
+{% set kind_labels = {'welcome': 'İlk kayıt', 'visit': 'Ziyaret', 'reward': 'Ödül'} %}
+<div class="page-head">
+  <div><h1>Damga hareketleri</h1><p class="muted page-sub">Okutulan her kart; bekleyen, onaylanan, reddedilen istekler ve verilen ödüller.</p></div>
+  <a class="btn btn-ghost" href="{{ url_for('loyalty.setup') }}">{{ icon('coffee', 16) }} Damga kartı</a>
+</div>
+
+<div class="lc-chips" role="tablist" aria-label="Duruma göre">
+  {% for key, (label, _) in filters.items() %}
+  <a class="lc-chip {{ 'is-active' if key == status_key }} {{ 'is-alert' if key == 'bekleyen' and counts[key] }}" role="tab" aria-selected="{{ 'true' if key == status_key else 'false' }}"
+     href="{{ url_for('loyalty.history', durum=key or None, q=q or None, baslangic=day_from or None, bitis=day_to or None) }}">{{ label }} <b>{{ counts[key] }}</b></a>
+  {% endfor %}
+</div>
+
+<form method="get" class="card lc-history-filter">
+  {% if status_key %}<input type="hidden" name="durum" value="{{ status_key }}">{% endif %}
+  <div class="field"><label for="h-q">Müşteri</label><input id="h-q" type="search" name="q" value="{{ q }}" placeholder="Ad ya da telefon"></div>
+  <div class="field"><label for="h-from">Başlangıç</label><input id="h-from" type="date" name="baslangic" value="{{ day_from }}"></div>
+  <div class="field"><label for="h-to">Bitiş</label><input id="h-to" type="date" name="bitis" value="{{ day_to }}"></div>
+  <div class="lc-history-actions"><button class="btn btn-primary" type="submit">Filtrele</button>
+    <a class="btn btn-ghost" href="{{ url_for('loyalty.history') }}">Temizle</a></div>
+</form>
+
+<div class="card" style="margin-top:1rem">
+  {% if rows.items %}
+  <div class="table-wrap"><table class="lc-table lc-history">
+    <thead><tr><th>Zaman</th><th>Müşteri</th><th>İşlem</th><th>Damga</th><th>Durum</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows.items %}
+      <tr class="{{ 'is-pending' if r.status == 'pending' }}">
+        <td class="muted">{{ (r.created_at|yerel).strftime('%d.%m.%Y %H:%M') if r.created_at else '—' }}</td>
+        <td><b>{{ r.customer.name }}</b><br><span class="hint">{{ mask_phone(r.customer.phone) }}</span></td>
+        <td>{{ kind_labels.get(r.kind, r.kind) }}{% if r.kind != 'reward' %}<br><span class="hint">Kod {{ r.code }}</span>{% endif %}</td>
+        <td class="num">{{ '+' if r.stamps > 0 }}{{ r.stamps }}</td>
+        <td>
+          {% if r.status == 'pending' %}<span class="badge amber">Bekliyor</span>
+          {% elif r.kind == 'reward' %}<span class="badge violet">Ödül verildi</span>
+          {% elif r.status == 'approved' %}<span class="badge green">Onaylandı</span>
+          {% elif r.status == 'rejected' %}<span class="badge red">Reddedildi</span>
+          {% else %}<span class="badge gray">Süresi doldu</span>{% endif %}
+          {% if r.decided_at and r.status != 'pending' and r.kind != 'reward' %}<br><span class="hint">{{ (r.decided_at|yerel).strftime('%d.%m %H:%M') }}</span>{% endif %}
+        </td>
+        <td>
+          {% if r.status == 'pending' %}
+          <div class="lc-actions">
+            <form method="post" action="{{ url_for('loyalty.decide', req_id=r.id, action='onay') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}"><button class="btn btn-primary btn-sm" type="submit">Onayla</button></form>
+            <form method="post" action="{{ url_for('loyalty.decide', req_id=r.id, action='red') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}"><button class="btn btn-ghost btn-sm" type="submit">Reddet</button></form>
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% if rows.pages > 1 %}
+  <div class="lc-pager">
+    {% if rows.has_prev %}<a class="btn btn-ghost btn-sm" href="{{ url_for('loyalty.history', durum=status_key or None, q=q or None, baslangic=day_from or None, bitis=day_to or None, page=rows.prev_num) }}">Önceki</a>{% endif %}
+    <span class="muted">{{ rows.page }} / {{ rows.pages }}</span>
+    {% if rows.has_next %}<a class="btn btn-ghost btn-sm" href="{{ url_for('loyalty.history', durum=status_key or None, q=q or None, baslangic=day_from or None, bitis=day_to or None, page=rows.next_num) }}">Sonraki</a>{% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="muted">Bu filtreye uyan hareket yok.</p>
+  {% endif %}
+</div>
+{% endblock %}

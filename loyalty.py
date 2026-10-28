@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from extensions import db
 from models import LoyaltyCustomer, LoyaltyProgram, LoyaltyRequest
 
-PENDING_TTL = timedelta(minutes=15)   # onaylanmayan istek bu sürede düşer
 COOKIE_PREFIX = "sg_kart_"
 COOKIE_MAX_AGE = 2 * 365 * 24 * 3600
 
@@ -41,17 +40,9 @@ def get_program(user):
     return LoyaltyProgram.query.filter_by(user_id=user.id).first()
 
 
-def expire_old(program_id):
-    cutoff = datetime.utcnow() - PENDING_TTL
-    LoyaltyRequest.query.filter(LoyaltyRequest.program_id == program_id, LoyaltyRequest.status == "pending",
-                                LoyaltyRequest.created_at < cutoff).update(
-        {"status": "expired", "decided_at": datetime.utcnow()}, synchronize_session=False)
-
-
 def pending_for(customer):
-    cutoff = datetime.utcnow() - PENDING_TTL
-    return (LoyaltyRequest.query.filter(LoyaltyRequest.customer_id == customer.id, LoyaltyRequest.status == "pending",
-                                        LoyaltyRequest.created_at >= cutoff)
+    """Onay bekleyen istek; süre aşımı yok, kasada onaylanana ya da reddedilene kadar bekler."""
+    return (LoyaltyRequest.query.filter(LoyaltyRequest.customer_id == customer.id, LoyaltyRequest.status == "pending")
             .order_by(LoyaltyRequest.id.desc()).first())
 
 
