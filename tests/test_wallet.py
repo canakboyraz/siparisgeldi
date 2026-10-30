@@ -257,3 +257,18 @@ class NotifyTest(WalletTest):
         db.session.expire_all()
         self.assertEqual((self.program.notify_inactive_days, self.program.notify_min_hours,
                           self.program.notify_max_reminders), (5, 72, 2))
+
+
+class WalletBadgeTest(WalletTest):
+    def test_wallet_badge_and_filter(self):
+        other = LoyaltyCustomer(program_id=self.program.id, name="Mehmet", phone="5329998877", stamps=1)
+        db.session.add(other)
+        db.session.add(WalletRegistration(device_id="d1", push_token="t1", serial=self.serial, customer_id=self.customer.id))
+        db.session.commit()
+        page = self.staff.get("/panel/sadakat").get_data(as_text=True)
+        self.assertIn("Mehmet", page)
+        self.assertEqual(page.count('class="lc-wallet-tag"'), 1)
+        self.assertIn("Apple Cüzdan'da <b>1</b>", page)
+        only = self.staff.get("/panel/sadakat?cuzdan=1").get_data(as_text=True)
+        self.assertIn("Ayşe", only)
+        self.assertNotIn("Mehmet", only)

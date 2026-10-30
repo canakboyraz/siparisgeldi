@@ -81,7 +81,7 @@
 
 <div class="card lc-notify" id="bildirimler" style="margin-top:1rem">
   <div class="section-head"><div class="card-title">{{ icon('bell') }} Cüzdan bildirimleri</div>
-    <span class="badge {{ 'green' if wallet_info.holders else '' }}">{{ wallet_info.holders }} kişi Apple Cüzdan'da</span></div>
+    <a class="badge {{ 'green' if wallet_info.holders else '' }}" href="{{ url_for('loyalty.setup', cuzdan=1) }}#musteriler" title="Cüzdan'a ekleyenleri listele">{{ wallet_info.holders }} kişi Apple Cüzdan'da →</a></div>
   {% if not wallet_info.ready %}
     <p class="muted">Apple Cüzdan bağlantısı kurulmadığı için bildirim gönderilemiyor.</p>
   {% else %}
@@ -112,16 +112,20 @@
   {% endif %}
 </div>
 
-<div class="card" style="margin-top:1rem">
+<div class="card" id="musteriler" style="margin-top:1rem">
   <div class="section-head"><div class="card-title">Müşteriler</div>
-    <form method="get" class="inline lc-search"><input type="search" name="q" value="{{ q }}" placeholder="Ad ya da telefon ara"><button class="btn btn-ghost btn-sm" type="submit">{{ icon('search', 16) }}</button></form></div>
+    <div class="lc-cust-tools">
+      <a class="lc-chip {{ 'is-active' if not only_wallet }}" href="{{ url_for('loyalty.setup', q=q or None) }}#musteriler">Tümü</a>
+      <a class="lc-chip {{ 'is-active' if only_wallet }}" href="{{ url_for('loyalty.setup', cuzdan=1, q=q or None) }}#musteriler"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M15 15h3" stroke-linecap="round"/></svg> Apple Cüzdan'da <b>{{ wallet_ids|length }}</b></a>
+      <form method="get" class="inline lc-search">{% if only_wallet %}<input type="hidden" name="cuzdan" value="1">{% endif %}<input type="search" name="q" value="{{ q }}" placeholder="Ad ya da telefon ara"><button class="btn btn-ghost btn-sm" type="submit">{{ icon('search', 16) }}</button></form>
+    </div></div>
   {% if customers %}
   <div class="table-wrap"><table class="lc-table">
     <thead><tr><th>Müşteri</th><th>Damga</th><th>Ödül</th><th>Son ziyaret</th><th></th></tr></thead>
     <tbody>
     {% for c in customers %}
       <tr>
-        <td><b>{{ c.name }}</b><br><span class="hint">{{ mask_phone(c.phone) }}</span></td>
+        <td><b>{{ c.name }}</b>{% if c.id in wallet_ids %} <span class="lc-wallet-tag" title="Kartını Apple Cüzdan'a ekledi; bildirim alabilir"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M15 15h3" stroke-linecap="round"/></svg> Cüzdan</span>{% endif %}<br><span class="hint">{{ mask_phone(c.phone) }}</span></td>
         <td><span class="lc-mini">{% for i in range(program.stamps_required) %}<i class="{{ 'on' if i < c.stamps }}"></i>{% endfor %}</span> {{ c.stamps }}/{{ program.stamps_required }}</td>
         <td>{{ c.rewards_redeemed }}</td>
         <td class="muted">{{ (c.last_visit_at|yerel).strftime('%d.%m %H:%M') if c.last_visit_at else '—' }}</td>
@@ -135,7 +139,7 @@
     {% endfor %}
     </tbody></table></div>
   {% else %}
-  <p class="muted">{{ 'Aramana uyan müşteri yok.' if q else 'Henüz kayıtlı müşteri yok. QR afişini kasaya koyduğunda ilk kayıtlar burada görünür.' }}</p>
+  <p class="muted">{{ 'Aramana uyan müşteri yok.' if q else 'Henüz kartını Apple Cüzdan\'a ekleyen müşteri yok.' if only_wallet else 'Henüz kayıtlı müşteri yok. QR afişini kasaya koyduğunda ilk kayıtlar burada görünür.' }}</p>
   {% endif %}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>

@@ -245,6 +245,8 @@ def setup():
 
     customers, pending, stats = [], [], {}
     q = (request.args.get("q") or "").strip()
+    only_wallet = request.args.get("cuzdan") == "1"
+    wallet_ids = set()
     if program:
         query = LoyaltyCustomer.query.filter_by(program_id=program.id)
         if q:
@@ -252,6 +254,13 @@ def setup():
             like = f"%{q}%"
             query = query.filter(db.or_(LoyaltyCustomer.name.ilike(like),
                                         LoyaltyCustomer.phone.like(f"%{digits}%") if digits else db.false()))
+        from models import WalletRegistration
+        wallet_q = (db.session.query(WalletRegistration.customer_id).join(
+            LoyaltyCustomer, LoyaltyCustomer.id == WalletRegistration.customer_id)
+            .filter(LoyaltyCustomer.program_id == program.id).distinct())
+        wallet_ids = {row[0] for row in wallet_q.all()}
+        if only_wallet:
+            query = query.filter(LoyaltyCustomer.id.in_(wallet_ids or {0}))
         customers = query.order_by(LoyaltyCustomer.last_visit_at.desc().nullslast(), LoyaltyCustomer.id.desc()).limit(100).all()
         pending = (LoyaltyRequest.query.filter_by(program_id=program.id, status="pending")
                    .order_by(LoyaltyRequest.id.asc()).all())
@@ -278,6 +287,7 @@ def setup():
         }
     return render_template("loyalty/setup.html", program=program, customers=customers, pending=pending,
                            stats=stats, q=q, mask_phone=loyalty.mask_phone, wallet_info=wallet_info,
+                           wallet_ids=wallet_ids, only_wallet=only_wallet,
                            join_url=url_for("loyalty_public.join", token=program.token, _external=True) if program else "")
 
 

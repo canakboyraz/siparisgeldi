@@ -1536,3 +1536,9 @@ body{line-height:1.5}
 .lc-notify-box .hint{margin:0}
 .lc-switch{display:flex;gap:8px;align-items:center;font-weight:500}
 @media (max-width:760px){.lc-notify-grid{grid-template-columns:1fr}}
+
+/* Damga kartı: Apple Cüzdan işareti */
+.lc-wallet-tag{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:2px 8px;border-radius:999px;background:#111;color:#fff;font-size:.72rem;font-weight:700;vertical-align:2px;white-space:nowrap}
+.lc-cust-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lc-cust-tools .lc-chip{display:inline-flex;align-items:center;gap:6px}
+a.badge{text-decoration:none}
