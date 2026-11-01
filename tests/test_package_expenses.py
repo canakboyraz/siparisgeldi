@@ -103,6 +103,12 @@ class PackageExpensesTest(unittest.TestCase):
             self.assertEqual(values["advertising_total"], 450.0)
             self.assertEqual(values["expense_total"], 450.0)
             self.assertEqual(row["estimated_profit"], 0.0)
+            self.assertEqual((values["totals"]["days"], values["totals"]["advertising_expense"],
+                              values["totals"]["profit"]), (3, 450.0, -450.0))
+        html = self.client.get(f"/panel/maliyetler?start_date={day.isoformat()}&end_date={end_day.isoformat()}").get_data(as_text=True)
+        self.assertIn("Toplam · 3 gün", html)
+        self.assertIn("Toplam kâr", html)
+        self.assertIn("-450.00 TL", html)
 
     def test_cost_page_renders_without_advertising_records(self):
         response = self.client.get("/panel/maliyetler?days=30")

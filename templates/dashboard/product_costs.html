@@ -43,6 +43,23 @@
     </div>
     <div class="daily-products"><div class="muted">Bu gün satılan ürünler</div><table><thead><tr><th>Ürün</th><th>Adet</th><th>Satış</th><th>Maliyet</th><th>Kâr</th></tr></thead><tbody>{% for product in row.products %}<tr><td>{{ product.name }}</td><td>{{ '%.2f'|format(product.quantity) }}</td><td>{{ '%.2f'|format(product.revenue) }} TL</td><td>{{ '%.2f'|format(product.cost) }} TL</td><td>{{ '%.2f'|format(product.profit) }} TL</td></tr>{% else %}<tr><td colspan="5" class="muted">Ürün detayı bulunamadı.</td></tr>{% endfor %}</tbody></table></div>
   </details></td></tr>
-  {% else %}<tr><td colspan="11" class="muted">Seçili dönemde sipariş veya gider bulunamadı.</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<tr><td colspan="11" class="muted">Seçili dönemde sipariş veya gider bulunamadı.</td></tr>{% endfor %}</tbody>
+  {% if daily_rows %}
+  <tfoot><tr><td colspan="11" style="padding:0"><div class="daily-total">
+    <span>Toplam · {{ totals.days }} gün</span><span>{{ totals.orders }}</span><span>{{ '%.2f'|format(totals.revenue) }} TL</span><span>{{ '%.2f'|format(totals.cost) }} TL</span><span>{{ '%.2f'|format(totals.commission) }} TL</span><span>{{ '%.2f'|format(totals.other_expense) }} TL</span><span>{{ '%.2f'|format(totals.advertising_expense) }} TL</span><span>{{ '%.2f'|format(totals.monthly_expense) }} TL</span><strong class="{{ 'text-danger' if totals.estimated_profit < 0 }}">{{ '%.2f'|format(totals.estimated_profit) }} TL</strong><strong class="{{ 'text-danger' if totals.profit < 0 }}">{{ '%.2f'|format(totals.profit) }} TL</strong><span>%{{ '%.1f'|format(totals.margin) }}</span>
+  </div></td></tr></tfoot>
+  {% endif %}
+  </table></div>
+  {% if daily_rows %}
+  <div class="cost-totals" aria-label="Dönem toplamları">
+    <div class="is-main {{ 'is-neg' if totals.profit < 0 }}"><span>Toplam kâr</span><strong>{{ '%.2f'|format(totals.profit) }} TL</strong><small>Marj %{{ '%.1f'|format(totals.margin) }} · günlük ort. {{ '%.0f'|format(totals.avg_daily_profit) }} TL</small></div>
+    <div class="is-main"><span>Toplam ciro</span><strong>{{ '%.2f'|format(totals.revenue) }} TL</strong><small>{{ totals.orders }} sipariş · günlük ort. {{ '%.0f'|format(totals.avg_daily_revenue) }} TL</small></div>
+    <div><span>Ürün maliyeti</span><strong>{{ '%.2f'|format(totals.cost) }} TL</strong><small>Ciroya oranı %{{ '%.1f'|format(totals.cost / totals.revenue * 100 if totals.revenue else 0) }}</small></div>
+    <div><span>Komisyon</span><strong>{{ '%.2f'|format(totals.commission) }} TL</strong></div>
+    <div><span>Giderler</span><strong>{{ '%.2f'|format(totals.expense) }} TL</strong><small>Diğer {{ '%.0f'|format(totals.other_expense) }} · Reklam {{ '%.0f'|format(totals.advertising_expense) }} · Aylık {{ '%.0f'|format(totals.monthly_expense) }}</small></div>
+    <div class="{{ 'is-neg' if totals.estimated_profit < 0 }}"><span>Tahmini kâr</span><strong>{{ '%.2f'|format(totals.estimated_profit) }} TL</strong><small>Reklam ve aylık gider hariç · %{{ '%.1f'|format(totals.estimated_margin) }}</small></div>
+    <div><span>Ortalama sepet</span><strong>{{ '%.2f'|format(totals.avg_order) }} TL</strong></div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

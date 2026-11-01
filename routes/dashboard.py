@@ -1596,7 +1596,16 @@ def product_costs():
             ({**product, "profit": product["revenue"] - product["cost"]} for product in row["products"].values()),
             key=lambda product: (-product["revenue"], product["name"]),
         )
-    return render_template("dashboard/product_costs.html", products=product_rows, days=days,
+    totals = {key: sum(row[key] for row in daily_rows)
+              for key in ("orders", "revenue", "cost", "commission", "other_expense", "advertising_expense",
+                          "monthly_expense", "expense", "estimated_profit", "profit")}
+    totals["days"] = len(daily_rows)
+    totals["margin"] = totals["profit"] / totals["revenue"] * 100 if totals["revenue"] else 0
+    totals["estimated_margin"] = totals["estimated_profit"] / totals["revenue"] * 100 if totals["revenue"] else 0
+    totals["avg_order"] = totals["revenue"] / totals["orders"] if totals["orders"] else 0
+    totals["avg_daily_profit"] = totals["profit"] / totals["days"] if totals["days"] else 0
+    totals["avg_daily_revenue"] = totals["revenue"] / totals["days"] if totals["days"] else 0
+    return render_template("dashboard/product_costs.html", products=product_rows, days=days, totals=totals,
                            platform_label=platform_label, expenses=expenses, expense_total=expense_total,
                            commissions=commissions, commission_total=commission_total, order_counts=order_counts,
                            revenue_total=revenue_total, cost_total=cost_total,

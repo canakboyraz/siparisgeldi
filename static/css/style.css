@@ -1866,3 +1866,16 @@ body:has(.qm){background:#FAF8F5}
 .qt-adisyo{margin-bottom:1rem}
 .qt-map select{width:100%;font-size:.85rem}
 .qt-map select.is-off{color:#B4321F}
+
+/* Günlük kârlılık · dönem toplamı */
+.daily-total{display:grid;grid-template-columns:13% 8% repeat(9,8.7777%);align-items:center;padding:.95rem 1rem;background:var(--surface-2,#F1EEE8);border-top:2px solid var(--line,#D7D2C9);font-weight:700}
+.daily-total>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cost-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.75rem;margin-top:1rem}
+.cost-totals>div{border:1px solid var(--line,#E2DED6);border-radius:12px;padding:.8rem .9rem;display:flex;flex-direction:column;gap:.15rem;background:var(--surface,#fff)}
+.cost-totals span{font-size:.8rem;color:var(--muted)}
+.cost-totals strong{font-size:1.1rem}
+.cost-totals small{font-size:.75rem;color:var(--muted)}
+.cost-totals .is-main strong{font-size:1.4rem}
+.cost-totals .is-main{border-color:var(--accent,#1E5B47)}
+.cost-totals .is-neg strong{color:#B4321F}
+@media (max-width:600px){.cost-totals{grid-template-columns:1fr 1fr}.cost-totals .is-main{grid-column:1/-1}}
