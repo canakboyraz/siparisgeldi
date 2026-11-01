@@ -1,0 +1,83 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Sayım ürünleri · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Ürünler ve kategoriler</h1><p class="muted page-sub">Baristaların sayım ekranında bu sırayla görünür. Min. stok altına düşen ürün "sipariş ver" olarak işaretlenir.</p></div>
+  <a class="btn btn-ghost" href="{{ url_for('stock.index') }}">{{ icon('clipboard', 16) }} Sayımlar</a>
+</div>
+
+<div class="st-toolbar card">
+  <form method="post" action="{{ url_for('stock.add_category') }}" class="st-row">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="name" maxlength="60" placeholder="Yeni kategori adı (ör. Şuruplar)" required aria-label="Yeni kategori adı">
+    <button class="btn btn-primary" type="submit">{{ icon('plus', 16) }} Kategori ekle</button>
+  </form>
+  <details class="st-more"><summary>Toplu ekle</summary>
+    <div class="st-more-body">
+      <form method="post" action="{{ url_for('stock.seed') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-ghost btn-sm" type="submit">Hazır kafe listesini ekle</button>
+        <span class="hint">Aynı adlı ürünler tekrar eklenmez.</span></form>
+      <form method="post" action="{{ url_for('stock.import_file') }}" enctype="multipart/form-data" class="st-row"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="file" accept=".xlsx" required aria-label="Excel dosyası">
+        <button class="btn btn-ghost btn-sm" type="submit">Excel'den aktar</button></form>
+      <p class="hint">Excel'de Kategori, Ürün, Birim ve Min. Stok başlıklı sütunlar olmalı.</p>
+    </div>
+  </details>
+</div>
+
+{% if not groups %}<div class="card"><p class="muted">Henüz kategori yok. Yukarıdan bir kategori ekle ya da hazır listeyi yükle.</p></div>{% endif %}
+
+<datalist id="st-units">{% for u in units %}<option value="{{ u }}">{% endfor %}</datalist>
+{% for cat, items in groups %}
+<section class="card st-catcard" id="k{{ cat.id }}">
+  <div class="st-cathead">
+    <form method="post" action="{{ url_for('stock.rename_category', cat_id=cat.id) }}" class="st-rename">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="name" value="{{ cat.name }}" maxlength="60" aria-label="Kategori adı">
+      <button class="btn btn-ghost btn-sm" type="submit">Adı kaydet</button>
+    </form>
+    <div class="st-catactions">
+      <span class="hint">{{ items|selectattr('is_active')|list|length }} ürün</span>
+      <form method="post" action="{{ url_for('stock.move_category', cat_id=cat.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-ghost btn-sm" name="yon" value="yukari" title="Yukarı taşı" aria-label="{{ cat.name }} yukarı" {{ 'disabled' if loop.first }}>↑</button>
+        <button class="btn btn-ghost btn-sm" name="yon" value="asagi" title="Aşağı taşı" aria-label="{{ cat.name }} aşağı" {{ 'disabled' if loop.last }}>↓</button></form>
+      <form method="post" action="{{ url_for('stock.delete_category', cat_id=cat.id) }}" onsubmit="return window.confirm('{{ cat.name }} kategorisi ve içindeki {{ items|length }} ürün silinsin mi? Eski sayımlar etkilenmez.');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit">{{ icon('x', 15) }} Sil</button></form>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('stock.save_items', cat_id=cat.id) }}" class="st-items">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="st-default" tabindex="-1" aria-hidden="true">Kaydet</button>
+    <div class="st-irow st-ihead" aria-hidden="true"><span>Ürün</span><span>Birim</span><span>Min. stok</span><span>Sayımda</span><span></span></div>
+    {% for item in items %}
+    {% set p = 'i' ~ item.id ~ '_' %}
+    <div class="st-irow {{ 'is-off' if not item.is_active }}">
+      <label class="st-f st-f-name"><span>Ürün</span><input type="text" name="{{ p }}name" value="{{ item.name }}" maxlength="80"></label>
+      <label class="st-f"><span>Birim</span><input type="text" name="{{ p }}unit" value="{{ item.unit }}" list="st-units" maxlength="20"></label>
+      <label class="st-f"><span>Min. stok</span><input type="text" name="{{ p }}min" value="{{ fmt(item.min_stock) }}" inputmode="decimal" placeholder="—"></label>
+      <label class="st-active"><input type="checkbox" name="{{ p }}active" value="1" {{ 'checked' if item.is_active }}> <span>Göster</span></label>
+      <div class="st-iactions">
+        <button class="btn btn-ghost btn-sm" type="submit" formaction="{{ url_for('stock.move_item', item_id=item.id) }}" name="yon" value="yukari" aria-label="{{ item.name }} yukarı" {{ 'disabled' if loop.first }}>↑</button>
+        <button class="btn btn-ghost btn-sm" type="submit" formaction="{{ url_for('stock.move_item', item_id=item.id) }}" name="yon" value="asagi" aria-label="{{ item.name }} aşağı" {{ 'disabled' if loop.last }}>↓</button>
+        {% if groups|length > 1 %}
+        <select name="mv_{{ item.id }}" aria-label="{{ item.name }} kategorisini değiştir" onchange="if(this.value){this.form.action='{{ url_for('stock.change_item_category', item_id=item.id) }}';this.form.submit();}">
+          <option value="">Taşı…</option>{% for c2, _ in groups if c2.id != cat.id %}<option value="{{ c2.id }}">{{ c2.name }}</option>{% endfor %}</select>
+        {% endif %}
+        <button class="btn btn-ghost btn-sm" type="submit" formaction="{{ url_for('stock.delete_item', item_id=item.id) }}" formnovalidate title="Sil" aria-label="{{ item.name }} sil" onclick="return window.confirm('{{ item.name }} silinsin mi? Eski sayımlarda görünmeye devam eder.');">{{ icon('x', 15) }}</button>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="st-irow st-new">
+      <label class="st-f st-f-name"><span>Yeni ürün</span><input type="text" name="new_name" maxlength="80" placeholder="+ Yeni ürün adı"></label>
+      <label class="st-f"><span>Birim</span><input type="text" name="new_unit" list="st-units" maxlength="20" placeholder="adet"></label>
+      <label class="st-f"><span>Min. stok</span><input type="text" name="new_min" inputmode="decimal" placeholder="—"></label>
+      <span></span>
+      <span class="hint">Kaydet'e basınca eklenir</span>
+    </div>
+    <div class="st-save"><button class="btn btn-primary" type="submit">Kaydet</button></div>
+  </form>
+</section>
+{% endfor %}
+{% endblock %}

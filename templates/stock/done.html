@@ -1,0 +1,24 @@
+{% extends "stock/_shell.html" %}
+{% block title %}Sayım kaydedildi · {{ owner.name }}{% endblock %}
+{% block content %}
+<section class="sc-card sc-done">
+  <div class="sc-check" aria-hidden="true">✓</div>
+  <h1>Sayım kaydedildi</h1>
+  <p>{{ count.count_date.strftime('%d.%m.%Y') }} · {{ count.counted_by }} · {{ s.counted }}/{{ s.total }} ürün sayıldı. Teşekkürler!</p>
+</section>
+{% if s.order %}
+<section class="sc-card">
+  <h2>Sipariş verilecekler ({{ s.order|length }})</h2>
+  <p class="sc-muted">Minimum stokta ya da altında. Yöneticiye ilet.</p>
+  <ul class="sc-list">{% for l in s.order %}<li><span>{{ l.item_name }}</span><b>{{ fmt(l.counted) }} {{ l.unit }}</b></li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% if s.check %}
+<section class="sc-card">
+  <h2>Tekrar sayılmalı ({{ s.check|length }})</h2>
+  <p class="sc-muted">Sayılan, önceki sayım + gelenden fazla çıktı. Bir rakam yanlış girilmiş olabilir.</p>
+  <ul class="sc-list">{% for l in s.check %}<li><span>{{ l.item_name }}</span><b>{{ fmt(l.counted) }} {{ l.unit }}</b></li>{% endfor %}</ul>
+</section>
+{% endif %}
+<a class="btn btn-ghost btn-block" href="{{ url_for('stock_public.count_form', token=setting.token) }}">Yeni sayım</a>
+{% endblock %}

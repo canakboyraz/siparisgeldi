@@ -1,0 +1,48 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Sayım {{ count.count_date.strftime('%d.%m.%Y') }} · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Sayım · {{ count.count_date.strftime('%d.%m.%Y') }}</h1>
+    <p class="muted page-sub">{{ count.counted_by }} · {{ (count.created_at|yerel).strftime('%d.%m %H:%M') }} · {{ s.counted }}/{{ s.total }} ürün sayıldı</p></div>
+  <div class="lc-head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('stock.index') }}">{{ icon('clipboard', 16) }} Sayımlar</a>
+    <a class="btn btn-ghost" href="{{ url_for('stock.export_csv', count_id=count.id) }}">Excel'e aktar</a>
+    <form method="post" action="{{ url_for('stock.delete_count', count_id=count.id) }}" onsubmit="return window.confirm('Bu sayım silinsin mi?');">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost" type="submit">Sil</button></form>
+  </div>
+</div>
+{% if count.note %}<div class="card st-note-card">“{{ count.note }}”</div>{% endif %}
+<div class="lc-chips">
+  <a class="lc-chip {{ 'is-active' if not only }}" href="{{ url_for('stock.detail', count_id=count.id) }}">Tümü <b>{{ s.total }}</b></a>
+  <a class="lc-chip {{ 'is-active' if only=='siparis' }} {{ 'is-alert' if s.order }}" href="{{ url_for('stock.detail', count_id=count.id, goster='siparis') }}">Sipariş ver <b>{{ s.order|length }}</b></a>
+  <a class="lc-chip {{ 'is-active' if only=='kontrol' }}" href="{{ url_for('stock.detail', count_id=count.id, goster='kontrol') }}">Kontrol et <b>{{ s.check|length }}</b></a>
+  <a class="lc-chip {{ 'is-active' if only=='sayilmadi' }}" href="{{ url_for('stock.detail', count_id=count.id, goster='sayilmadi') }}">Sayılmadı <b>{{ s.total - s.counted }}</b></a>
+</div>
+<div class="card st-detail">
+  <div class="table-wrap"><table class="st-table st-lines">
+    <thead><tr><th>Ürün</th><th>Min.</th><th>Önceki</th><th>Gelen</th><th>Sayılan</th><th>Kullanılan / fire</th><th>Durum</th></tr></thead>
+    {% for cat, lines in groups %}
+    {% set shown = [] %}
+    {% for l in lines %}{% if not only or (only=='siparis' and l.needs_order) or (only=='kontrol' and l.used is not none and l.used < 0) or (only=='sayilmadi' and l.counted is none) %}{% set _ = shown.append(l) %}{% endif %}{% endfor %}
+    {% if shown %}
+    <tbody>
+      <tr class="st-cat"><th colspan="7">{{ cat }}</th></tr>
+      {% for l in shown %}
+      <tr class="{{ 'is-order' if l.needs_order }} {{ 'is-missing' if l.counted is none }}">
+        <td data-l="Ürün"><b>{{ l.item_name }}</b> <span class="hint">{{ l.unit }}</span>{% if l.note %}<div class="st-n">📝 {{ l.note }}</div>{% endif %}</td>
+        <td data-l="Min.">{{ fmt(l.min_stock) or '—' }}</td>
+        <td data-l="Önceki">{{ fmt(l.prev_qty) or '—' }}</td>
+        <td data-l="Gelen">{{ fmt(l.received) or '—' }}</td>
+        <td data-l="Sayılan"><b>{{ fmt(l.counted) or '—' }}</b></td>
+        <td data-l="Kullanılan">{% if l.used is none %}—{% elif l.used < 0 %}<span class="badge amber" title="Sayılan, önceki + gelenden fazla">{{ fmt(l.used) }} · kontrol</span>{% else %}{{ fmt(l.used) }}{% endif %}</td>
+        <td data-l="Durum">{% if l.counted is none %}<span class="badge gray">Sayılmadı</span>{% elif l.needs_order %}<span class="badge red">Sipariş ver</span>{% else %}<span class="badge green">Yeterli</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% endif %}
+    {% endfor %}
+  </table></div>
+  {% if only and not (only=='siparis' and s.order) and not (only=='kontrol' and s.check) and not (only=='sayilmadi' and s.total - s.counted) %}<p class="muted">Bu filtrede ürün yok.</p>{% endif %}
+</div>
+{% endblock %}

@@ -257,6 +257,9 @@ def create_app(config_class=Config, start_scheduler=None):
     app.register_blueprint(loyalty_bp, url_prefix="/panel/sadakat")
     from routes.wallet import wallet_bp
     app.register_blueprint(wallet_bp)
+    from routes.stock import stock_bp, stock_public_bp
+    app.register_blueprint(stock_public_bp)
+    app.register_blueprint(stock_bp, url_prefix="/panel/sayim")
 
     # Şablonlarda kullanılacak yardımcılar
     from datetime import datetime
@@ -323,7 +326,8 @@ def create_app(config_class=Config, start_scheduler=None):
         if request.is_secure:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         # Panel sayfaları kişiye özel ve canlı: tarayıcı (özellikle mobil) eski kopyayı göstermesin.
-        if request.blueprint in ("dashboard", "adisyo", "loyalty", "loyalty_public") and response.mimetype == "text/html":
+        if request.blueprint in ("dashboard", "adisyo", "loyalty", "loyalty_public", "stock", "stock_public") \
+                and response.mimetype == "text/html":
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -333,7 +337,7 @@ def create_app(config_class=Config, start_scheduler=None):
     def inject_helpers():
         dashboard_latest_order_id = 0
         loyalty_active = False
-        if current_user.is_authenticated and request.blueprint in ("dashboard", "adisyo", "loyalty"):
+        if current_user.is_authenticated and request.blueprint in ("dashboard", "adisyo", "loyalty", "stock"):
             from models import LoyaltyProgram
             loyalty_active = db.session.query(LoyaltyProgram.id).filter_by(
                 user_id=current_user.id, is_active=True).first() is not None

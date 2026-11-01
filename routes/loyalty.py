@@ -311,7 +311,7 @@ def announce():
     program = loyalty.get_program(current_user) or abort(404)
     text = " ".join((request.form.get("message") or "").split())[:140]
     if len(text) < 5:
-        flash("Duyuru metni en az 5 karakter olmalı.", "error")
+        flash("Duyuru metni en az 5 karakter olmalı.", "danger")
         return redirect(url_for("loyalty.setup") + "#bildirimler")
     sent, skipped = loyalty_notify.broadcast(program, text)
     if sent:
@@ -320,7 +320,7 @@ def announce():
             msg += f" {skipped} kişi son bildirimini yakın zamanda aldığı için atlandı."
         flash(msg, "success")
     else:
-        flash("Duyuru gönderilmedi: Cüzdan'da kartı olan ya da sıklık sınırına uyan müşteri yok.", "error")
+        flash("Duyuru gönderilmedi: Cüzdan'da kartı olan ya da sıklık sınırına uyan müşteri yok.", "danger")
     return redirect(url_for("loyalty.setup") + "#bildirimler")
 
 

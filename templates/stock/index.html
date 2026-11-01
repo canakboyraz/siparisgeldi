@@ -1,0 +1,108 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Sayım · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Günlük sayım</h1><p class="muted page-sub">Baristalar telefondan sayar; sipariş verilecekleri ve kullanımı burada görürsün.</p></div>
+  <div class="lc-head-actions">
+    <a class="btn btn-primary" href="{{ link }}" target="_blank" rel="noopener">{{ icon('clipboard', 16) }} Sayım yap</a>
+    <a class="btn btn-ghost" href="{{ url_for('stock.items') }}">{{ icon('settings', 16) }} Ürünler ve kategoriler</a>
+  </div>
+</div>
+
+{% if not item_count %}
+<div class="card st-empty">
+  <h2>Önce sayım listesini oluştur</h2>
+  <p class="muted">Baristaların sayacağı ürünleri kategorilere ayırarak ekle. Üç yol var:</p>
+  <div class="st-empty-grid">
+    <form method="post" action="{{ url_for('stock.seed') }}" class="st-opt">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <b>Hazır kafe listesi</b><span>Şurup, püre, tatlı, süt, sarf malzeme… 13 kategoride yaklaşık 100 ürün. Sonra düzenlersin.</span>
+      <button class="btn btn-primary" type="submit">Hazır listeyi yükle</button>
+    </form>
+    <form method="post" action="{{ url_for('stock.import_file') }}" enctype="multipart/form-data" class="st-opt">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <b>Excel'den aktar</b><span>Kategori, Ürün, Birim, Min. Stok sütunları olan .xlsx dosyası.</span>
+      <input type="file" name="file" accept=".xlsx" required>
+      <button class="btn btn-ghost" type="submit">Yükle</button>
+    </form>
+    <div class="st-opt"><b>Elle oluştur</b><span>Kategorileri ve ürünleri tek tek ekle.</span>
+      <a class="btn btn-ghost" href="{{ url_for('stock.items') }}">Ürünler sayfasına git</a></div>
+  </div>
+</div>
+{% endif %}
+
+<div class="st-grid">
+  <div class="card">
+    <div class="section-head"><div class="card-title">{{ icon('receipt') }} Son sayım</div>
+      {% if latest %}<a class="btn btn-ghost btn-sm" href="{{ url_for('stock.detail', count_id=latest[0].id) }}">Detay</a>{% endif %}</div>
+    {% if latest %}{% set c, s = latest %}
+      <p class="st-meta"><b>{{ c.count_date.strftime('%d.%m.%Y') }}</b> · {{ c.counted_by }} · {{ (c.created_at|yerel).strftime('%H:%M') }} · {{ s.counted }}/{{ s.total }} ürün sayıldı</p>
+      {% if c.note %}<p class="st-note">“{{ c.note }}”</p>{% endif %}
+      <h3 class="st-h">Sipariş verilecekler <span class="badge {{ 'red' if s.order else 'green' }}">{{ s.order|length }}</span></h3>
+      {% if s.order %}
+      <ul class="st-list">{% for l in s.order %}<li><span>{{ l.item_name }}<small>{{ l.category_name }}</small></span><b>{{ fmt(l.counted) }} / min {{ fmt(l.min_stock) }} {{ l.unit }}</b></li>{% endfor %}</ul>
+      {% else %}<p class="muted">Minimum stokun altına düşen ürün yok.</p>{% endif %}
+      {% if s.check %}
+      <h3 class="st-h">Kontrol et <span class="badge amber">{{ s.check|length }}</span></h3>
+      <p class="hint">Sayılan miktar önceki sayım + gelenden fazla; bir rakam yanlış girilmiş ya da gelen yazılmamış olabilir.</p>
+      <ul class="st-list">{% for l in s.check %}<li><span>{{ l.item_name }}</span><b>önceki {{ fmt(l.prev_qty) }} + gelen {{ fmt(l.received or 0) }} → {{ fmt(l.counted) }}</b></li>{% endfor %}</ul>
+      {% endif %}
+      {% if s.notes %}
+      <h3 class="st-h">Notlar</h3>
+      <ul class="st-list">{% for l in s.notes %}<li><span>{{ l.item_name }}</span><b class="st-n">{{ l.note }}</b></li>{% endfor %}</ul>
+      {% endif %}
+    {% else %}
+      <p class="muted">Henüz sayım yok. Bağlantıyı baristalarla paylaş; ilk sayım geldiğinde burada görünür.</p>
+    {% endif %}
+  </div>
+
+  <div class="card" id="baglanti">
+    <div class="card-title">{{ icon('qr') }} Barista bağlantısı</div>
+    <p class="hint" style="margin-top:0">Baristalar bu bağlantıyı telefonda açar; hesap gerekmez. Ana ekrana eklemelerini söyle.</p>
+    <div class="lc-qr" id="st-qr" data-url="{{ link }}" aria-label="Sayım bağlantısı QR kodu"></div>
+    <div class="lc-link"><code id="st-link">{{ link }}</code><button class="btn btn-ghost btn-sm" type="button" id="st-copy">Kopyala</button></div>
+    <form method="post" action="{{ url_for('stock.settings') }}" class="st-pin">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label for="st-pin">Sayım PIN'i {% if setting.pin_hash %}<span class="badge green">açık</span>{% else %}<span class="badge gray">kapalı</span>{% endif %}</label>
+      <div class="st-row"><input id="st-pin" type="text" name="pin" inputmode="numeric" maxlength="6" placeholder="{{ 'Yeni PIN' if setting.pin_hash else '4–6 haneli PIN' }}">
+        <button class="btn btn-primary btn-sm" type="submit" name="action" value="pin">Kaydet</button>
+        {% if setting.pin_hash %}<button class="btn btn-ghost btn-sm" type="submit" name="action" value="pin_off">Kaldır</button>{% endif %}</div>
+      <p class="hint">PIN açıksa bağlantı başkasının eline geçse bile sayım giremez. Telefon 60 gün hatırlar.</p>
+      <button class="btn btn-ghost btn-sm" type="submit" name="action" value="new_link" onclick="return window.confirm('Eski bağlantı çalışmaz hale gelecek. Yeni bağlantı oluşturulsun mu?');">Bağlantıyı yenile</button>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">{{ icon('calendar') }} Sayım geçmişi</div>
+  {% if rows %}
+  <div class="table-wrap"><table class="st-table">
+    <thead><tr><th>Tarih</th><th>Sayan</th><th>Sayılan</th><th>Sipariş ver</th><th>Kontrol</th><th></th></tr></thead>
+    <tbody>
+    {% for c, s in rows %}
+      <tr>
+        <td><b>{{ c.count_date.strftime('%d.%m.%Y') }}</b><br><span class="hint">{{ (c.created_at|yerel).strftime('%H:%M') }}</span></td>
+        <td>{{ c.counted_by }}</td>
+        <td>{{ s.counted }}/{{ s.total }}</td>
+        <td>{% if s.order %}<span class="badge red">{{ s.order|length }}</span>{% else %}<span class="badge green">0</span>{% endif %}</td>
+        <td>{% if s.check %}<span class="badge amber">{{ s.check|length }}</span>{% else %}—{% endif %}</td>
+        <td><div class="lc-actions"><a class="btn btn-ghost btn-sm" href="{{ url_for('stock.detail', count_id=c.id) }}">Detay</a>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('stock.export_csv', count_id=c.id) }}">Excel</a></div></td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}<p class="muted">Henüz sayım yok.</p>{% endif %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+(function () {
+  var box = document.getElementById("st-qr"), url = box.getAttribute("data-url");
+  if (window.qrcode) { var qr = qrcode(0, "M"); qr.addData(url); qr.make(); box.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); }
+  else { box.textContent = "QR yüklenemedi; bağlantıyı kullan."; }
+  document.getElementById("st-copy").addEventListener("click", function () {
+    var b = this; (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { b.textContent = "Kopyalandı"; }).catch(function () {});
+  });
+})();
+</script>
+{% endblock %}

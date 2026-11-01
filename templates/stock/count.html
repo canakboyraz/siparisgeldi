@@ -1,0 +1,149 @@
+{% extends "stock/_shell.html" %}
+{% block title %}Sayım · {{ owner.name }}{% endblock %}
+{% block content %}
+{% set total = groups|map(attribute=1)|map('length')|sum %}
+<form method="post" id="sc-form" novalidate data-key="sayim:{{ setting.token }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  {% if errors._form %}<p class="sc-error" role="alert">{{ errors._form }}</p>{% endif %}
+
+  {% if not total %}
+  <section class="sc-card"><h2>Sayım listesi boş</h2><p class="sc-muted">Yönetici henüz ürün eklememiş. SiparişGeldi panelinde Sayım → Ürünler bölümünden liste oluşturulmalı.</p></section>
+  {% else %}
+  <section class="sc-card sc-who">
+    <div class="sc-field {{ 'has-error' if errors.count_date }}">
+      <label for="sc-date">Tarih</label>
+      <input id="sc-date" type="date" name="count_date" value="{{ values.count_date or today }}" max="{{ today }}" required>
+      {% if errors.count_date %}<small class="sc-err">{{ errors.count_date }}</small>{% endif %}
+    </div>
+    <div class="sc-field {{ 'has-error' if errors.counted_by }}">
+      <label for="sc-who">Sayımı yapan</label>
+      <input id="sc-who" type="text" name="counted_by" list="sc-names" autocomplete="name" maxlength="60" placeholder="Adın"
+             value="{{ values.counted_by or request.cookies.get('sg_sayim_ad', '') }}" required>
+      <datalist id="sc-names">{% for n in names %}<option value="{{ n }}">{% endfor %}</datalist>
+      {% if errors.counted_by %}<small class="sc-err">{{ errors.counted_by }}</small>{% endif %}
+    </div>
+    <label class="sc-toggle"><input type="checkbox" id="sc-recv-toggle" {{ 'checked' if recv_on }}>
+      <span><b>Bugün mal geldi</b><small>Açınca her ürünün altında "gelen" kutusu çıkar.</small></span></label>
+  </section>
+
+  <nav class="sc-cats" aria-label="Kategoriler">
+    {% for cat, items in groups if items %}<a href="#c{{ cat.id }}" data-cat="{{ cat.id }}">{{ cat.name }} <b data-cat-count="{{ cat.id }}">0/{{ items|length }}</b></a>{% endfor %}
+  </nav>
+
+  {% for cat, items in groups if items %}
+  <section class="sc-cat" id="c{{ cat.id }}">
+    <h2>{{ cat.name }}</h2>
+    {% for item in items %}
+    {% set cf = 'c_' ~ item.id %}{% set rf = 'r_' ~ item.id %}{% set nf = 'n_' ~ item.id %}
+    {% set p = prev.get(item.id) %}
+    <div class="sc-item {{ 'has-error' if errors[cf] or errors[rf] }}" data-cat="{{ cat.id }}" data-min="{{ item.min_stock if item.min_stock is not none else '' }}">
+      <div class="sc-name">
+        <b>{{ item.name }}</b>
+        <small>{{ item.unit }}{% if p %} · önceki: {{ fmt(p[0]) }}{% endif %}{% if item.min_stock is not none %} · min {{ fmt(item.min_stock) }}{% endif %}</small>
+        <span class="sc-flag" hidden>Sipariş ver</span>
+      </div>
+      <div class="sc-step">
+        <button type="button" class="sc-btn" data-step="-1" aria-label="{{ item.name }} azalt">−</button>
+        <input type="text" inputmode="decimal" autocomplete="off" name="{{ cf }}" value="{{ values[cf] or '' }}" placeholder="–" aria-label="{{ item.name }} sayılan ({{ item.unit }})">
+        <button type="button" class="sc-btn" data-step="1" aria-label="{{ item.name }} artır">+</button>
+      </div>
+      <div class="sc-extra">
+        <label class="sc-recv">Gelen <input type="text" inputmode="decimal" autocomplete="off" name="{{ rf }}" value="{{ values[rf] or '' }}" placeholder="0" aria-label="{{ item.name }} bugün gelen"></label>
+        <button type="button" class="sc-note-btn" aria-expanded="{{ 'true' if values[nf] else 'false' }}">Not</button>
+        <input class="sc-note" type="text" name="{{ nf }}" maxlength="200" value="{{ values[nf] or '' }}" placeholder="ör. 2 dilim SKT geçti" {{ '' if values[nf] else 'hidden' }} aria-label="{{ item.name }} not">
+      </div>
+      {% if errors[cf] or errors[rf] %}<small class="sc-err">{{ errors[cf] or errors[rf] }}</small>{% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <section class="sc-card">
+    <label for="sc-note-all" class="sc-label">Genel not (isteğe bağlı)</label>
+    <textarea id="sc-note-all" name="note" maxlength="500" rows="3" placeholder="ör. Süt tedarikçisi yarın gelecek">{{ values.note or '' }}</textarea>
+    <p class="sc-muted">Yarım şişe gibi miktarları 0,5 diye yazabilirsin. Boş bırakılan ürün "sayılmadı" kabul edilir.</p>
+  </section>
+
+  <div class="sc-bar">
+    <div class="sc-progress"><span id="sc-done">0</span>/{{ total }} sayıldı<i><b id="sc-pbar"></b></i></div>
+    <button class="btn btn-primary btn-lg" type="submit" id="sc-submit">Sayımı gönder</button>
+  </div>
+  {% endif %}
+</form>
+<script>
+(function () {
+  var form = document.getElementById("sc-form"); if (!form || !form.querySelector(".sc-item")) return;
+  var key = form.getAttribute("data-key"), total = {{ total }}, hasErrors = {{ 'true' if errors else 'false' }};
+  var items = Array.prototype.slice.call(form.querySelectorAll(".sc-item"));
+  function num(v) { v = (v || "").trim().replace(/\s/g, "").replace(",", "."); return v === "" || isNaN(+v) ? null : +v; }
+  function fmt(n) { return (Math.round(n * 1000) / 1000).toString().replace(".", ","); }
+  function store(fn) { try { return fn(window.localStorage); } catch (e) { return null; } }
+  function update() {
+    var done = 0, perCat = {};
+    items.forEach(function (row) {
+      var input = row.querySelector(".sc-step input"), v = num(input.value), min = row.getAttribute("data-min");
+      var cat = row.getAttribute("data-cat"); perCat[cat] = perCat[cat] || [0, 0]; perCat[cat][1]++;
+      row.classList.toggle("is-filled", v !== null);
+      if (v !== null) { done++; perCat[cat][0]++; }
+      row.querySelector(".sc-flag").hidden = !(v !== null && min !== "" && v <= +min);
+    });
+    document.getElementById("sc-done").textContent = done;
+    document.getElementById("sc-pbar").style.width = (total ? done / total * 100 : 0) + "%";
+    Object.keys(perCat).forEach(function (c) {
+      var el = form.querySelector('[data-cat-count="' + c + '"]'); if (el) { el.textContent = perCat[c][0] + "/" + perCat[c][1]; el.parentNode.classList.toggle("is-done", perCat[c][0] === perCat[c][1]); }
+    });
+  }
+  function save() {
+    var data = {}; Array.prototype.forEach.call(form.elements, function (el) {
+      if (el.name && el.name !== "_csrf_token" && el.type !== "checkbox" && el.value) data[el.name] = el.value; });
+    data._recv = document.getElementById("sc-recv-toggle").checked ? "1" : "";
+    data._at = Date.now(); store(function (s) { s.setItem(key, JSON.stringify(data)); });
+  }
+  // Taslağı geri yükle (aynı gün, sunucu hatası ile dönülmediyse)
+  if (!hasErrors) {
+    var raw = store(function (s) { return s.getItem(key); });
+    if (raw) { try { var d = JSON.parse(raw);
+      if (d._at && Date.now() - d._at < 12 * 3600 * 1000) {
+        Object.keys(d).forEach(function (n) { var el = form.elements[n]; if (el && !el.value && n.charAt(0) !== "_") el.value = d[n]; });
+        if (d._recv) document.getElementById("sc-recv-toggle").checked = true;
+        form.querySelectorAll(".sc-note").forEach(function (n) { if (n.value) n.hidden = false; });
+      } } catch (e) {} }
+  }
+  function recvToggle() { form.classList.toggle("show-recv", document.getElementById("sc-recv-toggle").checked); }
+  document.getElementById("sc-recv-toggle").addEventListener("change", function () { recvToggle(); save(); });
+  recvToggle();
+  form.addEventListener("click", function (e) {
+    var b = e.target.closest(".sc-btn");
+    if (b) { var input = b.parentNode.querySelector("input"), v = num(input.value) || 0;
+      v = Math.max(0, v + (+b.getAttribute("data-step"))); input.value = fmt(v); update(); save();
+      if (navigator.vibrate) { try { navigator.vibrate(8); } catch (x) {} } return; }
+    var n = e.target.closest(".sc-note-btn");
+    if (n) { var note = n.parentNode.querySelector(".sc-note"); note.hidden = !note.hidden; n.setAttribute("aria-expanded", String(!note.hidden)); if (!note.hidden) note.focus(); }
+  });
+  form.addEventListener("input", function () { update(); save(); });
+  // Enter bir sonraki ürüne geçsin
+  form.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || e.target.tagName !== "INPUT" || e.target.type === "date") return;
+    e.preventDefault();
+    var inputs = Array.prototype.slice.call(form.querySelectorAll(".sc-step input"));
+    var i = inputs.indexOf(e.target); if (i >= 0 && inputs[i + 1]) inputs[i + 1].focus(); else e.target.blur();
+  });
+  form.addEventListener("submit", function (e) {
+    var left = total - (+document.getElementById("sc-done").textContent);
+    if (left > 0 && !window.confirm(left + " ürün sayılmadı. Sayılmayanlar boş kaydedilecek. Yine de gönderilsin mi?")) { e.preventDefault(); return; }
+    document.getElementById("sc-submit").disabled = true;
+    document.getElementById("sc-submit").textContent = "Gönderiliyor…";
+    store(function (s) { s.removeItem(key); });
+  });
+  // Kategori çipleri: görünen kategoriyi işaretle
+  if ("IntersectionObserver" in window) {
+    var chips = form.querySelectorAll(".sc-cats a");
+    var io = new IntersectionObserver(function (entries) { entries.forEach(function (en) {
+      if (en.isIntersecting) chips.forEach(function (c) { var on = c.getAttribute("href") === "#" + en.target.id; c.classList.toggle("is-current", on); if (on && c.scrollIntoView) c.parentNode.scrollTo({ left: c.offsetLeft - 16, behavior: "smooth" }); });
+    }); }, { rootMargin: "-45% 0px -50% 0px" });
+    form.querySelectorAll(".sc-cat").forEach(function (s) { io.observe(s); });
+  }
+  update();
+})();
+</script>
+{% endblock %}

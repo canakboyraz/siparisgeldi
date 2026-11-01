@@ -52,6 +52,7 @@
         </div>
       </details>
       <a href="{{ url_for('loyalty.setup') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('loyalty.') }}">{{ icon('coffee') }}<span>Damga kartı</span></a>
+      <a href="{{ url_for('stock.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('stock.') }}">{{ icon('clipboard') }}<span>Sayım</span></a>
       <a href="{{ url_for('dashboard.subscription') }}" class="{{ 'active' if request.endpoint=='dashboard.subscription' }}">{{ icon('card') }}<span>Abonelik</span></a>
       <a href="{{ url_for('dashboard.profile') }}" class="{{ 'active' if request.endpoint=='dashboard.profile' }}">{{ icon('user') }}<span>Profil</span></a>
       {% if user_is_admin %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block head %}<meta name="robots" content="noindex"><meta name="theme-color" content="#15302A">{% block sc_head %}{% endblock %}{% endblock %}
+{% block body %}
+<div class="sc-wrap">
+  <header class="sc-head">
+    <div class="sc-logo" aria-hidden="true">{{ (owner.name or 'S')[:1]|upper }}</div>
+    <div><div class="sc-biz">{{ owner.name }}</div><div class="sc-sub">Günlük stok sayımı</div></div>
+  </header>
+  {% block content %}{% endblock %}
+  <footer class="sc-foot">SiparişGeldi ile çalışır</footer>
+</div>
+{% endblock %}

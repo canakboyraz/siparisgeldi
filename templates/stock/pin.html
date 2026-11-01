@@ -1,0 +1,12 @@
+{% extends "stock/_shell.html" %}
+{% block title %}Sayım · {{ owner.name }}{% endblock %}
+{% block content %}
+<form method="post" action="{{ url_for('stock_public.pin_login', token=setting.token) }}" class="sc-card sc-pin">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <h1>Sayım PIN'i</h1>
+  <p>Yöneticinin verdiği PIN'i yaz. Bu telefon 60 gün boyunca hatırlar.</p>
+  {% if error %}<p class="sc-error" role="alert">{{ error }}</p>{% endif %}
+  <input class="sc-pin-input" type="password" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" autofocus required aria-label="PIN">
+  <button class="btn btn-primary btn-block btn-lg" type="submit">Devam</button>
+</form>
+{% endblock %}

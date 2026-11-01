@@ -501,3 +501,84 @@ class WalletRegistration(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     __table_args__ = (db.UniqueConstraint("device_id", "serial", name="uq_wallet_device_serial"),)
+
+
+# ── Günlük stok sayımı ──────────────────────────────────────────────────────
+
+class StockSetting(db.Model):
+    """İşletmenin sayım bağlantısı (baristalar hesapsız girer) ve isteğe bağlı PIN."""
+    __tablename__ = "stock_settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+    token = db.Column(db.String(24), unique=True, nullable=False, index=True)
+    pin_hash = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class StockCategory(db.Model):
+    __tablename__ = "stock_categories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    name = db.Column(db.String(60), nullable=False)
+    sort = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    items = db.relationship("StockItem", backref="category", lazy="dynamic", cascade="all, delete-orphan",
+                            order_by="StockItem.sort, StockItem.id")
+
+
+class StockItem(db.Model):
+    __tablename__ = "stock_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("stock_categories.id"), nullable=False, index=True)
+    name = db.Column(db.String(80), nullable=False)
+    unit = db.Column(db.String(20), nullable=False, default="adet")
+    min_stock = db.Column(db.Float)                       # boş = uyarı yok
+    sort = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class StockCount(db.Model):
+    __tablename__ = "stock_counts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    count_date = db.Column(db.Date, nullable=False, index=True)
+    counted_by = db.Column(db.String(60), nullable=False)
+    note = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    lines = db.relationship("StockCountLine", backref="count", lazy="dynamic", cascade="all, delete-orphan",
+                            order_by="StockCountLine.id")
+
+
+class StockCountLine(db.Model):
+    """Sayımdaki bir ürün. Ad, birim ve min. stok o anki haliyle saklanır (geçmiş bozulmasın)."""
+    __tablename__ = "stock_count_lines"
+
+    id = db.Column(db.Integer, primary_key=True)
+    count_id = db.Column(db.Integer, db.ForeignKey("stock_counts.id"), nullable=False, index=True)
+    item_id = db.Column(db.Integer, index=True)            # ürün silinse de satır kalır
+    category_name = db.Column(db.String(60), nullable=False)
+    item_name = db.Column(db.String(80), nullable=False)
+    unit = db.Column(db.String(20), nullable=False)
+    min_stock = db.Column(db.Float)
+    prev_qty = db.Column(db.Float)                         # bir önceki sayımda sayılan
+    received = db.Column(db.Float)                         # bugün gelen
+    counted = db.Column(db.Float)                          # şu an sayılan (boş = sayılmadı)
+    note = db.Column(db.String(200))
+
+    @property
+    def used(self):
+        if self.counted is None or self.prev_qty is None:
+            return None
+        return round(self.prev_qty + (self.received or 0) - self.counted, 3)
+
+    @property
+    def needs_order(self):
+        return self.counted is not None and self.min_stock is not None and self.counted <= self.min_stock
