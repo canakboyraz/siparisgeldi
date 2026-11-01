@@ -318,3 +318,169 @@ def import_adisyo(user, categories_data):
     setting.adisyo_synced_at = datetime.utcnow()
     db.session.commit()
     return added, updated, skipped
+
+
+# ── Adisyo'ya masa siparişi yazma (açık hesap) ─────────────────────────────
+
+ADISYO_OK = "100"
+ADISYO_DUPLICATE = "713"     # aynı WebOrderId daha önce kaydedilmiş
+
+
+def adisyo_connection(user):
+    from models import Integration
+    integration = Integration.query.filter_by(user_id=user.id, platform="adisyo", is_active=True).first()
+    return integration.adisyo_connection if integration else None
+
+
+def _adisyo_call(connection, method, path, payload=None):
+    import requests
+    from integrations.adisyo import BASE_URL, AdisyoError, remote_message
+    url = current_app.config.get("ADISYO_API_BASE", BASE_URL).rstrip("/") + path
+    headers = {"x-api-key": connection.api_key, "x-api-secret": connection.api_secret,
+               "x-api-consumer": connection.consumer}
+    try:
+        response = requests.request(method, url, headers=headers, json=payload, timeout=(5, 20),
+                                    allow_redirects=False)
+    except requests.Timeout:
+        raise AdisyoError("Adisyo zamanında yanıt vermedi.") from None
+    except requests.RequestException:
+        raise AdisyoError("Adisyo bağlantısı kurulamadı.") from None
+    try:
+        data = response.json()
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        raise AdisyoError(f"Adisyo HTTP {response.status_code}: {remote_message(response, connection)}")
+    return data
+
+
+def _norm_name(text):
+    return " ".join(str(text or "").replace("-", " ").split()).casefold()
+
+
+def fetch_adisyo_tables(connection):
+    """Adisyo'daki bölge ve masalar → [{"id", "name", "area"}]."""
+    from integrations.adisyo import AdisyoError
+    data = _adisyo_call(connection, "GET", "/AreasWithTables")
+    if str(data.get("status")) != ADISYO_OK or not isinstance(data.get("data"), list):
+        raise AdisyoError(f"Adisyo masa listesi alınamadı ({data.get('status')}: {clean(str(data.get('message') or ''), 80)}).")
+    rows = []
+    for area in data["data"]:
+        for t in (area.get("tables") or []):
+            if isinstance(t.get("id"), int) and t.get("name"):
+                rows.append({"id": t["id"], "name": clean(str(t["name"]), 40), "area": clean(str(area.get("name") or ""), 40)})
+    return rows
+
+
+def saved_adisyo_tables(setting):
+    import json
+    try:
+        return json.loads(setting.adisyo_tables or "[]")
+    except ValueError:
+        return []
+
+
+def sync_adisyo_tables(user, adisyo_rows, create_missing=False):
+    """Masa listesini kaydeder, aynı adlı masaları eşleştirir; istenirse eksik masaları oluşturur.
+
+    Dönüş: (eşleşen, eklenen)."""
+    import json
+    setting = get_setting(user, create=True)
+    setting.adisyo_tables = json.dumps(adisyo_rows, ensure_ascii=False)
+    tables = MenuTable.query.filter_by(user_id=user.id).order_by(MenuTable.sort, MenuTable.id).all()
+    used = {t.adisyo_table_id for t in tables if t.adisyo_table_id}
+    by_name = {}
+    for row in adisyo_rows:
+        by_name.setdefault(_norm_name(row["name"]), row)
+    matched = added = 0
+    for t in tables:
+        row = by_name.get(_norm_name(t.name))
+        if not t.adisyo_table_id and row and row["id"] not in used:
+            t.adisyo_table_id = row["id"]
+            used.add(row["id"])
+            matched += 1
+    if create_missing:
+        names = {_norm_name(t.name) for t in tables}
+        sort = next_sort(MenuTable, user_id=user.id)
+        for row in adisyo_rows:
+            if row["id"] in used or _norm_name(row["name"]) in names:
+                continue
+            db.session.add(MenuTable(user_id=user.id, name=row["name"], code=_token(8, MenuTable, "code"),
+                                     sort=sort + added * 10, adisyo_table_id=row["id"]))
+            used.add(row["id"])
+            added += 1
+    db.session.commit()
+    return matched, added
+
+
+def adisyo_payload(order, table):
+    from integrations.adisyo import AdisyoError
+    items = {i.id: i for i in MenuItem.query.filter(
+        MenuItem.user_id == order.user_id, MenuItem.id.in_([l.item_id for l in order.lines if l.item_id]))}
+    details, missing = [], []
+    for line in order.lines:
+        item = items.get(line.item_id)
+        if not item or not item.adisyo_unit_id:
+            missing.append(line.name)
+            continue
+        details.append({"ProductUnitId": item.adisyo_unit_id, "Quantity": line.quantity,
+                        "Name": line.name, "IsMenu": False})
+    if missing:
+        raise AdisyoError("Adisyo'da karşılığı olmayan ürün: " + ", ".join(missing[:4])
+                          + ". Ürünü Adisyo'dan aktar ya da Adisyo'ya elle gir.")
+    note = f"QR menü · {order.table_name}"
+    if order.customer_name:
+        note += f" · {order.customer_name}"
+    if order.note:
+        note += f" · Not: {order.note}"
+    return {
+        "CustomerName": order.customer_name or order.table_name, "CustomerSurname": "",
+        "CustomerId": f"sg-masa-{order.table_id or 0}", "CustomerPhone": "", "CustomerPhone2": "",
+        "Address": "", "AddressDescription": "", "Region": "", "City": "",
+        "PaymentNote": "QR menü · ödeme kasada", "Discount": 0,
+        "OrderNote": note[:300], "WebOrderId": f"sg-qr-{order.id}",
+        "OrderTotal": float(order.total), "TableId": table.adisyo_table_id,
+        "DeliveryFee": 0, "ServiceCharge": 0, "OrderDetails": details,
+    }
+
+
+def send_to_adisyo(order):
+    """Siparişi Adisyo'da masanın hesabına yazar. Aynı sipariş iki kez gönderilmez.
+
+    Dönüş: (ok, mesaj)."""
+    from integrations.adisyo import AdisyoError
+    if order.adisyo_state == "sent":
+        return True, "Bu sipariş zaten Adisyo'da."
+    if order.status == "cancelled":
+        return False, "İptal edilen sipariş Adisyo'ya gönderilmez."
+    from models import User
+    owner = db.session.get(User, order.user_id)
+    connection = adisyo_connection(owner)
+    table = db.session.get(MenuTable, order.table_id) if order.table_id else None
+    if not connection:
+        return False, "Adisyo bağlantısı yok."
+    if not table or not table.adisyo_table_id:
+        return False, f"{order.table_name} Adisyo'daki bir masayla eşleşmemiş (Masalar ve QR → Adisyo eşleştirme)."
+    # Çift tıklama / iki sekme: sadece bir istek gönderilsin
+    claimed = (TableOrder.query.filter(TableOrder.id == order.id,
+                                       db.or_(TableOrder.adisyo_state.is_(None), TableOrder.adisyo_state == "error"))
+               .update({"adisyo_state": "sending"}, synchronize_session=False))
+    db.session.commit()
+    if not claimed:
+        db.session.refresh(order)
+        return order.adisyo_state == "sent", "Sipariş şu an Adisyo'ya gönderiliyor."
+    db.session.refresh(order)
+    try:
+        data = _adisyo_call(connection, "POST", "/SaveOrder", adisyo_payload(order, table))
+        code = str(data.get("status"))
+        if code not in (ADISYO_OK, ADISYO_DUPLICATE):
+            raise AdisyoError(f"Adisyo kaydetmedi ({code}: {clean(str(data.get('message') or ''), 120)})")
+    except AdisyoError as exc:
+        order.adisyo_state, order.adisyo_error = "error", clean(str(exc), 200)
+        db.session.commit()
+        log.warning("Adisyo SaveOrder hatası order=%s: %s", order.id, exc)
+        return False, order.adisyo_error
+    order.adisyo_state, order.adisyo_error, order.adisyo_sent_at = "sent", None, datetime.utcnow()
+    order.adisyo_order_id = str(data.get("orderId") or "")[:40] or None
+    db.session.commit()
+    return True, f"{order.table_name} siparişi Adisyo'da masanın hesabına eklendi."

@@ -21,6 +21,7 @@ class TestConfig:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     RUN_SCHEDULER = False
     TRIAL_DAYS = 0
+    ENCRYPTION_KEY = "M0dkZ3VvQ1ZqZ0x2b3pXVmJ6a1FwR3hJb1N5c3h6Zkk="
 
 
 class MenuTest(unittest.TestCase):
@@ -221,6 +222,98 @@ class MenuTest(unittest.TestCase):
         # panel düğmesi: bağlantı yoksa uyarır
         r = self._post("/panel/menu/adisyo-aktar", {})
         self.assertEqual(r.status_code, 302)
+
+    def _adisyo(self):
+        from models import AdisyoConnection, Integration
+        intg = Integration(user_id=self.owner.id, platform="adisyo", is_active=True)
+        db.session.add(intg)
+        conn = AdisyoConnection(integration=intg, restaurant_name="Pion", consumer="SG")
+        conn.api_key, conn.api_secret = "k", "s"
+        db.session.add(conn)
+        db.session.commit()
+
+    @staticmethod
+    def _resp(payload):
+        r = mock.Mock(status_code=200)
+        r.json.return_value = payload
+        return r
+
+    def test_send_order_to_adisyo_table(self):
+        self._build_menu()
+        self._adisyo()
+        latte = MenuItem.query.filter_by(name="Latte").one()
+        cake = MenuItem.query.filter_by(name="Cheesecake").one()
+        latte.adisyo_unit_id = 9001
+        db.session.commit()
+        tables = {"status": 100, "data": [{"id": 1, "name": "Salon", "tables": [
+            {"id": 101, "name": "MASA 3"}, {"id": 102, "name": "Masa-1"}, {"id": 103, "name": "Bahçe 1"}]}]}
+        with mock.patch("requests.request", return_value=self._resp(tables)):
+            r = self._post("/panel/menu/adisyo-masalar", {}, page="/panel/menu/masalar")
+        self.assertEqual(r.status_code, 302)
+        t3 = MenuTable.query.filter_by(name="Masa 3").one()
+        self.assertEqual((t3.adisyo_table_id, MenuTable.query.filter_by(name="Masa 1").one().adisyo_table_id), (101, 102))
+        self.assertIsNone(MenuTable.query.filter_by(name="Masa 2").one().adisyo_table_id)
+        page = self.staff.get("/panel/menu/masalar").get_data(as_text=True)
+        self.assertIn("Adisyo: Salon · Bahçe 1", page)
+        with mock.patch("requests.request", return_value=self._resp(tables)):
+            self._post("/panel/menu/adisyo-masalar", {"action": "create"}, page="/panel/menu/masalar")
+        self.assertEqual(MenuTable.query.filter_by(name="Bahçe 1").one().adisyo_table_id, 103)
+        # elle eşleştirme: listede olmayan id kabul edilmez
+        t2 = MenuTable.query.filter_by(name="Masa 2").one()
+        self._post(f"/panel/menu/masa/{t2.id}/adisyo", {"adisyo_table_id": "999"}, page="/panel/menu/masalar")
+        self.assertIsNone(db.session.get(MenuTable, t2.id).adisyo_table_id)
+
+        # Adisyo karşılığı olmayan ürün varsa gönderilmez
+        o = menu.create_order(t3, {"items": [{"id": latte.id, "qty": 2}, {"id": cake.id, "qty": 1}]}, "d1")
+        with mock.patch("requests.request") as call:
+            ok, msg = menu.send_to_adisyo(o)
+        self.assertFalse(ok)
+        self.assertIn("Cheesecake", msg)
+        call.assert_not_called()
+        self.assertEqual(o.adisyo_state, "error")
+
+        # otomatik: Hazırlanıyor'a basınca masanın hesabına yazılır
+        self._post("/panel/menu/ayarlar", {"action": "adisyo_send", "value": "accept"}, page="/panel/menu")
+        o2 = menu.create_order(t3, {"items": [{"id": latte.id, "qty": 2}], "note": "az köpük", "name": "Ayşe"}, "d2")
+        tok = self._csrf(self.staff, "/panel/menu")
+        with mock.patch("requests.request", return_value=self._resp({"status": 100, "orderId": 55501})) as call:
+            r = self.staff.post(f"/panel/menu/siparis/{o2.id}/preparing",
+                                headers={"X-CSRF-Token": tok, "X-Requested-With": "fetch"})
+        self.assertTrue(r.get_json()["adisyo"]["ok"])
+        method, url = call.call_args.args
+        body = call.call_args.kwargs["json"]
+        self.assertEqual((method, url.endswith("/SaveOrder")), ("POST", True))
+        self.assertEqual((body["TableId"], body["OrderTotal"], body["WebOrderId"]), (101, 190.0, f"sg-qr-{o2.id}"))
+        self.assertEqual(body["OrderDetails"], [{"ProductUnitId": 9001, "Quantity": 2, "Name": "Latte", "IsMenu": False}])
+        self.assertIn("az köpük", body["OrderNote"])
+        self.assertIn("Ayşe", body["OrderNote"])
+        db.session.expire_all()
+        o2 = db.session.get(TableOrder, o2.id)
+        self.assertEqual((o2.adisyo_state, o2.adisyo_order_id), ("sent", "55501"))
+        # ikinci kez gönderilmez
+        with mock.patch("requests.request") as call:
+            self.assertTrue(menu.send_to_adisyo(o2)[0])
+        call.assert_not_called()
+        self.assertIn("Adisyo'da masanın hesabında", self.staff.get("/panel/menu").get_data(as_text=True))
+
+        # Adisyo hata dönerse siparişte görünür, tekrar denenebilir
+        o3 = menu.create_order(t3, {"items": [{"id": latte.id, "qty": 1}]}, "d3")
+        with mock.patch("requests.request", return_value=self._resp({"status": 715, "message": "Hatalı"})):
+            r = self._post(f"/panel/menu/siparis/{o3.id}/adisyo", {}, page="/panel/menu")
+        self.assertEqual(r.status_code, 302)
+        db.session.expire_all()
+        o3 = db.session.get(TableOrder, o3.id)
+        self.assertEqual(o3.adisyo_state, "error")
+        self.assertIn("715", o3.adisyo_error)
+        self.assertIn("Tekrar dene", self.staff.get("/panel/menu").get_data(as_text=True))
+        with mock.patch("requests.request", return_value=self._resp({"status": 713, "message": "var"})):
+            self.assertTrue(menu.send_to_adisyo(o3)[0])          # zaten kayıtlıysa başarılı sayılır
+        # eşleşmemiş masa
+        t2 = db.session.get(MenuTable, t2.id)
+        o4 = menu.create_order(t2, {"items": [{"id": latte.id, "qty": 1}]}, "d4")
+        ok, msg = menu.send_to_adisyo(o4)
+        self.assertFalse(ok)
+        self.assertIn("eşleşmemiş", msg)
 
 
 if __name__ == "__main__":

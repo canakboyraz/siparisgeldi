@@ -604,6 +604,8 @@ class MenuSetting(db.Model):
     ordering_open = db.Column(db.Boolean, nullable=False, default=True)
     accent = db.Column(db.String(9), default="#1E5B47")
     adisyo_synced_at = db.Column(db.DateTime)
+    adisyo_send = db.Column(db.String(10), default="off")      # off | accept (Hazırlanıyor'a basınca açık hesaba yaz)
+    adisyo_tables = db.Column(db.Text)                          # son çekilen Adisyo masa listesi (JSON)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -660,6 +662,7 @@ class MenuTable(db.Model):
     code = db.Column(db.String(16), unique=True, nullable=False, index=True)
     sort = db.Column(db.Integer, nullable=False, default=0)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    adisyo_table_id = db.Column(db.Integer)                   # Adisyo'daki masa (SaveOrder TableId)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -675,6 +678,10 @@ class TableOrder(db.Model):
     customer_name = db.Column(db.String(40))
     total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     device = db.Column(db.String(32), index=True)
+    adisyo_state = db.Column(db.String(10))                   # None | sending | sent | error
+    adisyo_order_id = db.Column(db.String(40))
+    adisyo_error = db.Column(db.String(200))
+    adisyo_sent_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 

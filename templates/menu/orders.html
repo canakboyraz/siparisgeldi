@@ -10,6 +10,13 @@
       <button class="btn {{ 'btn-ghost' if setting.ordering_open else 'btn-primary' }}" type="submit"
         title="{{ 'Kapatınca menü sadece görüntülenir' if setting.ordering_open else 'Masadan sipariş alımını aç' }}">
         <span class="qo-dot {{ 'on' if setting.ordering_open }}"></span>{{ 'Sipariş alımı açık' if setting.ordering_open else 'Sipariş alımı kapalı · aç' }}</button></form>
+    {% if adisyo_on %}
+    <form method="post" action="{{ url_for('menu.settings') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="adisyo_send"><input type="hidden" name="next" value="{{ url_for('menu.orders') }}">
+      <input type="hidden" name="value" value="{{ 'off' if setting.adisyo_send=='accept' else 'accept' }}">
+      <button class="btn btn-ghost" type="submit" title="Hazırlanıyor'a basınca sipariş Adisyo'da masanın hesabına yazılır">
+        <span class="qo-dot {{ 'on' if setting.adisyo_send=='accept' }}"></span>{{ "Adisyo'ya yazılıyor" if setting.adisyo_send=='accept' else "Adisyo'ya yazma kapalı" }}</button></form>
+    {% endif %}
     <a class="btn btn-ghost" href="{{ url_for('menu.items') }}">{{ icon('list', 16) }} Menü</a>
     <a class="btn btn-ghost" href="{{ url_for('menu.tables') }}">{{ icon('qr', 16) }} Masalar ve QR</a>
   </div>
@@ -43,6 +50,9 @@
     <p class="qo-meta">#{{ o.id }} · {{ (o.created_at|yerel).strftime('%H:%M') }}{% if o.customer_name %} · {{ o.customer_name }}{% endif %}</p>
     <ul class="qo-lines">{% for l in o.lines %}<li><b>{{ l.quantity }}×</b> {{ l.name }}</li>{% endfor %}</ul>
     {% if o.note %}<p class="qo-note">📝 {{ o.note }}</p>{% endif %}
+    {% if o.adisyo_state == 'sent' %}<p class="qo-adisyo is-ok">✓ Adisyo'da masanın hesabında{% if o.adisyo_order_id %} · #{{ o.adisyo_order_id }}{% endif %}</p>
+    {% elif o.adisyo_state == 'error' %}<p class="qo-adisyo is-err">Adisyo'ya yazılamadı: {{ o.adisyo_error }}</p>
+    {% elif o.adisyo_state == 'sending' %}<p class="qo-adisyo">Adisyo'ya gönderiliyor…</p>{% endif %}
     <footer>
       <b>{{ tl(o.total) }}</b>
       <div class="qo-actions">
@@ -51,6 +61,11 @@
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
           <button class="btn btn-sm {{ cls }}" type="submit">{{ text }}</button></form>
         {% endfor %}
+        {% if adisyo_on and o.status != 'cancelled' and o.adisyo_state in (none, 'error') %}
+        <form method="post" action="{{ url_for('menu.send_adisyo', order_id=o.id) }}" onsubmit="this.querySelector('button').disabled=true">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+          <button class="btn btn-sm btn-ghost" type="submit">{{ 'Tekrar dene' if o.adisyo_state=='error' else "Adisyo'ya yaz" }}</button></form>
+        {% endif %}
       </div>
     </footer>
   </article>

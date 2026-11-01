@@ -45,10 +45,18 @@
         if (!current || current.id !== items[0].id || box.hidden) show(items[0], items.length - 1); else beep(); })
       .catch(function () {});
   }
+  function toast(text, ok) {
+    var t = document.createElement("div"); t.className = "qo-toast" + (ok ? "" : " is-warn"); t.textContent = text;
+    t.setAttribute("role", "status"); document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, ok ? 4000 : 9000);
+  }
   el("qo-alert-ok").addEventListener("click", function () {
     if (!current) return; busy = true;
     fetch(base.replace("/0/", "/" + current.id + "/"), { method: "POST", credentials: "same-origin",
       headers: { "X-CSRF-Token": csrf, "X-Requested-With": "fetch", "Accept": "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.adisyo) toast(d.adisyo.ok ? "✓ " + d.adisyo.message : "Adisyo'ya yazılamadı: " + d.adisyo.message, d.adisyo.ok); })
+      .catch(function () {})
       .finally(function () { busy = false; box.hidden = true; current = null; poll();
         if (/\/panel\/menu\/?$/.test(location.pathname)) location.reload(); });
   });

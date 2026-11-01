@@ -136,7 +136,8 @@ def orders():
     has_tables = MenuTable.query.filter_by(user_id=current_user.id).first() is not None
     return render_template("menu/orders.html", setting=setting, rows=rows, durum=durum, counts=counts,
                            status=menu.STATUS, tl=menu.tl, today_total=today_total,
-                           has_menu=has_menu, has_tables=has_tables)
+                           has_menu=has_menu, has_tables=has_tables,
+                           adisyo_on=menu.adisyo_connection(current_user) is not None)
 
 
 @menu_bp.get("/yeni.json")
@@ -155,9 +156,30 @@ def change_status(order_id, status):
     order = TableOrder.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
     if status not in menu.STATUS:
         abort(404)
+    sending = (status == "preparing" and order.status == "new" and not order.adisyo_state
+               and (menu.get_setting(current_user, create=True).adisyo_send == "accept"))
     menu.set_status(order, status)
+    adisyo = None
+    if sending:
+        ok, message = menu.send_to_adisyo(order)
+        adisyo = {"ok": ok, "message": message}
     if _wants_json():
-        return jsonify({"ok": True, "status": status})
+        return jsonify({"ok": True, "status": status, "adisyo": adisyo})
+    if adisyo:
+        flash(adisyo["message"] if adisyo["ok"] else f"Adisyo'ya yazılamadı: {adisyo['message']}",
+              "success" if adisyo["ok"] else "warning")
+    return redirect(request.form.get("next") if (request.form.get("next") or "").startswith("/panel/")
+                    else url_for("menu.orders"))
+
+
+@menu_bp.post("/siparis/<int:order_id>/adisyo")
+@login_required
+def send_adisyo(order_id):
+    order = TableOrder.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
+    ok, message = menu.send_to_adisyo(order)
+    if _wants_json():
+        return jsonify({"ok": ok, "message": message})
+    flash(message if ok else f"Adisyo'ya yazılamadı: {message}", "success" if ok else "warning")
     return redirect(request.form.get("next") if (request.form.get("next") or "").startswith("/panel/")
                     else url_for("menu.orders"))
 
@@ -349,7 +371,11 @@ def move_item(item_id):
 @login_required
 def settings():
     setting = menu.get_setting(current_user, create=True)
-    if request.form.get("action") == "toggle":
+    if request.form.get("action") == "adisyo_send":
+        setting.adisyo_send = "accept" if request.form.get("value") == "accept" else "off"
+        flash("Siparişler artık \"Hazırlanıyor\"a basınca Adisyo'da masanın hesabına yazılacak."
+              if setting.adisyo_send == "accept" else "Adisyo'ya otomatik yazma kapatıldı.", "success")
+    elif request.form.get("action") == "toggle":
         setting.ordering_open = not setting.ordering_open
         flash("Masadan sipariş alımı " + ("açıldı." if setting.ordering_open else "kapatıldı; menü sadece görüntülenir."),
               "success")
@@ -398,6 +424,8 @@ def tables():
     setting = menu.get_setting(current_user, create=True)
     rows = MenuTable.query.filter_by(user_id=current_user.id).order_by(MenuTable.sort, MenuTable.id).all()
     return render_template("menu/tables.html", setting=setting, rows=rows,
+                           adisyo_on=menu.adisyo_connection(current_user) is not None,
+                           adisyo_rows=menu.saved_adisyo_tables(setting),
                            url=lambda t: url_for("menu_public.public_menu", code=t.code, _external=True))
 
 
@@ -430,6 +458,41 @@ def table_action(table_id, action):
         abort(404)
     db.session.commit()
     return redirect(url_for("menu.tables"))
+
+
+@menu_bp.post("/adisyo-masalar")
+@login_required
+def adisyo_tables():
+    from integrations.adisyo import AdisyoError
+    connection = menu.adisyo_connection(current_user)
+    if not connection:
+        flash("Önce Adisyo bağlantısını kur (Yemek platformları → Adisyo).", "warning")
+        return redirect(url_for("menu.tables"))
+    try:
+        rows = menu.fetch_adisyo_tables(connection)
+        matched, added = menu.sync_adisyo_tables(current_user, rows,
+                                                 create_missing=request.form.get("action") == "create")
+    except AdisyoError as exc:
+        db.session.rollback()
+        flash(f"Adisyo masaları alınamadı: {exc}", "danger")
+        return redirect(url_for("menu.tables"))
+    msg = f"Adisyo'da {len(rows)} masa bulundu. {matched} masa adıyla eşleşti"
+    msg += f", {added} masa eklendi." if added else "."
+    flash(msg + " Eşleşmeyenleri aşağıdan seçebilirsin.", "success")
+    return redirect(url_for("menu.tables"))
+
+
+@menu_bp.post("/masa/<int:table_id>/adisyo")
+@login_required
+def table_adisyo(table_id):
+    table = _table(table_id)
+    setting = menu.get_setting(current_user, create=True)
+    value = request.form.get("adisyo_table_id", type=int)
+    valid = {r["id"] for r in menu.saved_adisyo_tables(setting)}
+    table.adisyo_table_id = value if value in valid else None
+    db.session.commit()
+    flash(f"{table.name} eşleştirmesi kaydedildi.", "success")
+    return redirect(url_for("menu.tables") + f"#masa{table.id}")
 
 
 @menu_bp.get("/masalar/yazdir")

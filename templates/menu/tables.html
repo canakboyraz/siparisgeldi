@@ -20,14 +20,38 @@
   </div>
   <p class="hint">Örnek: "Masa", 1 – 12 → Masa 1 … Masa 12. Bahçe gibi farklı bölümler için adı değiştirip tekrar ekleyebilirsin (Bahçe 1 – 6).</p>
 </form>
+{% if adisyo_on %}
+<div class="card qt-adisyo">
+  <div class="card-title">Adisyo masa eşleştirmesi</div>
+  <p class="hint" style="margin-top:0">Eşleşen masadan gelen sipariş, "Hazırlanıyor"a basınca (ya da siparişteki "Adisyo'ya yaz" ile) Adisyo'da o masanın hesabına yazılır. Ödemeyi her zamanki gibi Adisyo'dan alırsın.</p>
+  <div class="qt-addrow">
+    <form method="post" action="{{ url_for('menu.adisyo_tables') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary" type="submit">{{ icon('refresh', 16) }} Adisyo masalarını getir ve eşleştir</button></form>
+    {% if adisyo_rows %}
+    <form method="post" action="{{ url_for('menu.adisyo_tables') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="create">
+      <button class="btn btn-ghost" type="submit">Adisyo'daki eksik masaları buraya ekle</button></form>
+    {% endif %}
+  </div>
+  {% if adisyo_rows %}<p class="hint">{{ rows|selectattr('adisyo_table_id')|list|length }}/{{ rows|length }} masa eşleşti.</p>{% endif %}
+</div>
+{% endif %}
 {% if rows %}
 <div class="qt-grid">
   {% for t in rows %}
-  <div class="card qt-card">
+  <div class="card qt-card" id="masa{{ t.id }}">
     <div class="qt-qr" data-url="{{ url(t) }}" aria-label="{{ t.name }} QR kodu"></div>
     <form method="post" action="{{ url_for('menu.table_action', table_id=t.id, action='ad') }}" class="st-row">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="text" name="name" value="{{ t.name }}" maxlength="40" aria-label="Masa adı"><button class="btn btn-ghost btn-sm" type="submit">Kaydet</button></form>
+    {% if adisyo_on and adisyo_rows %}
+    <form method="post" action="{{ url_for('menu.table_adisyo', table_id=t.id) }}" class="st-row qt-map">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <select name="adisyo_table_id" aria-label="{{ t.name }} Adisyo masası" onchange="this.form.submit()" class="{{ 'is-off' if not t.adisyo_table_id }}">
+        <option value="">Adisyo: eşleşmedi</option>
+        {% for a in adisyo_rows %}<option value="{{ a.id }}" {{ 'selected' if a.id == t.adisyo_table_id }}>Adisyo: {% if a.area %}{{ a.area }} · {% endif %}{{ a.name }}</option>{% endfor %}
+      </select><noscript><button class="btn btn-ghost btn-sm" type="submit">Kaydet</button></noscript></form>
+    {% endif %}
     <div class="qt-actions">
       <a class="btn btn-ghost btn-sm" href="{{ url(t) }}" target="_blank" rel="noopener">Aç</a>
       <a class="btn btn-ghost btn-sm" href="{{ url_for('menu.print_tables', masa=t.id) }}" target="_blank" rel="noopener">{{ icon('printer', 14) }} Yazdır</a>

@@ -1856,3 +1856,13 @@ body:has(.qm){background:#FAF8F5}
   .qt-addrow{grid-template-columns:1fr 1fr}
   .qt-addrow .st-f:first-child{grid-column:1/-1}
 }
+
+/* QR menü · Adisyo */
+.qo-adisyo{font-size:.8rem;margin:.1rem 0;color:var(--muted)}
+.qo-adisyo.is-ok{color:#1E7A4F;font-weight:600}
+.qo-adisyo.is-err{color:#B4321F}
+.qo-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;max-width:min(92vw,520px);background:#15302A;color:#fff;padding:.75rem 1rem;border-radius:12px;font-size:.9rem;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.qo-toast.is-warn{background:#8A3A12}
+.qt-adisyo{margin-bottom:1rem}
+.qt-map select{width:100%;font-size:.85rem}
+.qt-map select.is-off{color:#B4321F}

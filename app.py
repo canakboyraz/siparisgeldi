@@ -77,6 +77,13 @@ def _ensure_schema():
             "ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS wallet_message VARCHAR(200)",
             "ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS wallet_message_at TIMESTAMP",
             "ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS reminders_since_visit INTEGER DEFAULT 0",
+            "ALTER TABLE menu_settings ADD COLUMN IF NOT EXISTS adisyo_send VARCHAR(10) DEFAULT 'off'",
+            "ALTER TABLE menu_settings ADD COLUMN IF NOT EXISTS adisyo_tables TEXT",
+            "ALTER TABLE menu_tables ADD COLUMN IF NOT EXISTS adisyo_table_id INTEGER",
+            "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS adisyo_state VARCHAR(10)",
+            "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS adisyo_order_id VARCHAR(40)",
+            "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS adisyo_error VARCHAR(200)",
+            "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS adisyo_sent_at TIMESTAMP",
         ]
     elif backend.startswith("sqlite"):
         with db.engine.begin() as conn:
