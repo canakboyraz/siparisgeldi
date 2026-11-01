@@ -589,3 +589,105 @@ class StockCountLine(db.Model):
     @property
     def needs_order(self):
         return self.counted is not None and self.min_stock is not None and self.counted <= self.min_stock
+
+
+# ── QR menü ve masadan sipariş ──────────────────────────────────────────────
+
+class MenuSetting(db.Model):
+    __tablename__ = "menu_settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+    token = db.Column(db.String(24), unique=True, nullable=False, index=True)   # sadece görüntüleme bağlantısı
+    title = db.Column(db.String(80))                          # müşteriye görünen işletme adı
+    welcome = db.Column(db.String(200))                        # menünün üstündeki kısa yazı
+    ordering_open = db.Column(db.Boolean, nullable=False, default=True)
+    accent = db.Column(db.String(9), default="#1E5B47")
+    adisyo_synced_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MenuImage(db.Model):
+    """Menü fotoğrafı: küçültülmüş WebP, veritabanında (Railway diski kalıcı değil)."""
+    __tablename__ = "menu_images"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    data = db.Column(db.LargeBinary, nullable=False)
+    mime = db.Column(db.String(20), nullable=False, default="image/webp")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MenuCategory(db.Model):
+    __tablename__ = "menu_categories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    name = db.Column(db.String(60), nullable=False)
+    sort = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    adisyo_category_id = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    items = db.relationship("MenuItem", backref="category", lazy="dynamic", cascade="all, delete-orphan",
+                            order_by="MenuItem.sort, MenuItem.id")
+
+
+class MenuItem(db.Model):
+    __tablename__ = "menu_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("menu_categories.id"), nullable=False, index=True)
+    name = db.Column(db.String(80), nullable=False)
+    description = db.Column(db.String(300))
+    price = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    image_id = db.Column(db.Integer)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)      # menüde görünür
+    is_available = db.Column(db.Boolean, nullable=False, default=True)   # tükendi değil
+    sort = db.Column(db.Integer, nullable=False, default=0)
+    adisyo_product_id = db.Column(db.Integer, index=True)
+    adisyo_unit_id = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MenuTable(db.Model):
+    __tablename__ = "menu_tables"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    name = db.Column(db.String(40), nullable=False)          # "Masa 3", "Bahçe 1"
+    code = db.Column(db.String(16), unique=True, nullable=False, index=True)
+    sort = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TableOrder(db.Model):
+    __tablename__ = "table_orders"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    table_id = db.Column(db.Integer, index=True)
+    table_name = db.Column(db.String(40), nullable=False)
+    status = db.Column(db.String(12), nullable=False, default="new", index=True)  # new|preparing|served|cancelled
+    note = db.Column(db.String(300))
+    customer_name = db.Column(db.String(40))
+    total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    device = db.Column(db.String(32), index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    lines = db.relationship("TableOrderLine", backref="order", lazy="select", cascade="all, delete-orphan",
+                            order_by="TableOrderLine.id")
+
+
+class TableOrderLine(db.Model):
+    __tablename__ = "table_order_lines"
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey("table_orders.id"), nullable=False, index=True)
+    item_id = db.Column(db.Integer)
+    name = db.Column(db.String(80), nullable=False)
+    price = db.Column(db.Numeric(10, 2), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=1)

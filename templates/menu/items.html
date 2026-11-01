@@ -1,0 +1,90 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Menü · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Menü</h1><p class="muted page-sub">Müşterinin QR'da göreceği menü. Fiyat ve "tükendi" durumunu buradan hızlıca değiştirebilirsin.</p></div>
+  <div class="lc-head-actions">
+    <a class="btn btn-ghost" href="{{ view_url }}" target="_blank" rel="noopener">Menüyü önizle</a>
+    <a class="btn btn-ghost" href="{{ url_for('menu.orders') }}">{{ icon('receipt', 16) }} Siparişler</a>
+    <a class="btn btn-ghost" href="{{ url_for('menu.tables') }}">{{ icon('qr', 16) }} Masalar ve QR</a>
+  </div>
+</div>
+
+<div class="qi-top">
+  <form method="post" action="{{ url_for('menu.settings') }}" class="card qi-settings">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="card-title">Menü başlığı</div>
+    <div class="field"><label for="qi-title">İşletme adı</label><input id="qi-title" type="text" name="title" maxlength="80" value="{{ setting.title or '' }}"></div>
+    <div class="field"><label for="qi-welcome">Karşılama yazısı (isteğe bağlı)</label><input id="qi-welcome" type="text" name="welcome" maxlength="200" value="{{ setting.welcome or '' }}" placeholder="ör. Hoş geldin! Siparişin masana gelir."></div>
+    <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
+  </form>
+  <div class="card qi-import">
+    <div class="card-title">Adisyo'dan aktar</div>
+    {% if has_adisyo %}
+    <p class="hint" style="margin-top:0">Adisyo'daki kategori, ürün ve masa fiyatlarını menüye çeker. Tekrar bastığında yeni ürünler eklenir, var olanların adı ve fiyatı güncellenir; fotoğraf ve açıklamaların korunur.</p>
+    {% if setting.adisyo_synced_at %}<p class="hint">Son aktarım: {{ (setting.adisyo_synced_at|yerel).strftime('%d.%m.%Y %H:%M') }}</p>{% endif %}
+    <form method="post" action="{{ url_for('menu.adisyo_import') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary btn-sm" type="submit">{{ icon('refresh', 16) }} Adisyo'dan ürünleri çek</button></form>
+    {% else %}
+    <p class="hint" style="margin-top:0">Adisyo bağlıysa ürünleri tek tıkla aktarabilirsin. Önce Yemek platformları → Adisyo'dan bağlantıyı kur.</p>
+    {% endif %}
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('menu.add_category') }}" class="card st-row qi-addcat">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <input type="text" name="name" maxlength="60" placeholder="Yeni kategori (ör. Sıcak kahveler)" required aria-label="Yeni kategori adı">
+  <button class="btn btn-primary" type="submit">{{ icon('plus', 16) }} Kategori ekle</button>
+</form>
+
+{% if not groups %}<div class="card"><p class="muted">Henüz kategori yok. Yukarıdan ekle{% if has_adisyo %} ya da Adisyo'dan aktar{% endif %}.</p></div>{% endif %}
+
+{% for cat, items in groups %}
+<section class="card st-catcard {{ 'qi-off' if not cat.is_active }}" id="k{{ cat.id }}">
+  <div class="st-cathead">
+    <form method="post" action="{{ url_for('menu.edit_category', cat_id=cat.id) }}" class="st-rename">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="name" value="{{ cat.name }}" maxlength="60" aria-label="Kategori adı">
+      <label class="st-active"><input type="checkbox" name="is_active" value="1" {{ 'checked' if cat.is_active }}> <span>Menüde göster</span></label>
+      <button class="btn btn-ghost btn-sm" type="submit">Kaydet</button>
+    </form>
+    <div class="st-catactions">
+      <form method="post" action="{{ url_for('menu.move_category', cat_id=cat.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-ghost btn-sm" name="yon" value="yukari" aria-label="{{ cat.name }} yukarı" {{ 'disabled' if loop.first }}>↑</button>
+        <button class="btn btn-ghost btn-sm" name="yon" value="asagi" aria-label="{{ cat.name }} aşağı" {{ 'disabled' if loop.last }}>↓</button></form>
+      <form method="post" action="{{ url_for('menu.delete_category', cat_id=cat.id) }}" onsubmit="return window.confirm('{{ cat.name }} ve içindeki {{ items|length }} ürün silinsin mi?');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit">{{ icon('x', 15) }} Sil</button></form>
+    </div>
+  </div>
+
+  {% if items %}
+  <form method="post" action="{{ url_for('menu.quick_save', cat_id=cat.id) }}" class="qi-items">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="st-default" tabindex="-1" aria-hidden="true">Kaydet</button>
+    {% for i in items %}
+    <div class="qi-row {{ 'is-off' if not i.is_active }} {{ 'is-out' if not i.is_available }}">
+      <a class="qi-thumb" href="{{ url_for('menu.item_form', item_id=i.id) }}" aria-label="{{ i.name }} düzenle">
+        {% if i.image_id %}<img src="{{ url_for('menu_public.image', image_id=i.image_id) }}" alt="" loading="lazy">{% else %}<span>+ Foto</span>{% endif %}</a>
+      <div class="qi-name"><a href="{{ url_for('menu.item_form', item_id=i.id) }}"><b>{{ i.name }}</b></a>
+        {% if i.description %}<small>{{ i.description }}</small>{% endif %}
+        {% if i.adisyo_product_id %}<span class="badge gray">Adisyo</span>{% endif %}</div>
+      <label class="qi-price"><span>Fiyat</span><input type="text" name="p{{ i.id }}" value="{{ '%.2f'|format(i.price)|replace('.', ',')|replace(',00', '') }}" inputmode="decimal" aria-label="{{ i.name }} fiyat"></label>
+      <label class="st-active"><input type="checkbox" name="v{{ i.id }}" value="1" {{ 'checked' if i.is_active }}> <span>Menüde</span></label>
+      <label class="st-active"><input type="checkbox" name="a{{ i.id }}" value="1" {{ 'checked' if i.is_available }}> <span>Var</span></label>
+      <div class="st-iactions">
+        <button class="btn btn-ghost btn-sm" type="submit" formaction="{{ url_for('menu.move_item', item_id=i.id) }}" name="yon" value="yukari" aria-label="{{ i.name }} yukarı" {{ 'disabled' if loop.first }}>↑</button>
+        <button class="btn btn-ghost btn-sm" type="submit" formaction="{{ url_for('menu.move_item', item_id=i.id) }}" name="yon" value="asagi" aria-label="{{ i.name }} aşağı" {{ 'disabled' if loop.last }}>↓</button>
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('menu.item_form', item_id=i.id) }}">Düzenle</a>
+        <button class="btn btn-ghost btn-sm" type="submit" formaction="{{ url_for('menu.delete_item', item_id=i.id) }}" aria-label="{{ i.name }} sil" onclick="return window.confirm('{{ i.name }} silinsin mi?');">{{ icon('x', 15) }}</button>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="st-save qi-save"><span class="hint">"Var" işaretini kaldırırsan ürün menüde "Tükendi" görünür, sipariş verilemez.</span>
+      <button class="btn btn-primary" type="submit">Kaydet</button></div>
+  </form>
+  {% else %}<p class="muted">Bu kategoride ürün yok.</p>{% endif %}
+  <a class="btn btn-ghost btn-sm qi-additem" href="{{ url_for('menu.item_form', kategori=cat.id) }}">{{ icon('plus', 15) }} Ürün ekle</a>
+</section>
+{% endfor %}
+{% endblock %}

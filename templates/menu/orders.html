@@ -1,0 +1,77 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Masa siparişleri · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Masa siparişleri</h1><p class="muted page-sub">Müşterilerin masadaki QR menüden verdiği siparişler. Bugün: {{ tl(today_total) }}</p></div>
+  <div class="lc-head-actions">
+    <form method="post" action="{{ url_for('menu.settings') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="toggle"><input type="hidden" name="next" value="{{ url_for('menu.orders') }}">
+      <button class="btn {{ 'btn-ghost' if setting.ordering_open else 'btn-primary' }}" type="submit"
+        title="{{ 'Kapatınca menü sadece görüntülenir' if setting.ordering_open else 'Masadan sipariş alımını aç' }}">
+        <span class="qo-dot {{ 'on' if setting.ordering_open }}"></span>{{ 'Sipariş alımı açık' if setting.ordering_open else 'Sipariş alımı kapalı · aç' }}</button></form>
+    <a class="btn btn-ghost" href="{{ url_for('menu.items') }}">{{ icon('list', 16) }} Menü</a>
+    <a class="btn btn-ghost" href="{{ url_for('menu.tables') }}">{{ icon('qr', 16) }} Masalar ve QR</a>
+  </div>
+</div>
+
+{% if not has_menu or not has_tables %}
+<div class="card qo-start">
+  <h2>QR menüyü 3 adımda kur</h2>
+  <ol>
+    <li class="{{ 'done' if has_menu }}"><b>Menüyü oluştur</b><span>Kategorileri ve ürünleri ekle; fotoğraf ve açıklama koy. Adisyo bağlıysa ürünleri tek tıkla aktar.</span>
+      <a class="btn btn-sm {{ 'btn-ghost' if has_menu else 'btn-primary' }}" href="{{ url_for('menu.items') }}">Menüye git</a></li>
+    <li class="{{ 'done' if has_tables }}"><b>Masaları ekle</b><span>Örneğin Masa 1–12. Her masaya özel QR oluşur.</span>
+      <a class="btn btn-sm {{ 'btn-ghost' if has_tables else 'btn-primary' }}" href="{{ url_for('menu.tables') }}">Masalar</a></li>
+    <li><b>QR'ları yazdır, masalara koy</b><span>Müşteri okutur, sipariş verir; sipariş burada ve sesli uyarıyla panelde çıkar.</span></li>
+  </ol>
+</div>
+{% endif %}
+
+<div class="lc-chips">
+  <a class="lc-chip {{ 'is-active' if durum=='aktif' }} {{ 'is-alert' if counts.aktif }}" href="{{ url_for('menu.orders') }}">Aktif <b>{{ counts.aktif }}</b></a>
+  <a class="lc-chip {{ 'is-active' if durum=='served' }}" href="{{ url_for('menu.orders', durum='served') }}">Teslim edildi <b>{{ counts.served }}</b></a>
+  <a class="lc-chip {{ 'is-active' if durum=='cancelled' }}" href="{{ url_for('menu.orders', durum='cancelled') }}">İptal <b>{{ counts.cancelled }}</b></a>
+</div>
+
+{% if rows %}
+<div class="qo-grid">
+  {% for o in rows %}
+  {% set label, tone = status[o.status] %}
+  <article class="card qo-card is-{{ o.status }}">
+    <header><h2>{{ o.table_name }}</h2><span class="badge {{ tone }}">{{ label }}</span></header>
+    <p class="qo-meta">#{{ o.id }} · {{ (o.created_at|yerel).strftime('%H:%M') }}{% if o.customer_name %} · {{ o.customer_name }}{% endif %}</p>
+    <ul class="qo-lines">{% for l in o.lines %}<li><b>{{ l.quantity }}×</b> {{ l.name }}</li>{% endfor %}</ul>
+    {% if o.note %}<p class="qo-note">📝 {{ o.note }}</p>{% endif %}
+    <footer>
+      <b>{{ tl(o.total) }}</b>
+      <div class="qo-actions">
+        {% for target, text, cls in ([('preparing','Hazırlanıyor','btn-primary'),('cancelled','İptal','btn-ghost')] if o.status=='new' else [('served','Teslim edildi','btn-primary'),('cancelled','İptal','btn-ghost')] if o.status=='preparing' else []) %}
+        <form method="post" action="{{ url_for('menu.change_status', order_id=o.id, status=target) }}" {% if target=='cancelled' %}onsubmit="return window.confirm('{{ o.table_name }} siparişi iptal edilsin mi?');"{% endif %}>
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+          <button class="btn btn-sm {{ cls }}" type="submit">{{ text }}</button></form>
+        {% endfor %}
+      </div>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><p class="muted">{{ 'Şu an bekleyen masa siparişi yok. Yeni sipariş gelince bu sayfa kendiliğinden yenilenir.' if durum=='aktif' else 'Bugün bu durumda sipariş yok.' }}</p></div>
+{% endif %}
+<script>
+(function () {
+  // Yeni sipariş gelince listeyi yenile (sayfa açıkken)
+  var url = "{{ url_for('menu.new_orders_json') }}", seen = null;
+  function poll() {
+    if (document.hidden) return;
+    fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
+      var ids = (d.items || []).map(function (i) { return i.id; }).join(",");
+      if (seen !== null && ids !== seen && {{ 'true' if durum=='aktif' else 'false' }}) window.location.reload();
+      seen = ids;
+    }).catch(function () {});
+  }
+  poll(); setInterval(poll, 6000);
+})();
+</script>
+{% endblock %}

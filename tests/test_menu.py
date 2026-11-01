@@ -1,0 +1,227 @@
+import io
+import json
+import re
+import unittest
+from datetime import datetime, timedelta
+from decimal import Decimal
+from unittest import mock
+
+from PIL import Image
+
+from app import create_app
+from extensions import db
+import menu
+from models import MenuCategory, MenuImage, MenuItem, MenuSetting, MenuTable, TableOrder, User
+
+
+class TestConfig:
+    TESTING = True
+    SECRET_KEY = "test-only"
+    SQLALCHEMY_DATABASE_URI = "sqlite://"
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    RUN_SCHEDULER = False
+    TRIAL_DAYS = 0
+
+
+class MenuTest(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app(TestConfig, start_scheduler=False)
+        from flask import g
+        self.app.before_request(lambda: g.pop("_login_user", None) and None)
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        self.owner = self._user("pion@kafe.com", "Pion Coffee")
+        self._user("baska@kafe.com", "Başka")
+        self.staff = self.app.test_client()
+        self._login(self.staff, "pion@kafe.com")
+        self.guest = self.app.test_client()
+
+    def tearDown(self):
+        db.session.remove()
+        db.drop_all()
+        self.ctx.pop()
+
+    def _user(self, email, name):
+        u = User(name=name, email=email)
+        u.set_password("sifre12345")
+        db.session.add(u)
+        db.session.commit()
+        return u
+
+    @staticmethod
+    def _csrf(client, path):
+        html = client.get(path).get_data(as_text=True)
+        return re.search(r'(?:name="_csrf_token" value|data-csrf)="([^"]+)"', html).group(1)
+
+    def _login(self, client, email):
+        token = self._csrf(client, "/giris")
+        client.post("/giris", data={"_csrf_token": token, "email": email, "password": "sifre12345"})
+
+    def _post(self, path, data, page="/panel/menu/urunler", **kw):
+        return self.staff.post(path, data=dict(data, _csrf_token=self._csrf(self.staff, page)), **kw)
+
+    def _png(self, size=(1600, 1200)):
+        buf = io.BytesIO()
+        Image.new("RGB", size, (200, 120, 60)).save(buf, "PNG")
+        buf.seek(0)
+        return buf
+
+    def _build_menu(self):
+        self.assertEqual(self.staff.get("/panel/menu").status_code, 200)
+        self._post("/panel/menu/kategori", {"name": "Sıcak kahveler"})
+        cat = MenuCategory.query.one()
+        r = self._post("/panel/menu/urun/yeni", {"name": "Latte", "price": "95", "category_id": str(cat.id),
+                                                "description": "Çift shot", "is_active": "1", "is_available": "1",
+                                                "photo": (self._png(), "latte.png")},
+                       page=f"/panel/menu/urun/yeni?kategori={cat.id}", content_type="multipart/form-data")
+        self.assertEqual(r.status_code, 302)
+        self._post("/panel/menu/urun/yeni", {"name": "Cheesecake", "price": "120,50", "category_id": str(cat.id),
+                                            "is_active": "1", "is_available": "1"}, page=f"/panel/menu/urun/yeni?kategori={cat.id}")
+        self._post("/panel/menu/masalar", {"prefix": "Masa", "start": "1", "end": "4"}, page="/panel/menu/masalar")
+        return cat
+
+    def test_money_and_format(self):
+        self.assertEqual(menu.money("85,5"), Decimal("85.50"))
+        self.assertEqual(menu.tl(Decimal("85")), "85 TL")
+        self.assertEqual(menu.tl(Decimal("85.5")), "85,50 TL")
+        self.assertEqual(menu.tl(Decimal("1250")), "1.250 TL")
+        with self.assertRaises(ValueError):
+            menu.money("abc")
+
+    def test_build_menu_tables_and_photo(self):
+        self._build_menu()
+        latte = MenuItem.query.filter_by(name="Latte").one()
+        self.assertEqual(latte.price, Decimal("95.00"))
+        img = db.session.get(MenuImage, latte.image_id)
+        self.assertEqual(img.mime, "image/webp")
+        self.assertEqual(Image.open(io.BytesIO(img.data)).size, (1000, 750))       # küçültüldü
+        r = self.guest.get(f"/m/img/{latte.image_id}.webp")
+        self.assertEqual((r.status_code, r.mimetype), (200, "image/webp"))
+        self.assertIn("immutable", r.headers["Cache-Control"])
+        self.assertEqual(MenuTable.query.count(), 4)
+        self._post("/panel/menu/masalar", {"prefix": "Masa", "start": "3", "end": "5"}, page="/panel/menu/masalar")
+        self.assertEqual(MenuTable.query.count(), 5)      # 3, 4 atlandı
+        page = self.staff.get("/panel/menu/masalar").get_data(as_text=True)
+        self.assertIn("Masa 5", page)
+        printed = self.staff.get("/panel/menu/masalar/yazdir").get_data(as_text=True)
+        self.assertIn("Okut, menüyü gör, sipariş ver", printed)
+        self.assertEqual(printed.count('class="card"'), 5)
+        items_page = self.staff.get("/panel/menu/urunler").get_data(as_text=True)
+        self.assertIn("Cheesecake", items_page)
+        self.assertIn("120,50", items_page)
+
+    def test_customer_orders_from_table(self):
+        self._build_menu()
+        table = MenuTable.query.filter_by(name="Masa 3").one()
+        latte = MenuItem.query.filter_by(name="Latte").one()
+        cake = MenuItem.query.filter_by(name="Cheesecake").one()
+        page = self.guest.get(f"/m/{table.code}")
+        html = page.get_data(as_text=True)
+        self.assertIn("Masa 3", html)
+        self.assertIn("Latte", html)
+        self.assertIn("Sipariş notu", html)
+        self.assertIn("sg_menu_cihaz", page.headers.get("Set-Cookie", ""))
+        token = self._csrf(self.guest, f"/m/{table.code}")
+        send = lambda body: self.guest.post(f"/m/{table.code}/siparis", data=json.dumps(body),   # noqa: E731
+                                            headers={"X-CSRF-Token": token, "Content-Type": "application/json"})
+        # telefondan gelen fiyat yok sayılır, menü fiyatı kullanılır
+        r = send({"items": [{"id": latte.id, "qty": 2, "price": 1}, {"id": cake.id, "qty": 1}],
+                  "note": "Latte laktozsuz olsun", "name": "Ayşe"})
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        data = r.get_json()
+        order = db.session.get(TableOrder, data["order"])
+        self.assertEqual((order.table_name, order.total, order.note, order.status),
+                         ("Masa 3", Decimal("310.50"), "Latte laktozsuz olsun", "new"))
+        self.assertEqual([(l.name, l.quantity) for l in order.lines], [("Latte", 2), ("Cheesecake", 1)])
+        status = self.guest.get(data["url"]).get_data(as_text=True)
+        self.assertIn("Siparişin alındı", status)
+        self.assertIn("Birazdan hazırlanmaya", status)
+        self.assertIn("310,50 TL", status)
+        # aynı telefondan hemen ikinci sipariş engellenir
+        r = send({"items": [{"id": latte.id, "qty": 1}]})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("az önce", r.get_json()["message"])
+        # panelde uyarı + liste
+        alert = self.staff.get("/panel/menu/yeni.json").get_json()["items"]
+        self.assertEqual((alert[0]["table"], alert[0]["note"]), ("Masa 3", "Latte laktozsuz olsun"))
+        self.assertIn("qo-alert", self.staff.get("/panel/aktif-siparisler").get_data(as_text=True))
+        listing = self.staff.get("/panel/menu").get_data(as_text=True)
+        self.assertIn("Masa 3", listing)
+        self.assertIn("Latte laktozsuz olsun", listing)
+        # durum değişir, müşteri görür
+        tok = self._csrf(self.staff, "/panel/menu")
+        r = self.staff.post(f"/panel/menu/siparis/{order.id}/preparing",
+                            headers={"X-CSRF-Token": tok, "X-Requested-With": "fetch"})
+        self.assertEqual(r.get_json()["status"], "preparing")
+        self.assertEqual(self.guest.get(data["url"] + "?json=1").get_json()["status"], "preparing")
+        self.assertEqual(self.staff.get("/panel/menu/yeni.json").get_json()["items"], [])
+        # başka işletme bu siparişe dokunamaz
+        other = self.app.test_client()
+        self._login(other, "baska@kafe.com")
+        tok2 = self._csrf(other, "/panel/menu")
+        self.assertEqual(other.post(f"/panel/menu/siparis/{order.id}/served",
+                                    headers={"X-CSRF-Token": tok2, "X-Requested-With": "fetch"}).status_code, 404)
+
+    def test_order_rules(self):
+        self._build_menu()
+        table = MenuTable.query.first()
+        latte = MenuItem.query.filter_by(name="Latte").one()
+        with self.assertRaises(menu.OrderError):
+            menu.create_order(table, {"items": []}, "d1")
+        latte.is_available = False
+        db.session.commit()
+        with self.assertRaisesRegex(menu.OrderError, "Latte şu an yok"):
+            menu.create_order(table, {"items": [{"id": latte.id, "qty": 1}]}, "d1")
+        latte.is_available = True
+        db.session.commit()
+        o = menu.create_order(table, {"items": [{"id": latte.id, "qty": 99}]}, "d1")
+        self.assertEqual(o.lines[0].quantity, 20)                        # üst sınır
+        x = self._user("x@x.com", "X")
+        other_cat = MenuCategory(user_id=x.id, name="Diğer")
+        db.session.add(other_cat)
+        db.session.flush()
+        other_item = MenuItem(user_id=x.id, category_id=other_cat.id, name="Başka", price=1)
+        db.session.add(other_item)
+        db.session.commit()
+        with self.assertRaises(menu.OrderError):
+            menu.create_order(table, {"items": [{"id": other_item.id, "qty": 1}]}, "d2")
+        setting = MenuSetting.query.filter_by(user_id=self.owner.id).one()
+        setting.ordering_open = False
+        db.session.commit()
+        with self.assertRaisesRegex(menu.OrderError, "sipariş alınmıyor"):
+            menu.create_order(table, {"items": [{"id": latte.id, "qty": 1}]}, "d3")
+        # görüntüleme bağlantısında sepet yok
+        html = self.guest.get(f"/m/{setting.token}").get_data(as_text=True)
+        self.assertIn("masandaki QR", html)
+        self.assertNotIn('id="qm-send"', html)
+        self.assertNotIn("Başka", html)
+        self.assertEqual(self.guest.get("/m/yokboyle").status_code, 404)
+
+    def test_adisyo_import(self):
+        self.staff.get("/panel/menu")
+        data = [{"categoryName": "Sıcak İçecekler", "categoryId": 11, "products": [
+            {"productName": "Latte", "productId": 501, "productUnits": [
+                {"unitName": "Tam", "productUnitId": 9001, "isDefault": True,
+                 "prices": [{"price": 110, "orderType": 3, "isActive": True},
+                            {"price": 95, "orderType": 1, "isActive": True}]}]},
+            {"productName": "Eski ürün", "productId": 502, "productUnits": [
+                {"unitName": "Tam", "productUnitId": 9002, "isDefault": True,
+                 "prices": [{"price": 50, "orderType": 1, "isActive": False}]}]}]}]
+        added, updated, skipped = menu.import_adisyo(self.owner, data)
+        self.assertEqual((added, updated, skipped), (1, 0, 1))
+        item = MenuItem.query.one()
+        self.assertEqual((item.name, item.price, item.adisyo_unit_id), ("Latte", Decimal("95.00"), 9001))   # masa fiyatı
+        item.description = "Benim açıklamam"
+        db.session.commit()
+        data[0]["products"][0]["productUnits"][0]["prices"][1]["price"] = 100
+        self.assertEqual(menu.import_adisyo(self.owner, data), (0, 1, 1))
+        db.session.expire_all()
+        self.assertEqual((item.price, item.description), (Decimal("100.00"), "Benim açıklamam"))
+        self.assertEqual(MenuCategory.query.count(), 1)
+        # panel düğmesi: bağlantı yoksa uyarır
+        r = self._post("/panel/menu/adisyo-aktar", {})
+        self.assertEqual(r.status_code, 302)
+
+
+if __name__ == "__main__":
+    unittest.main()

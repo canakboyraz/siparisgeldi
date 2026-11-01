@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}{{ setting.title or owner.name }}{% if table %} · {{ table.name }}{% endif %} · Menü{% endblock %}
+{% block head %}<meta name="robots" content="noindex"><meta name="theme-color" content="{{ setting.accent or '#1E5B47' }}">
+<style>:root{--qm-accent:{{ setting.accent or '#1E5B47' }}}</style>{% endblock %}
+{% block body %}
+<div class="qm" id="qm" data-can-order="{{ '1' if can_order else '0' }}"
+     data-order-url="{{ url_for('menu_public.place_order', code=table.code) if table else '' }}"
+     data-cart-key="sepet:{{ table.code if table else setting.token }}" data-csrf="{{ csrf_token() }}">
+  <header class="qm-hero">
+    <div class="qm-hero-top">
+      <div class="qm-logo" aria-hidden="true">{{ (setting.title or owner.name or 'M')[:1]|upper }}</div>
+      {% if table %}<span class="qm-table">{{ table.name }}</span>{% endif %}
+    </div>
+    <h1>{{ setting.title or owner.name }}</h1>
+    {% if setting.welcome %}<p>{{ setting.welcome }}</p>{% endif %}
+    {% if table and not setting.ordering_open %}<p class="qm-banner">Şu an menüden sipariş alınmıyor. Siparişini kasaya söyleyebilirsin.</p>
+    {% elif not table %}<p class="qm-banner">Sipariş vermek için masandaki QR kodu okut.</p>{% endif %}
+  </header>
+
+  {% if not groups %}
+  <section class="qm-empty"><p>Menü henüz hazırlanıyor.</p></section>
+  {% else %}
+  <nav class="qm-cats" aria-label="Kategoriler">{% for cat, items in groups %}<a href="#k{{ cat.id }}">{{ cat.name }}</a>{% endfor %}</nav>
+  <main class="qm-list">
+    {% for cat, items in groups %}
+    <section class="qm-cat" id="k{{ cat.id }}">
+      <h2>{{ cat.name }}</h2>
+      {% for i in items %}
+      <article class="qm-item {{ 'is-out' if not i.is_available }} {{ 'no-img' if not i.image_id }}" data-id="{{ i.id }}" tabindex="0" aria-label="{{ i.name }}, {{ tl(i.price) }}">
+        <div class="qm-text">
+          <h3>{{ i.name }}</h3>
+          {% if i.description %}<p>{{ i.description }}</p>{% endif %}
+          <div class="qm-price">{{ tl(i.price) }}{% if not i.is_available %} <span class="qm-out">Tükendi</span>{% endif %}</div>
+        </div>
+        {% if i.image_id %}<img class="qm-img" src="{{ url_for('menu_public.image', image_id=i.image_id) }}" alt="" loading="lazy" decoding="async">{% endif %}
+        {% if can_order and i.is_available %}
+        <div class="qm-add" data-add="{{ i.id }}">
+          <button type="button" class="qm-plus" data-act="add" aria-label="{{ i.name }} sepete ekle">+</button>
+          <div class="qm-qty" hidden><button type="button" data-act="dec" aria-label="Azalt">−</button><b>0</b><button type="button" data-act="inc" aria-label="Artır">+</button></div>
+        </div>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </main>
+  {% endif %}
+  <footer class="qm-foot">SiparişGeldi QR menü</footer>
+</div>
+
+{% if can_order %}
+<button type="button" class="qm-cartbar" id="qm-cartbar" hidden>
+  <span class="qm-cartcount" id="qm-count">0</span><span>Sepeti gör</span><b id="qm-total">0 TL</b>
+</button>
+{% endif %}
+
+<div class="qm-sheet-bg" id="qm-detail" hidden>
+  <div class="qm-sheet qm-detail" role="dialog" aria-modal="true" aria-labelledby="qm-d-name">
+    <button class="qm-close" type="button" data-close aria-label="Kapat">×</button>
+    <img id="qm-d-img" alt="" hidden>
+    <div class="qm-d-body">
+      <h2 id="qm-d-name"></h2><p id="qm-d-desc"></p>
+      <div class="qm-d-row"><b id="qm-d-price"></b>
+        {% if can_order %}<div class="qm-qty is-big"><button type="button" id="qm-d-dec" aria-label="Azalt">−</button><b id="qm-d-qty">1</b><button type="button" id="qm-d-inc" aria-label="Artır">+</button></div>{% endif %}
+      </div>
+      {% if can_order %}<button class="qm-primary" type="button" id="qm-d-add">Sepete ekle</button>{% endif %}
+      <p class="qm-d-out" id="qm-d-out" hidden>Bu ürün şu an tükendi.</p>
+    </div>
+  </div>
+</div>
+
+{% if can_order %}
+<div class="qm-sheet-bg" id="qm-cart" hidden>
+  <div class="qm-sheet" role="dialog" aria-modal="true" aria-labelledby="qm-cart-title">
+    <button class="qm-close" type="button" data-close aria-label="Kapat">×</button>
+    <h2 id="qm-cart-title">Siparişin · {{ table.name }}</h2>
+    <ul class="qm-lines" id="qm-lines"></ul>
+    <label class="qm-label" for="qm-note">Sipariş notu</label>
+    <textarea id="qm-note" maxlength="300" rows="3" placeholder="ör. Latte laktozsuz sütle, buzu az olsun"></textarea>
+    <label class="qm-label" for="qm-name">Adın <span>(isteğe bağlı)</span></label>
+    <input id="qm-name" type="text" maxlength="40" autocomplete="given-name" placeholder="Siparişini getirirken sesleniriz">
+    <p class="qm-err" id="qm-err" role="alert" hidden></p>
+    <button class="qm-primary" type="button" id="qm-send">Siparişi gönder · <span id="qm-send-total">0 TL</span></button>
+    <p class="qm-small">Ödemeyi kasada ya da masada yaparsın.</p>
+  </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var DATA = {{ data|tojson }};
+  var root = document.getElementById("qm"), canOrder = root.getAttribute("data-can-order") === "1";
+  var items = {}; DATA.forEach(function (c) { c.items.forEach(function (i) { items[i.id] = i; }); });
+  var key = root.getAttribute("data-cart-key"), cart = {};
+  function store(fn) { try { return fn(window.localStorage); } catch (e) { return null; } }
+  try { cart = JSON.parse(store(function (s) { return s.getItem(key); }) || "{}") || {}; } catch (e) { cart = {}; }
+  Object.keys(cart).forEach(function (id) { if (!items[id] || !items[id].available) delete cart[id]; });
+  function tl(n) { var r = Math.round(n * 100) / 100, w = Math.floor(r), f = Math.round((r - w) * 100);
+    var s = w.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); return (f ? s + "," + (f < 10 ? "0" + f : f) : s) + " TL"; }
+  function save() { store(function (s) { s.setItem(key, JSON.stringify(cart)); }); }
+  function totals() { var n = 0, t = 0; Object.keys(cart).forEach(function (id) { n += cart[id]; t += cart[id] * items[id].price; }); return [n, t]; }
+  function vib() { if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} } }
+  function render() {
+    document.querySelectorAll("[data-add]").forEach(function (box) {
+      var q = cart[box.getAttribute("data-add")] || 0;
+      box.querySelector(".qm-plus").hidden = q > 0; var qq = box.querySelector(".qm-qty"); qq.hidden = q === 0; qq.querySelector("b").textContent = q;
+      box.closest(".qm-item").classList.toggle("in-cart", q > 0);
+    });
+    if (!canOrder) return;
+    var t = totals(), bar = document.getElementById("qm-cartbar");
+    bar.hidden = t[0] === 0; document.getElementById("qm-count").textContent = t[0];
+    document.getElementById("qm-total").textContent = tl(t[1]); document.getElementById("qm-send-total").textContent = tl(t[1]);
+    var ul = document.getElementById("qm-lines"); ul.innerHTML = "";
+    Object.keys(cart).forEach(function (id) {
+      var i = items[id], li = document.createElement("li");
+      li.innerHTML = '<div><b></b><small></small></div><div class="qm-qty"><button type="button" data-cart="dec">−</button><b></b><button type="button" data-cart="inc">+</button></div>';
+      li.querySelector("div b").textContent = i.name; li.querySelector("small").textContent = tl(i.price * cart[id]);
+      li.querySelector(".qm-qty b").textContent = cart[id]; li.setAttribute("data-id", id); ul.appendChild(li);
+    });
+    if (t[0] === 0) closeSheet("qm-cart");
+  }
+  function change(id, d) { cart[id] = Math.max(0, Math.min(20, (cart[id] || 0) + d)); if (!cart[id]) delete cart[id]; save(); render(); vib(); }
+  function openSheet(id) { var s = document.getElementById(id); s.hidden = false; document.body.classList.add("qm-lock");
+    requestAnimationFrame(function () { s.classList.add("is-open"); }); }
+  function closeSheet(id) { var s = document.getElementById(id); if (!s || s.hidden) return; s.classList.remove("is-open"); document.body.classList.remove("qm-lock");
+    setTimeout(function () { s.hidden = true; }, 220); }
+  document.querySelectorAll(".qm-sheet-bg").forEach(function (bg) {
+    bg.addEventListener("click", function (e) { if (e.target === bg || e.target.hasAttribute("data-close")) closeSheet(bg.id); }); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeSheet("qm-detail"); closeSheet("qm-cart"); } });
+
+  // Kart: + / − ve detay
+  var detailId = null, detailQty = 1;
+  document.querySelector(".qm-list") && document.querySelector(".qm-list").addEventListener("click", function (e) {
+    var act = e.target.closest("[data-act]");
+    if (act) { var id = act.closest("[data-add]").getAttribute("data-add"); change(id, act.getAttribute("data-act") === "dec" ? -1 : 1); return; }
+    var card = e.target.closest(".qm-item"); if (card) openDetail(card.getAttribute("data-id"));
+  });
+  document.querySelectorAll(".qm-item").forEach(function (c) { c.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target === c) openDetail(c.getAttribute("data-id")); }); });
+  function openDetail(id) {
+    var i = items[id]; detailId = id; detailQty = 1;
+    var img = document.getElementById("qm-d-img"); img.hidden = !i.img; if (i.img) img.src = i.img;
+    document.getElementById("qm-d-name").textContent = i.name; document.getElementById("qm-d-desc").textContent = i.desc;
+    document.getElementById("qm-d-price").textContent = tl(i.price);
+    document.getElementById("qm-d-out").hidden = i.available;
+    if (canOrder) { document.getElementById("qm-d-qty").textContent = 1; var add = document.getElementById("qm-d-add"); add.hidden = !i.available;
+      add.textContent = "Sepete ekle · " + tl(i.price); }
+    openSheet("qm-detail");
+  }
+  if (canOrder) {
+    function dq(d) { detailQty = Math.max(1, Math.min(20, detailQty + d)); document.getElementById("qm-d-qty").textContent = detailQty;
+      document.getElementById("qm-d-add").textContent = "Sepete ekle · " + tl(items[detailId].price * detailQty); }
+    document.getElementById("qm-d-dec").addEventListener("click", function () { dq(-1); });
+    document.getElementById("qm-d-inc").addEventListener("click", function () { dq(1); });
+    document.getElementById("qm-d-add").addEventListener("click", function () { change(detailId, detailQty); closeSheet("qm-detail"); });
+    document.getElementById("qm-cartbar").addEventListener("click", function () { openSheet("qm-cart"); });
+    document.getElementById("qm-lines").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-cart]"); if (!b) return; change(b.closest("li").getAttribute("data-id"), b.getAttribute("data-cart") === "dec" ? -1 : 1); });
+    var note = document.getElementById("qm-note"), nameEl = document.getElementById("qm-name");
+    nameEl.value = store(function (s) { return s.getItem("qm-ad"); }) || "";
+    document.getElementById("qm-send").addEventListener("click", function () {
+      var btn = this, err = document.getElementById("qm-err"), lines = Object.keys(cart).map(function (id) { return { id: +id, qty: cart[id] }; });
+      if (!lines.length) return;
+      btn.disabled = true; btn.firstChild.textContent = "Gönderiliyor… "; err.hidden = true;
+      store(function (s) { s.setItem("qm-ad", nameEl.value.trim()); });
+      fetch(root.getAttribute("data-order-url"), { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": root.getAttribute("data-csrf"), "Accept": "application/json" },
+        body: JSON.stringify({ items: lines, note: note.value, name: nameEl.value }) })
+        .then(function (r) { return r.json().then(function (j) { return [r.ok, j]; }); })
+        .then(function (res) {
+          if (res[0] && res[1].ok) { cart = {}; save(); window.location.href = res[1].url; return; }
+          err.textContent = (res[1] && res[1].message) || "Sipariş gönderilemedi. Tekrar dene."; err.hidden = false;
+          btn.disabled = false; btn.firstChild.textContent = "Siparişi gönder · ";
+        })
+        .catch(function () { err.textContent = "Bağlantı sorunu. İnternetini kontrol edip tekrar dene."; err.hidden = false;
+          btn.disabled = false; btn.firstChild.textContent = "Siparişi gönder · "; });
+    });
+  }
+  // Görünen kategoriyi işaretle
+  if ("IntersectionObserver" in window) {
+    var chips = document.querySelectorAll(".qm-cats a");
+    var io = new IntersectionObserver(function (en) { en.forEach(function (x) { if (!x.isIntersecting) return;
+      chips.forEach(function (c) { var on = c.getAttribute("href") === "#" + x.target.id; c.classList.toggle("is-current", on);
+        if (on) c.parentNode.scrollTo({ left: c.offsetLeft - 16, behavior: "smooth" }); }); }); }, { rootMargin: "-40% 0px -55% 0px" });
+    document.querySelectorAll(".qm-cat").forEach(function (s) { io.observe(s); });
+  }
+  render();
+})();
+</script>
+{% endblock %}

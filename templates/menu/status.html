@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Siparişin · {{ setting.title or owner.name }}{% endblock %}
+{% block head %}<meta name="robots" content="noindex"><meta name="theme-color" content="{{ setting.accent or '#1E5B47' }}">
+<style>:root{--qm-accent:{{ setting.accent or '#1E5B47' }}}</style>{% endblock %}
+{% block body %}
+{% set steps = [('new','Alındı'),('preparing','Hazırlanıyor'),('served','Masana geldi')] %}
+<div class="qm qm-status-page" id="qs" data-url="{{ request.path }}?json=1" data-status="{{ order.status }}">
+  <header class="qm-hero qm-hero-sm">
+    <div class="qm-hero-top"><div class="qm-logo" aria-hidden="true">{{ (setting.title or owner.name or 'M')[:1]|upper }}</div>
+      <span class="qm-table">{{ order.table_name }}</span></div>
+    <h1>{{ setting.title or owner.name }}</h1>
+  </header>
+  <section class="qm-card qs-main" aria-live="polite">
+    <div class="qs-icon" id="qs-icon">{% if order.status == 'cancelled' %}×{% elif order.status == 'served' %}✓{% else %}☕{% endif %}</div>
+    <h2 id="qs-label">{{ status_label }}</h2>
+    <p id="qs-text">{{ status_text }}</p>
+    {% if order.status != 'cancelled' %}
+    <ol class="qs-steps" id="qs-steps">
+      {% for key, label in steps %}<li data-step="{{ key }}">{{ label }}</li>{% endfor %}
+    </ol>
+    {% endif %}
+  </section>
+  <section class="qm-card">
+    <h3>Sipariş #{{ order.id }}</h3>
+    <ul class="qm-lines qs-lines">{% for l in order.lines %}<li><div><b>{{ l.quantity }}× {{ l.name }}</b></div><span>{{ tl(l.price * l.quantity) }}</span></li>{% endfor %}</ul>
+    {% if order.note %}<p class="qs-note"><b>Notun:</b> {{ order.note }}</p>{% endif %}
+    <div class="qs-total"><span>Toplam</span><b>{{ tl(order.total) }}</b></div>
+    <p class="qm-small">Ödemeyi kasada ya da masada yaparsın.</p>
+  </section>
+  {% if table %}<a class="qm-primary qm-ghost" href="{{ url_for('menu_public.public_menu', code=code) }}">Menüye dön · bir şey daha ekle</a>{% endif %}
+  <footer class="qm-foot">SiparişGeldi QR menü</footer>
+</div>
+<script>
+(function () {
+  var root = document.getElementById("qs"), order = ["new", "preparing", "served"];
+  function paint(st) {
+    var steps = document.querySelectorAll("#qs-steps li"), idx = order.indexOf(st);
+    steps.forEach(function (li, i) { li.classList.toggle("is-done", i < idx || st === "served"); li.classList.toggle("is-now", i === idx && st !== "served"); });
+  }
+  paint(root.getAttribute("data-status"));
+  var timer = setInterval(function () {
+    if (document.hidden) return;
+    fetch(root.getAttribute("data-url"), { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (s) {
+      if (s.status === root.getAttribute("data-status")) return;
+      if (s.status === "cancelled") { window.location.reload(); return; }
+      root.setAttribute("data-status", s.status);
+      document.getElementById("qs-label").textContent = s.label; document.getElementById("qs-text").textContent = s.text;
+      document.getElementById("qs-icon").textContent = s.status === "served" ? "✓" : "☕";
+      paint(s.status); if (navigator.vibrate) { try { navigator.vibrate([60, 40, 60]); } catch (e) {} }
+      if (s.status === "served") clearInterval(timer);
+    }).catch(function () {});
+  }, 5000);
+})();
+</script>
+{% endblock %}

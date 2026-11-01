@@ -1,0 +1,54 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Masalar ve QR · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Masalar ve QR</h1><p class="muted page-sub">Her masanın kendine özel QR kodu var. Müşteri okutunca menü o masa adıyla açılır, sipariş "Masa 3" diye düşer.</p></div>
+  <div class="lc-head-actions">
+    {% if rows %}<a class="btn btn-primary" href="{{ url_for('menu.print_tables') }}" target="_blank" rel="noopener">{{ icon('printer', 16) }} Tüm QR'ları yazdır</a>{% endif %}
+    <a class="btn btn-ghost" href="{{ url_for('menu.orders') }}">{{ icon('receipt', 16) }} Siparişler</a>
+  </div>
+</div>
+<form method="post" action="{{ url_for('menu.add_tables') }}" class="card qt-add">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="card-title">Masa ekle</div>
+  <div class="qt-addrow">
+    <label class="st-f"><span>Ad</span><input type="text" name="prefix" value="Masa" maxlength="30"></label>
+    <label class="st-f"><span>İlk no</span><input type="number" name="start" value="{{ (rows|length) + 1 }}" min="1" max="500"></label>
+    <label class="st-f"><span>Son no</span><input type="number" name="end" value="{{ (rows|length) + 10 }}" min="1" max="600"></label>
+    <button class="btn btn-primary" type="submit">{{ icon('plus', 16) }} Ekle</button>
+  </div>
+  <p class="hint">Örnek: "Masa", 1 – 12 → Masa 1 … Masa 12. Bahçe gibi farklı bölümler için adı değiştirip tekrar ekleyebilirsin (Bahçe 1 – 6).</p>
+</form>
+{% if rows %}
+<div class="qt-grid">
+  {% for t in rows %}
+  <div class="card qt-card">
+    <div class="qt-qr" data-url="{{ url(t) }}" aria-label="{{ t.name }} QR kodu"></div>
+    <form method="post" action="{{ url_for('menu.table_action', table_id=t.id, action='ad') }}" class="st-row">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="name" value="{{ t.name }}" maxlength="40" aria-label="Masa adı"><button class="btn btn-ghost btn-sm" type="submit">Kaydet</button></form>
+    <div class="qt-actions">
+      <a class="btn btn-ghost btn-sm" href="{{ url(t) }}" target="_blank" rel="noopener">Aç</a>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('menu.print_tables', masa=t.id) }}" target="_blank" rel="noopener">{{ icon('printer', 14) }} Yazdır</a>
+      <form method="post" action="{{ url_for('menu.table_action', table_id=t.id, action='yenile') }}" onsubmit="return window.confirm('{{ t.name }} için yeni QR oluşturulsun mu? Eski QR çalışmaz.');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit" title="Yeni QR">{{ icon('refresh', 14) }}</button></form>
+      <form method="post" action="{{ url_for('menu.table_action', table_id=t.id, action='sil') }}" onsubmit="return window.confirm('{{ t.name }} silinsin mi?');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit" aria-label="{{ t.name }} sil">{{ icon('x', 14) }}</button></form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}<div class="card"><p class="muted">Henüz masa yok. Yukarıdan ekle.</p></div>{% endif %}
+<div class="card" style="margin-top:1rem"><div class="card-title">Masasız menü bağlantısı</div>
+  <p class="hint" style="margin-top:0">Instagram ya da Google profiline koyabileceğin, sadece menüyü gösteren bağlantı (buradan sipariş verilmez):</p>
+  <code class="qt-code">{{ url_for('menu_public.public_menu', code=setting.token, _external=True) }}</code></div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+document.querySelectorAll(".qt-qr").forEach(function (box) {
+  if (!window.qrcode) { box.textContent = "QR yüklenemedi"; return; }
+  var qr = qrcode(0, "M"); qr.addData(box.getAttribute("data-url")); qr.make();
+  box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,58 @@
+{#- Masadan yeni sipariş: her panel sayfasında sesli uyarı. -#}
+<div class="order-alert-backdrop qo-alert-backdrop" id="qo-alert" hidden>
+  <div class="order-alert qo-alert" role="alertdialog" aria-modal="true" aria-labelledby="qo-alert-title">
+    <div class="order-alert-kicker">{{ icon('qr', 16) }} QR menü · yeni sipariş</div>
+    <h2 id="qo-alert-title"></h2>
+    <p class="qo-alert-meta" id="qo-alert-meta"></p>
+    <ul class="qo-lines" id="qo-alert-lines"></ul>
+    <p class="qo-note" id="qo-alert-note" hidden></p>
+    <div class="order-alert-actions">
+      <button class="btn btn-primary btn-lg" type="button" id="qo-alert-ok">Hazırlanıyor</button>
+      <a class="btn btn-ghost" href="{{ url_for('menu.orders') }}">Tüm masa siparişleri</a>
+    </div>
+    <p class="hint" id="qo-alert-more" style="margin:.6rem 0 0"></p>
+  </div>
+</div>
+<script>
+(function () {
+  var url = "{{ url_for('menu.new_orders_json') }}", base = "{{ url_for('menu.change_status', order_id=0, status='preparing') }}";
+  var csrf = "{{ csrf_token() }}", box = document.getElementById("qo-alert"), current = null, busy = false, lastBeep = 0;
+  function el(id) { return document.getElementById(id); }
+  function beep() {
+    var now = Date.now(); if (now - lastBeep < 6000) return; lastBeep = now;
+    try { var C = window.AudioContext || window.webkitAudioContext; if (!C) return; var ctx = new C();
+      [0, .18, .36].forEach(function (d, i) { var o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = [784, 988, 1175][i];
+        g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.3, ctx.currentTime + d + .02);
+        g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .16); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .18); });
+    } catch (e) {}
+    if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
+  }
+  function show(o, rest) {
+    current = o;
+    el("qo-alert-title").textContent = o.table;
+    el("qo-alert-meta").textContent = "#" + o.id + (o.name ? " · " + o.name : "") + " · " + o.total;
+    var ul = el("qo-alert-lines"); ul.innerHTML = "";
+    o.lines.forEach(function (l) { var li = document.createElement("li"); li.innerHTML = "<b></b> "; li.querySelector("b").textContent = l.qty + "×"; li.appendChild(document.createTextNode(l.name)); ul.appendChild(li); });
+    el("qo-alert-note").hidden = !o.note; el("qo-alert-note").textContent = o.note ? "📝 " + o.note : "";
+    el("qo-alert-more").textContent = rest > 0 ? "Sırada " + rest + " masa siparişi daha var." : "";
+    if (box.hidden) { box.hidden = false; }
+    beep();
+  }
+  function poll() {
+    if (busy || document.hidden) return;
+    fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : { items: [] }; })
+      .then(function (d) { var items = d.items || []; if (!items.length) { box.hidden = true; current = null; return; }
+        if (!current || current.id !== items[0].id || box.hidden) show(items[0], items.length - 1); else beep(); })
+      .catch(function () {});
+  }
+  el("qo-alert-ok").addEventListener("click", function () {
+    if (!current) return; busy = true;
+    fetch(base.replace("/0/", "/" + current.id + "/"), { method: "POST", credentials: "same-origin",
+      headers: { "X-CSRF-Token": csrf, "X-Requested-With": "fetch", "Accept": "application/json" } })
+      .finally(function () { busy = false; box.hidden = true; current = null; poll();
+        if (/\/panel\/menu\/?$/.test(location.pathname)) location.reload(); });
+  });
+  poll(); setInterval(poll, 5000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
+})();
+</script>

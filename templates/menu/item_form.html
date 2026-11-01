@@ -1,0 +1,52 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ item.name if item else 'Yeni ürün' }} · Menü · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>{{ item.name if item else 'Yeni ürün' }}</h1><p class="muted page-sub">Fotoğraf, açıklama ve fiyat müşterinin menüsünde görünür.</p></div>
+  <a class="btn btn-ghost" href="{{ url_for('menu.items') }}{{ '#k' ~ item.category_id if item else '' }}">← Menü</a>
+</div>
+{% set f = form or {} %}
+<form method="post" enctype="multipart/form-data" class="card qf">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  {% if error %}<p class="flash danger" role="alert">{{ error }}</p>{% endif %}
+  <div class="qf-grid">
+    <div class="qf-photo">
+      <label class="qf-drop" for="qf-file">
+        <img id="qf-preview" src="{{ url_for('menu_public.image', image_id=item.image_id) if item and item.image_id else '' }}" alt="" {{ '' if item and item.image_id else 'hidden' }}>
+        <span id="qf-ph" {{ 'hidden' if item and item.image_id }}>{{ icon('plus', 22) }}<b>Fotoğraf ekle</b><small>JPG, PNG ya da WebP. Telefondan çekip yükleyebilirsin; otomatik küçültülür.</small></span>
+      </label>
+      <input id="qf-file" type="file" name="photo" accept="image/*" hidden>
+      <div class="qf-photo-actions">
+        <label class="btn btn-ghost btn-sm" for="qf-file">{{ 'Fotoğrafı değiştir' if item and item.image_id else 'Fotoğraf seç' }}</label>
+        {% if item and item.image_id %}<label class="st-active"><input type="checkbox" name="remove_photo" value="1"> <span>Fotoğrafı kaldır</span></label>{% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="field"><label for="qf-name">Ürün adı</label><input id="qf-name" type="text" name="name" maxlength="80" required value="{{ f.get('name', item.name if item else '') }}" placeholder="ör. Latte"></div>
+      <div class="qf-two">
+        <div class="field"><label for="qf-price">Fiyat (TL)</label><input id="qf-price" type="text" name="price" inputmode="decimal" required
+          value="{{ f.get('price', ('%.2f'|format(item.price)|replace('.', ',')|replace(',00','')) if item else '') }}" placeholder="ör. 95"></div>
+        <div class="field"><label for="qf-cat">Kategori</label><select id="qf-cat" name="category_id">
+          {% set selected = (f.get('category_id')|int if f.get('category_id') else (item.category_id if item else 0)) %}
+          {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if c.id == selected }}>{{ c.name }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="field"><label for="qf-desc">Açıklama (isteğe bağlı)</label>
+        <textarea id="qf-desc" name="description" maxlength="300" rows="3" placeholder="ör. Çift shot espresso, buharda ısıtılmış süt">{{ f.get('description', item.description if item and item.description else '') }}</textarea></div>
+      <div class="qf-checks">
+        <label class="st-active"><input type="checkbox" name="is_active" value="1" {{ 'checked' if (item.is_active if item else True) }}> <span>Menüde göster</span></label>
+        <label class="st-active"><input type="checkbox" name="is_available" value="1" {{ 'checked' if (item.is_available if item else True) }}> <span>Satışta (işareti kaldırırsan "Tükendi")</span></label>
+      </div>
+      <div class="qf-actions"><button class="btn btn-primary" type="submit">Kaydet</button>
+        <a class="btn btn-ghost" href="{{ url_for('menu.items') }}">Vazgeç</a></div>
+    </div>
+  </div>
+</form>
+<script>
+(function () {
+  var input = document.getElementById("qf-file"), img = document.getElementById("qf-preview"), ph = document.getElementById("qf-ph");
+  input.addEventListener("change", function () { var f = input.files && input.files[0]; if (!f) return;
+    img.src = URL.createObjectURL(f); img.hidden = false; ph.hidden = true; });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masa QR kartları · {{ setting.title }}</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Onest:wght@400..700&display=swap">
+<style>
+@page{size:A4;margin:10mm}
+*{box-sizing:border-box;margin:0}
+body{font-family:Onest,system-ui,sans-serif;color:#13231D;background:#E9E6E0}
+.bar{position:sticky;top:0;display:flex;gap:12px;align-items:center;justify-content:center;padding:12px;background:#15302A;color:#fff;font-size:14px}
+.bar button{background:#FF8A65;color:#13231D;border:0;border-radius:999px;padding:10px 20px;font-weight:700;font-size:15px;cursor:pointer}
+.sheet{display:grid;grid-template-columns:repeat(2,90mm);gap:8mm;justify-content:center;padding:10mm 0}
+.card{width:90mm;height:125mm;background:#fff;border:1px solid #D7D2C9;border-radius:6mm;padding:7mm 7mm 6mm;display:flex;flex-direction:column;align-items:center;text-align:center;page-break-inside:avoid;break-inside:avoid}
+.biz{font:700 11pt Onest;color:#5A6660;letter-spacing:.02em}
+.table{font:800 28pt/1 "Bricolage Grotesque";letter-spacing:-.03em;margin:2mm 0 4mm;color:{{ setting.accent or '#1E5B47' }}}
+.qr{width:62mm;height:62mm}
+.qr svg{width:100%;height:100%;display:block}
+.how{font:700 12pt Onest;margin-top:4mm}
+.sub{font:400 9pt Onest;color:#5A6660;margin-top:1.5mm}
+.foot{margin-top:auto;font:400 7pt Onest;color:#9AA49F}
+@media print{body{background:#fff}.bar{display:none}.sheet{padding:0;gap:6mm}.card{border-color:#BBB}}
+</style></head>
+<body>
+<div class="bar"><span>{{ rows|length }} masa kartı · A4'e ikişerli yazdırılır, kesip masaya koy.</span><button onclick="window.print()">Yazdır</button></div>
+<div class="sheet">
+  {% for t in rows %}
+  <div class="card">
+    <div class="biz">{{ setting.title }}</div>
+    <div class="table">{{ t.name }}</div>
+    <div class="qr" data-url="{{ url(t) }}"></div>
+    <div class="how">Okut, menüyü gör, sipariş ver</div>
+    <div class="sub">Siparişin masana gelir · ödeme kasada</div>
+    <div class="foot">SiparişGeldi QR menü</div>
+  </div>
+  {% endfor %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+document.querySelectorAll(".qr").forEach(function (box) {
+  if (!window.qrcode) { box.textContent = "QR yüklenemedi"; return; }
+  var qr = qrcode(0, "M"); qr.addData(box.getAttribute("data-url")); qr.make();
+  box.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+});
+</script>
+</body></html>
