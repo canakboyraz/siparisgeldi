@@ -122,7 +122,7 @@ def done(token, key):
         abort(404)
     count = StockCount.query.filter_by(id=count_id, user_id=setting.user_id).first_or_404()
     return render_template("stock/done.html", setting=setting, owner=_owner(setting), count=count,
-                           s=stock.summarize(count), fmt=stock.fmt)
+                           s=stock.summarize(count), fmt=stock.fmt, signed=stock.signed)
 
 
 # ── İşletme paneli ──────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ def index():
     rows = [(c, stock.summarize(c)) for c in counts]
     item_count = StockItem.query.filter_by(user_id=current_user.id, is_active=True).count()
     return render_template("stock/index.html", setting=setting, rows=rows, latest=rows[0] if rows else None,
-                           item_count=item_count, fmt=stock.fmt,
+                           item_count=item_count, fmt=stock.fmt, signed=stock.signed,
                            link=url_for("stock_public.count_form", token=setting.token, _external=True))
 
 
@@ -153,7 +153,8 @@ def index():
 def detail(count_id):
     count = StockCount.query.filter_by(id=count_id, user_id=current_user.id).first_or_404()
     return render_template("stock/detail.html", count=count, groups=stock.grouped_lines(count),
-                           s=stock.summarize(count), fmt=stock.fmt, only=request.args.get("goster", ""))
+                           s=stock.summarize(count), fmt=stock.fmt, signed=stock.signed,
+                           only=request.args.get("goster", ""))
 
 
 @stock_bp.get("/<int:count_id>.csv")
@@ -164,11 +165,12 @@ def export_csv(count_id):
     w = csv.writer(out, delimiter=";")
     w.writerow(["Tarih", count.count_date.strftime("%d.%m.%Y"), "Sayımı yapan", count.counted_by])
     w.writerow(["Kategori", "Ürün", "Birim", "Min. stok", "Önceki sayım", "Bugün gelen", "Sayılan",
-                "Kullanılan / fire", "Durum", "Not"])
+                "Fark (öncekine göre)", "Kullanılan / fire", "Durum", "Not"])
     for line in count.lines.all():
         status = "SİPARİŞ VER" if line.needs_order else ("Yeterli" if line.counted is not None else "Sayılmadı")
         w.writerow([line.category_name, line.item_name, line.unit, stock.fmt(line.min_stock), stock.fmt(line.prev_qty),
-                    stock.fmt(line.received), stock.fmt(line.counted), stock.fmt(line.used), status, line.note or ""])
+                    stock.fmt(line.received), stock.fmt(line.counted), stock.signed(line.diff), stock.fmt(line.used),
+                    status, line.note or ""])
     body = "﻿" + out.getvalue()   # Excel Türkçe karakterleri doğru açsın
     name = f"sayim-{count.count_date.isoformat()}.csv"
     return Response(body, mimetype="text/csv", headers={"Content-Disposition": f'attachment; filename="{name}"'})

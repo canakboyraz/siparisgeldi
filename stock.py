@@ -225,7 +225,23 @@ def summarize(count):
         "order": [l for l in lines if l.needs_order],
         "check": [l for l in counted if l.used is not None and l.used < 0],
         "notes": [l for l in lines if l.note],
+        # önceki sayıma göre değişim: en çok azalan / artan önce
+        "down": sorted([l for l in lines if l.diff is not None and l.diff < 0], key=lambda l: l.diff),
+        "up": sorted([l for l in lines if l.diff is not None and l.diff > 0], key=lambda l: -l.diff),
+        "same": len([l for l in lines if l.diff == 0]),
+        "compared": len([l for l in lines if l.diff is not None]),
     }
+
+
+def signed(value):
+    """+1 / −1,5 / 0 biçiminde fark."""
+    if value is None:
+        return ""
+    if value > 0:
+        return "+" + fmt(value)
+    if value < 0:
+        return "−" + fmt(-value)
+    return "0"
 
 
 def grouped_lines(count):

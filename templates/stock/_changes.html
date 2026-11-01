@@ -1,0 +1,23 @@
+{#- Önceki sayıma göre azalan / artan ürünler. -#}
+{% macro changes(s, fmt, signed, limit=None, more_url=None) %}
+{% if s.compared %}
+<div class="st-changes">
+  <div class="st-chcol is-down">
+    <h4>Azalanlar <span>{{ s.down|length }}</span></h4>
+    {% if s.down %}<ul>{% for l in (s.down[:limit] if limit else s.down) %}
+      <li><span>{{ l.item_name }}<small>{{ fmt(l.prev_qty) }} → {{ fmt(l.counted) }} {{ l.unit }}{% if l.received %} · gelen {{ fmt(l.received) }}{% endif %}</small></span><b>{{ signed(l.diff) }}</b></li>
+    {% endfor %}</ul>{% else %}<p class="st-chempty">Azalan ürün yok.</p>{% endif %}
+  </div>
+  <div class="st-chcol is-up">
+    <h4>Artanlar <span>{{ s.up|length }}</span></h4>
+    {% if s.up %}<ul>{% for l in (s.up[:limit] if limit else s.up) %}
+      <li><span>{{ l.item_name }}<small>{{ fmt(l.prev_qty) }} → {{ fmt(l.counted) }} {{ l.unit }}{% if l.received %} · gelen {{ fmt(l.received) }}{% else %} · gelen yazılmadı{% endif %}</small></span><b>{{ signed(l.diff) }}</b></li>
+    {% endfor %}</ul>{% else %}<p class="st-chempty">Artan ürün yok.</p>{% endif %}
+  </div>
+</div>
+<p class="st-chfoot">{{ s.same }} ürün aynı kaldı · {{ s.compared }} ürün önceki sayımla karşılaştırıldı
+  {% if more_url and limit and (s.down|length > limit or s.up|length > limit) %} · <a href="{{ more_url }}">Tümünü gör</a>{% endif %}</p>
+{% else %}
+<p class="muted">Karşılaştırma için en az iki sayım gerekiyor. Bir sonraki sayımda, bu sayıma göre azalan ve artan ürünler burada listelenecek.</p>
+{% endif %}
+{% endmacro %}

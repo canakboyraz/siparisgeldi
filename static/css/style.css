@@ -1669,3 +1669,23 @@ a.badge{text-decoration:none}
   .st-lines td:first-child{grid-column:1/-1}
   .st-lines td:not(:first-child)::before{content:attr(data-l);display:block;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 }
+
+/* Sayım: önceki sayıma göre değişim */
+.st-changes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.st-chcol{border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.st-chcol h4{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;font-size:.9rem}
+.st-chcol h4 span{font-size:.75rem;font-weight:800;padding:2px 9px;border-radius:999px}
+.st-chcol.is-down h4 span{background:var(--red-soft);color:var(--red)}
+.st-chcol.is-up h4 span{background:var(--green-soft);color:var(--green)}
+.st-chcol ul{list-style:none;margin:0;padding:0}
+.st-chcol li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:.9rem}
+.st-chcol li small{display:block;color:var(--muted);font-size:.76rem}
+.st-chcol li b{white-space:nowrap;font-size:1rem}
+.st-chcol.is-down li b{color:var(--red)}
+.st-chcol.is-up li b{color:var(--green)}
+.st-chempty{color:var(--muted);font-size:.85rem;margin:6px 0 0}
+.st-chfoot{color:var(--muted);font-size:.8rem;margin:8px 0 0}
+.st-diff{font-weight:800}
+.st-diff.is-down{color:var(--red)}
+.st-diff.is-up{color:var(--green)}
+@media (max-width:640px){.st-changes{grid-template-columns:1fr}.st-lines tr{grid-template-columns:1fr 1fr 1fr 1fr}}

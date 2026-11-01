@@ -580,5 +580,12 @@ class StockCountLine(db.Model):
         return round(self.prev_qty + (self.received or 0) - self.counted, 3)
 
     @property
+    def diff(self):
+        """Önceki sayıma göre değişim: şimdi sayılan − önceki sayılan (eksi = azalmış)."""
+        if self.counted is None or self.prev_qty is None:
+            return None
+        return round(self.counted - self.prev_qty, 3)
+
+    @property
     def needs_order(self):
         return self.counted is not None and self.min_stock is not None and self.counted <= self.min_stock

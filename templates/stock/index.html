@@ -1,6 +1,7 @@
 {% extends "dashboard/_layout.html" %}
 {% from "_icons.html" import icon %}
 {% block title %}Sayım · SiparişGeldi{% endblock %}
+{% from "stock/_changes.html" import changes %}
 {% block panel %}
 <div class="page-head">
   <div><h1>Günlük sayım</h1><p class="muted page-sub">Baristalar telefondan sayar; sipariş verilecekleri ve kullanımı burada görürsün.</p></div>
@@ -48,6 +49,8 @@
       <p class="hint">Sayılan miktar önceki sayım + gelenden fazla; bir rakam yanlış girilmiş ya da gelen yazılmamış olabilir.</p>
       <ul class="st-list">{% for l in s.check %}<li><span>{{ l.item_name }}</span><b>önceki {{ fmt(l.prev_qty) }} + gelen {{ fmt(l.received or 0) }} → {{ fmt(l.counted) }}</b></li>{% endfor %}</ul>
       {% endif %}
+      <h3 class="st-h">Önceki sayıma göre</h3>
+      {{ changes(s, fmt, signed, 8, url_for('stock.detail', count_id=c.id, goster='degisen')) }}
       {% if s.notes %}
       <h3 class="st-h">Notlar</h3>
       <ul class="st-list">{% for l in s.notes %}<li><span>{{ l.item_name }}</span><b class="st-n">{{ l.note }}</b></li>{% endfor %}</ul>

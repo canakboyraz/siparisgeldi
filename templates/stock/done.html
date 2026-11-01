@@ -1,5 +1,6 @@
 {% extends "stock/_shell.html" %}
 {% block title %}Sayım kaydedildi · {{ owner.name }}{% endblock %}
+{% from "stock/_changes.html" import changes %}
 {% block content %}
 <section class="sc-card sc-done">
   <div class="sc-check" aria-hidden="true">✓</div>
@@ -18,6 +19,12 @@
   <h2>Tekrar sayılmalı ({{ s.check|length }})</h2>
   <p class="sc-muted">Sayılan, önceki sayım + gelenden fazla çıktı. Bir rakam yanlış girilmiş olabilir.</p>
   <ul class="sc-list">{% for l in s.check %}<li><span>{{ l.item_name }}</span><b>{{ fmt(l.counted) }} {{ l.unit }}</b></li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% if s.compared %}
+<section class="sc-card">
+  <h2>Önceki sayıma göre</h2>
+  {{ changes(s, fmt, signed) }}
 </section>
 {% endif %}
 <a class="btn btn-ghost btn-block" href="{{ url_for('stock_public.count_form', token=setting.token) }}">Yeni sayım</a>
