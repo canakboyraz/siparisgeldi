@@ -2,6 +2,7 @@
 {% block title %}Sayım kaydedildi · {{ owner.name }}{% endblock %}
 {% from "stock/_changes.html" import changes %}
 {% block content %}
+{% if edited %}<p class="sc-edited" role="status">✓ Düzeltme kaydedildi. Liste yeniden hesaplandı.</p>{% endif %}
 <section class="sc-card sc-done">
   <div class="sc-check" aria-hidden="true">✓</div>
   <h1>Sayım kaydedildi</h1>
@@ -27,5 +28,6 @@
   {{ changes(s, fmt, signed) }}
 </section>
 {% endif %}
+{% if can_edit %}<a class="btn btn-ghost btn-block" href="{{ url_for('stock_public.staff_edit', token=setting.token, key=key) }}" style="margin-bottom:10px">Yanlış mı girdin? Sayımı düzelt</a>{% endif %}
 <a class="btn btn-ghost btn-block" href="{{ url_for('stock_public.count_form', token=setting.token) }}">Yeni sayım</a>
 {% endblock %}

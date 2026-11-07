@@ -9,7 +9,7 @@ Sipariş ver      = sayılan ≤ min. stok
 """
 import re
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from extensions import db
 from models import StockCategory, StockCount, StockCountLine, StockItem, StockSetting
@@ -214,6 +214,67 @@ def save_count(user, counted_by, count_date, entries, note=""):
                 received=e.get("received"), counted=e.get("counted"), note=clean(e.get("note"), 200) or None))
     db.session.commit()
     return count
+
+
+EDIT_WINDOW_HOURS = 12      # barista kendi sayımını bu süre içinde düzeltebilir
+
+
+def can_staff_edit(count, now=None):
+    now = now or datetime.utcnow()
+    return bool(count.created_at) and now - count.created_at <= timedelta(hours=EDIT_WINDOW_HOURS)
+
+
+def parse_entries(form, line_ids):
+    """Düzeltme formu: c_/r_/n_<satır id>. Dönüş: (entries, errors)."""
+    entries, errors = {}, {}
+    for line_id in line_ids:
+        entry = {}
+        for key, field in (("counted", f"c_{line_id}"), ("received", f"r_{line_id}")):
+            try:
+                entry[key] = parse_qty(form.get(field))
+            except ValueError:
+                errors[field] = "Sayı yaz (ör. 2 ya da 2,5)."
+        entry["note"] = form.get(f"n_{line_id}", "")
+        entries[line_id] = entry
+    return entries, errors
+
+
+def refresh_prev(user_id):
+    """Her sayımın "önceki" miktarlarını baştan hesaplar (eski bir sayım düzeltilince/silinince sonrakiler doğru kalsın)."""
+    last = {}
+    counts = StockCount.query.filter_by(user_id=user_id).order_by(StockCount.count_date, StockCount.id).all()
+    for count in counts:
+        lines = count.lines.all()
+        for line in lines:
+            if line.item_id:
+                line.prev_qty = last.get(line.item_id, (None,))[0]
+        for line in lines:
+            if line.item_id and line.counted is not None:
+                last[line.item_id] = (line.counted,)
+
+
+def update_count(count, entries, editor, counted_by=None, count_date=None, note=None):
+    """Kaydedilmiş sayımı düzeltir. Değişen satır sayısını döndürür."""
+    changed = 0
+    for line in count.lines.all():
+        e = entries.get(line.id)
+        if e is None:
+            continue
+        new_note = clean(e.get("note"), 200) or None
+        if (line.counted, line.received, line.note) != (e.get("counted"), e.get("received"), new_note):
+            line.counted, line.received, line.note = e.get("counted"), e.get("received"), new_note
+            changed += 1
+    if counted_by and len(clean(counted_by, 60)) >= 2:
+        count.counted_by = clean(counted_by, 60)
+    if count_date:
+        count.count_date = count_date
+    if note is not None:
+        count.note = clean(note, 500) or None
+    count.edited_at, count.edited_by = datetime.utcnow(), clean(editor, 60) or None
+    db.session.flush()
+    refresh_prev(count.user_id)
+    db.session.commit()
+    return changed
 
 
 def summarize(count):

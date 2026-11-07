@@ -122,7 +122,58 @@ def done(token, key):
         abort(404)
     count = StockCount.query.filter_by(id=count_id, user_id=setting.user_id).first_or_404()
     return render_template("stock/done.html", setting=setting, owner=_owner(setting), count=count,
-                           s=stock.summarize(count), fmt=stock.fmt, signed=stock.signed)
+                           s=stock.summarize(count), fmt=stock.fmt, signed=stock.signed,
+                           can_edit=stock.can_staff_edit(count), key=key,
+                           edited=request.args.get("duzeltildi") == "1")
+
+
+def _edit_page(count, owner, action, back, values=None, errors=None, status=200, staff=False):
+    groups = stock.grouped_lines(count)
+    return render_template("stock/edit.html", count=count, owner=owner, groups=groups, fmt=stock.fmt,
+                           values=values, errors=errors or {}, action=action, back=back, staff=staff,
+                           today=stock.today_local().isoformat()), status
+
+
+def _save_edit(count, editor, action, back, owner, staff):
+    """Düzeltme formunu kaydeder; hata varsa formu yeniden gösterir, yoksa None döner."""
+    form = request.form
+    ids = [l.id for l in count.lines.all()]
+    entries, errors = stock.parse_entries(form, ids)
+    day = stock.parse_day(form.get("count_date")) if form.get("count_date") else None
+    if form.get("count_date") and not day:
+        errors["count_date"] = "Geçerli bir tarih seç (ileri tarih olamaz)."
+    if not any(e.get("counted") is not None for e in entries.values()) and not errors:
+        errors["_form"] = "Hiç ürün sayılmamış görünüyor. Sayımın tamamı yanlışsa silebilirsin."
+    if errors:
+        errors.setdefault("_form", "Bazı alanlar hatalı; kırmızı işaretli yerleri düzelt.")
+        return _edit_page(count, owner, action, back, dict(form), errors, 400, staff)
+    changed = stock.update_count(count, entries, editor, counted_by=form.get("counted_by"), count_date=day,
+                                 note=form.get("note"))
+    return changed
+
+
+@stock_public_bp.route("/s/<token>/duzelt/<key>", methods=["GET", "POST"])
+def staff_edit(token, key):
+    setting = _setting_or_404(token)
+    owner = _owner(setting)
+    if not _pin_ok(setting):
+        return render_template("stock/pin.html", setting=setting, owner=owner)
+    try:
+        count_id = _signer().loads(key)
+    except BadSignature:
+        abort(404)
+    count = StockCount.query.filter_by(id=count_id, user_id=setting.user_id).first_or_404()
+    done_url = url_for("stock_public.done", token=token, key=key)
+    if not stock.can_staff_edit(count):
+        return render_template("stock/edit.html", count=count, owner=owner, expired=True, back=done_url,
+                               hours=stock.EDIT_WINDOW_HOURS)
+    action = url_for("stock_public.staff_edit", token=token, key=key)
+    if request.method == "GET":
+        return _edit_page(count, owner, action, done_url, staff=True)
+    result = _save_edit(count, count.counted_by, action, done_url, owner, staff=True)
+    if not isinstance(result, int):
+        return result
+    return redirect(done_url + "?duzeltildi=1")
 
 
 # ── İşletme paneli ──────────────────────────────────────────────────────────
@@ -176,11 +227,29 @@ def export_csv(count_id):
     return Response(body, mimetype="text/csv", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
+@stock_bp.route("/<int:count_id>/duzelt", methods=["GET", "POST"])
+@login_required
+def edit_count(count_id):
+    count = StockCount.query.filter_by(id=count_id, user_id=current_user.id).first_or_404()
+    action = url_for("stock.edit_count", count_id=count.id)
+    back = url_for("stock.detail", count_id=count.id)
+    if request.method == "GET":
+        return _edit_page(count, current_user, action, back)
+    result = _save_edit(count, current_user.name or "Yönetici", action, back, current_user, staff=False)
+    if not isinstance(result, int):
+        return result
+    flash(f"Sayım düzeltildi ({result} ürün değişti). Fark ve sipariş listesi yeniden hesaplandı." if result
+          else "Değişiklik yok; sayım aynı kaldı.", "success")
+    return redirect(back)
+
+
 @stock_bp.post("/<int:count_id>/sil")
 @login_required
 def delete_count(count_id):
     count = StockCount.query.filter_by(id=count_id, user_id=current_user.id).first_or_404()
     db.session.delete(count)
+    db.session.flush()
+    stock.refresh_prev(current_user.id)
     db.session.commit()
     flash("Sayım silindi.", "success")
     return redirect(url_for("stock.index"))

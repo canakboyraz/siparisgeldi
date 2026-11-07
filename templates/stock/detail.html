@@ -5,9 +5,10 @@
 {% block panel %}
 <div class="page-head">
   <div><h1>Sayım · {{ count.count_date.strftime('%d.%m.%Y') }}</h1>
-    <p class="muted page-sub">{{ count.counted_by }} · {{ (count.created_at|yerel).strftime('%d.%m %H:%M') }} · {{ s.counted }}/{{ s.total }} ürün sayıldı</p></div>
+    <p class="muted page-sub">{{ count.counted_by }} · {{ (count.created_at|yerel).strftime('%d.%m %H:%M') }} · {{ s.counted }}/{{ s.total }} ürün sayıldı{% if count.edited_at %} · <span title="{{ (count.edited_at|yerel).strftime('%d.%m.%Y %H:%M') }}">{{ count.edited_by or 'Biri' }} tarafından düzeltildi ({{ (count.edited_at|yerel).strftime('%d.%m %H:%M') }})</span>{% endif %}</p></div>
   <div class="lc-head-actions">
     <a class="btn btn-ghost" href="{{ url_for('stock.index') }}">{{ icon('clipboard', 16) }} Sayımlar</a>
+    <a class="btn btn-primary" href="{{ url_for('stock.edit_count', count_id=count.id) }}">{{ icon('edit', 16) }} Düzelt</a>
     <a class="btn btn-ghost" href="{{ url_for('stock.export_csv', count_id=count.id) }}">Excel'e aktar</a>
     <form method="post" action="{{ url_for('stock.delete_count', count_id=count.id) }}" onsubmit="return window.confirm('Bu sayım silinsin mi?');">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost" type="submit">Sil</button></form>

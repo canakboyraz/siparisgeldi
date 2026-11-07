@@ -1,0 +1,86 @@
+{% extends "stock/_shell.html" %}
+{% block title %}Sayımı düzelt · {{ owner.name }}{% endblock %}
+{% block content %}
+{% if expired %}
+<section class="sc-card">
+  <h1>Düzeltme süresi doldu</h1>
+  <p class="sc-muted">Sayım gönderildikten sonra {{ hours }} saat içinde düzeltilebilir. Bir hata varsa yöneticine söyle; panelden düzeltebilir.</p>
+  <a class="btn btn-ghost btn-block" href="{{ back }}">Geri dön</a>
+</section>
+{% else %}
+{% set v = values or {} %}
+<form method="post" action="{{ action }}" id="sc-form" class="sc-edit" novalidate>
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <section class="sc-card">
+    <h1>Sayımı düzelt</h1>
+    <p class="sc-muted">Yanlış girilen miktarları değiştir, eksik sayılanları doldur. Kaydedince fark, kullanılan ve sipariş listesi yeniden hesaplanır.</p>
+    {% if errors._form %}<p class="sc-error" role="alert">{{ errors._form }}</p>{% endif %}
+    <div class="sc-who">
+      <div class="sc-field {{ 'has-error' if errors.count_date }}">
+        <label for="sc-date">Tarih</label>
+        <input id="sc-date" type="date" name="count_date" value="{{ v.count_date or count.count_date.isoformat() }}" max="{{ today }}">
+        {% if errors.count_date %}<small class="sc-err">{{ errors.count_date }}</small>{% endif %}
+      </div>
+      <div class="sc-field">
+        <label for="sc-who">Sayımı yapan</label>
+        <input id="sc-who" type="text" name="counted_by" maxlength="60" value="{{ v.counted_by or count.counted_by }}" {{ 'readonly' if staff }}>
+      </div>
+    </div>
+    <label class="sc-toggle"><input type="checkbox" id="sc-only">
+      <span><b>Sadece kontrol gerekenleri göster</b><small>Sayılmayanlar ve önceki + gelenden fazla çıkanlar.</small></span></label>
+  </section>
+
+  {% for cat, lines in groups %}
+  <section class="sc-cat">
+    <h2>{{ cat }}</h2>
+    {% for l in lines %}
+    {% set cf = 'c_' ~ l.id %}{% set rf = 'r_' ~ l.id %}{% set nf = 'n_' ~ l.id %}
+    {% set check = l.counted is none or (l.used is not none and l.used < 0) %}
+    <div class="sc-item {{ 'has-error' if errors[cf] or errors[rf] }} {{ 'is-check' if check }}">
+      <div class="sc-name">
+        <b>{{ l.item_name }}</b>
+        <small>{{ l.unit }}{% if l.prev_qty is not none %} · önceki: {{ fmt(l.prev_qty) }}{% endif %}{% if l.min_stock is not none %} · min {{ fmt(l.min_stock) }}{% endif %}</small>
+        {% if l.counted is none %}<span class="sc-flag is-gray">Sayılmadı</span>
+        {% elif l.used is not none and l.used < 0 %}<span class="sc-flag">Kontrol et: önceki + gelenden fazla</span>{% endif %}
+      </div>
+      <div class="sc-step">
+        <button type="button" class="sc-btn" data-step="-1" aria-label="{{ l.item_name }} azalt">−</button>
+        <input type="text" inputmode="decimal" autocomplete="off" name="{{ cf }}" value="{{ v[cf] if values else fmt(l.counted) }}" placeholder="–" aria-label="{{ l.item_name }} sayılan ({{ l.unit }})">
+        <button type="button" class="sc-btn" data-step="1" aria-label="{{ l.item_name }} artır">+</button>
+      </div>
+      <div class="sc-extra">
+        <label class="sc-recv">Gelen <input type="text" inputmode="decimal" autocomplete="off" name="{{ rf }}" value="{{ v[rf] if values else fmt(l.received) }}" placeholder="0" aria-label="{{ l.item_name }} gelen"></label>
+        <input class="sc-note" type="text" name="{{ nf }}" maxlength="200" value="{{ v[nf] if values else (l.note or '') }}" placeholder="Not" aria-label="{{ l.item_name }} not">
+      </div>
+      {% if errors[cf] or errors[rf] %}<small class="sc-err">{{ errors[cf] or errors[rf] }}</small>{% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <section class="sc-card">
+    <label for="sc-note-all" class="sc-label">Genel not</label>
+    <textarea id="sc-note-all" name="note" maxlength="500" rows="3">{{ v.note if values else (count.note or '') }}</textarea>
+    <p class="sc-muted">Boş bırakılan ürün "sayılmadı" kabul edilir.</p>
+  </section>
+
+  <div class="sc-bar">
+    <a class="btn btn-ghost" href="{{ back }}">Vazgeç</a>
+    <button class="btn btn-primary btn-lg" type="submit">Düzeltmeyi kaydet</button>
+  </div>
+</form>
+<script>
+(function () {
+  var form = document.getElementById("sc-form");
+  form.addEventListener("click", function (e) {
+    var b = e.target.closest(".sc-btn"); if (!b) return;
+    var input = b.parentNode.querySelector("input"), n = parseFloat((input.value || "0").replace(",", ".")) || 0;
+    n = Math.max(0, Math.round((n + parseFloat(b.getAttribute("data-step"))) * 1000) / 1000);
+    input.value = String(n).replace(".", ",");
+  });
+  document.getElementById("sc-only").addEventListener("change", function () { form.classList.toggle("only-check", this.checked); });
+  var first = form.querySelector(".has-error input"); if (first) first.focus();
+})();
+</script>
+{% endif %}
+{% endblock %}

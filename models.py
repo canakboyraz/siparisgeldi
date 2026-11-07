@@ -552,6 +552,8 @@ class StockCount(db.Model):
     counted_by = db.Column(db.String(60), nullable=False)
     note = db.Column(db.String(500))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    edited_at = db.Column(db.DateTime)
+    edited_by = db.Column(db.String(60))
 
     lines = db.relationship("StockCountLine", backref="count", lazy="dynamic", cascade="all, delete-orphan",
                             order_by="StockCountLine.id")

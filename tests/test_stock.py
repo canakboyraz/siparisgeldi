@@ -197,6 +197,67 @@ class StockTest(unittest.TestCase):
         self.assertEqual(other.get(f"/panel/sayim/{count.id}").status_code, 404)
         self.assertEqual(self.app.test_client().get("/s/yokboyle").status_code, 404)
 
+    def test_correct_count(self):
+        setting = self._setup_list()
+        milk = StockItem.query.filter_by(name="Yağlı süt").one()
+        espresso = StockItem.query.filter_by(name="Espresso").one()
+        token = self._csrf(self.barista, f"/s/{setting.token}")
+        send = lambda day, who, data: self.barista.post(f"/s/{setting.token}", data=dict(   # noqa: E731
+            data, _csrf_token=token, count_date=day.isoformat(), counted_by=who))
+        d1, d2 = date.today() - timedelta(days=2), date.today() - timedelta(days=1)
+        r1 = send(d1, "Doğa", {f"c_{milk.id}": "20", f"c_{espresso.id}": "4"})
+        send(d2, "Sümeyye", {f"c_{milk.id}": "15", f"c_{espresso.id}": "3"})
+        c1, c2 = StockCount.query.order_by(StockCount.id).all()
+        line = lambda c, item: c.lines.filter_by(item_id=item.id).one()       # noqa: E731
+
+        # barista: gönderdikten sonra düzeltebilir (süt 20 değil 2 yazılmış olsun → 200 yanlışlıkla)
+        done_url = r1.headers["Location"]
+        self.assertIn("Sayımı düzelt", self.barista.get(done_url).get_data(as_text=True))
+        edit_url = done_url.replace("/tamam/", "/duzelt/")
+        page = self.barista.get(edit_url).get_data(as_text=True)
+        self.assertIn("Düzeltmeyi kaydet", page)
+        self.assertIn('value="20"', page)
+        r = self.barista.post(edit_url, data={"_csrf_token": token, f"c_{line(c1, milk).id}": "abc"})
+        self.assertEqual(r.status_code, 400)
+        r = self.barista.post(edit_url, data={"_csrf_token": token, "count_date": d1.isoformat(),
+                                              f"c_{line(c1, milk).id}": "25", f"c_{line(c1, espresso).id}": "4"})
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("Düzeltme kaydedildi", self.barista.get(r.headers["Location"]).get_data(as_text=True))
+        db.session.expire_all()
+        self.assertEqual(line(c1, milk).counted, 25)
+        self.assertEqual(c1.edited_by, "Doğa")
+        self.assertEqual(line(c2, milk).prev_qty, 25)              # sonraki sayımın "önceki"si de düzeldi
+        self.assertEqual(line(c2, milk).diff, -10)
+        # 12 saat geçince barista düzeltemez
+        c1.created_at = c1.created_at - timedelta(hours=13)
+        db.session.commit()
+        self.assertIn("süresi doldu", self.barista.get(edit_url).get_data(as_text=True))
+        self.assertNotIn("Sayımı düzelt", self.barista.get(done_url).get_data(as_text=True))
+
+        # yönetici: panelden her zaman; sayılmayan ürünü doldurur
+        syrup = StockItem.query.filter(StockItem.id.notin_([milk.id, espresso.id])).first()
+        detail = self.staff.get(f"/panel/sayim/{c1.id}").get_data(as_text=True)
+        self.assertIn("Düzelt", detail)
+        form = self.staff.get(f"/panel/sayim/{c1.id}/duzelt").get_data(as_text=True)
+        self.assertIn("Sayılmadı", form)
+        r = self._post(self.staff, f"/panel/sayim/{c1.id}/duzelt", {
+            "count_date": d1.isoformat(), "counted_by": "Doğa",
+            f"c_{line(c1, milk).id}": "25", f"c_{line(c1, espresso).id}": "4",
+            f"c_{line(c1, syrup).id}": "3", f"n_{line(c1, syrup).id}": "unutulmuş"}, page=f"/panel/sayim/{c1.id}/duzelt")
+        self.assertEqual(r.status_code, 302)
+        db.session.expire_all()
+        self.assertEqual((line(c1, syrup).counted, line(c1, syrup).note), (3, "unutulmuş"))
+        self.assertEqual(line(c2, syrup).prev_qty, 3)
+        self.assertIn("tarafından düzeltildi", self.staff.get(f"/panel/sayim/{c1.id}").get_data(as_text=True))
+        # başka işletme düzeltemez
+        other = self.app.test_client()
+        self._login(other, "baska@kafe.com")
+        self.assertEqual(other.get(f"/panel/sayim/{c1.id}/duzelt").status_code, 404)
+        # ilk sayım silinince ikincinin "önceki"si boşalır
+        self._post(self.staff, f"/panel/sayim/{c1.id}/sil", {}, page=f"/panel/sayim/{c1.id}")
+        db.session.expire_all()
+        self.assertIsNone(line(c2, milk).prev_qty)
+
     def test_pin_and_new_link(self):
         setting = self._setup_list()
         self._post(self.staff, "/panel/sayim/ayarlar", {"action": "pin", "pin": "4321"})

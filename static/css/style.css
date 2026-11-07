@@ -1879,3 +1879,12 @@ body:has(.qm){background:#FAF8F5}
 .cost-totals .is-main{border-color:var(--accent,#1E5B47)}
 .cost-totals .is-neg strong{color:#B4321F}
 @media (max-width:600px){.cost-totals{grid-template-columns:1fr 1fr}.cost-totals .is-main{grid-column:1/-1}}
+
+/* Sayım düzeltme */
+.sc-edit .sc-who{margin:12px 0}
+.sc-edit .sc-note{display:block;width:100%;margin-top:6px}
+.sc-flag.is-gray{background:#EEF0F2;color:#5A6168}
+.sc-edit .sc-item.is-check{border-left:3px solid var(--red);padding-left:10px}
+.sc-edit.only-check .sc-item:not(.is-check){display:none}
+.sc-edit.only-check .sc-cat:not(:has(.is-check)){display:none}
+.sc-edited{background:#E8F5EE;color:#1E7A4F;border-radius:12px;padding:10px 12px;font-weight:600;margin:0 0 12px}

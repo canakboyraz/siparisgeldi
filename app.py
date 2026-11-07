@@ -84,6 +84,8 @@ def _ensure_schema():
             "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS adisyo_order_id VARCHAR(40)",
             "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS adisyo_error VARCHAR(200)",
             "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS adisyo_sent_at TIMESTAMP",
+            "ALTER TABLE stock_counts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP",
+            "ALTER TABLE stock_counts ADD COLUMN IF NOT EXISTS edited_by VARCHAR(60)",
         ]
     elif backend.startswith("sqlite"):
         with db.engine.begin() as conn:
