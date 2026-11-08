@@ -1888,3 +1888,18 @@ body:has(.qm){background:#FAF8F5}
 .sc-edit.only-check .sc-item:not(.is-check){display:none}
 .sc-edit.only-check .sc-cat:not(:has(.is-check)){display:none}
 .sc-edited{background:#E8F5EE;color:#1E7A4F;border-radius:12px;padding:10px 12px;font-weight:600;margin:0 0 12px}
+
+/* Ana panel · bugün platformlara göre */
+.today-platforms{margin-bottom:1rem;padding:1rem 1.1rem}
+.tp-head{display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem}
+.tp-head .muted{font-size:.8rem}
+.tp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem}
+.tp-row{display:grid;grid-template-columns:1fr auto;gap:.15rem .75rem;padding:.75rem .85rem;border:1px solid var(--line,#E2DED6);border-radius:12px}
+.tp-row.is-zero{opacity:.65}
+.tp-name,.tp-val{display:flex;flex-direction:column;min-width:0}
+.tp-name strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp-val{text-align:right}
+.tp-val strong{font-size:1.15rem;font-variant-numeric:tabular-nums}
+.tp-name .muted,.tp-val .muted{font-size:.8rem}
+.tp-bar{grid-column:1/-1;height:6px;border-radius:999px;background:var(--surface-2,#F1EEE8);overflow:hidden;margin-top:.35rem}
+.tp-bar i{display:block;height:100%;background:var(--accent,#1E5B47);border-radius:inherit}

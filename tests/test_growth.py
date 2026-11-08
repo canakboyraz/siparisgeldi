@@ -78,6 +78,26 @@ class GrowthTest(unittest.TestCase):
         self.assertIn("<b>1</b><span>sipariş", page)  # iptal sayılmaz
         self.assertIn("Migros Yemek", page)         # duracak platform
 
+    def test_panel_shows_today_by_platform(self):
+        u = self._trial_user()
+        db.session.add(Integration(user_id=u.id, platform="trendyolgo", is_active=True))
+        db.session.add(Integration(user_id=u.id, platform="migros", is_active=True))
+        db.session.add(Integration(user_id=u.id, platform="getir", is_active=True))
+        db.session.add(Order(user_id=u.id, platform="trendyolgo", external_id="1", status="Delivered", total_price=300))
+        db.session.add(Order(user_id=u.id, platform="trendyolgo", external_id="2", status="Delivered", total_price=200))
+        db.session.add(Order(user_id=u.id, platform="trendyolgo", external_id="3", status="Cancelled", total_price=99))
+        db.session.add(Order(user_id=u.id, platform="migros", external_id="4", status="Delivered", total_price=500))
+        db.session.commit()
+        token = self._csrf("/giris")
+        self.client.post("/giris", data={"_csrf_token": token, "email": "usta@restoran.com", "password": "sifre12345"})
+        page = self.client.get("/panel/").get_data(as_text=True)
+        self.assertIn("Bugün platformlara göre", page)
+        block = page[page.index("Bugün platformlara göre"):]
+        self.assertIn("2 sipariş · ort. 250", block)   # iptal sayılmaz
+        self.assertIn("%50", block)
+        self.assertIn("Getir Yemek", block)             # siparişi olmayan aktif platform da görünür
+        self.assertIn("0 sipariş", block)
+
     def test_lifecycle_emails_once_each(self):
         u = self._trial_user(days_ago=1)
         sent = []

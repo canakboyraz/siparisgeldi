@@ -34,6 +34,20 @@
   <a class="stat stat-link {{ 'is-hot' if today_stats.active else '' }}" href="{{ url_for('dashboard.active_orders') }}"><div class="v">{{ today_stats.active }}</div><div class="l">Aktif sipariş</div></a>
   <a class="stat stat-link" href="{{ url_for('dashboard.subscription') }}"><div class="v">{{ ('Deneme' if current_user.is_trial_active else 'Pro') if is_pro_user() else 'Ücretsiz' }}</div><div class="l">Plan · {{ integrations|selectattr('is_active')|list|length }} aktif platform</div></a>
 </div>
+{% if today_stats.platforms|length > 1 or (today_stats.platforms and today_stats.orders) %}
+<div class="card today-platforms" aria-label="Bugün platformlara göre">
+  <div class="tp-head"><span class="card-title" style="margin:0">Bugün platformlara göre</span><span class="muted">Anlık · iptal ve iadeler hariç</span></div>
+  <div class="tp-grid">
+    {% for p in today_stats.platforms %}
+    <div class="tp-row {{ 'is-zero' if not p.orders }}">
+      <div class="tp-name"><strong>{{ platform_label(p.platform) }}</strong><span class="muted">{{ p.orders }} sipariş{% if p.orders %} · ort. {{ tl_amount(p.avg) }}{% endif %}</span></div>
+      <div class="tp-val"><strong>{{ tl_amount(p.revenue) }}</strong><span class="muted">%{{ '%.0f'|format(p.share) }}</span></div>
+      <div class="tp-bar" aria-hidden="true"><i style="width:{{ '%.1f'|format(p.share) }}%"></i></div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 {% if loss_alert %}
 <div class="card loss-alert">

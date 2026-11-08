@@ -92,6 +92,23 @@ def _force_free_notification_channel():
         current_user.notification_channel = "telegram"
 
 
+def _today_by_platform(integrations, orders, total_revenue):
+    """Bugünkü sipariş ve ciroyu platform platform ayırır (aktif bağlı platformlar sıfır olsa da görünür)."""
+    rows = {}
+    for intg in integrations:
+        if intg.is_active:
+            rows.setdefault(intg.platform, {"platform": intg.platform, "orders": 0, "revenue": 0.0})
+    for o in orders:
+        row = rows.setdefault(o.platform, {"platform": o.platform, "orders": 0, "revenue": 0.0})
+        row["orders"] += 1
+        row["revenue"] += float(o.total_price or 0)
+    total = float(total_revenue or 0)
+    for row in rows.values():
+        row["share"] = row["revenue"] / total * 100 if total else 0
+        row["avg"] = row["revenue"] / row["orders"] if row["orders"] else 0
+    return sorted(rows.values(), key=lambda r: (-r["revenue"], -r["orders"], r["platform"]))
+
+
 @dashboard_bp.route("/")
 @login_required
 def index():
@@ -111,6 +128,7 @@ def index():
                    .filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(ACTIVE_EXCLUDED_STATUSES))))
                    .count()),
     }
+    today_stats["platforms"] = _today_by_platform(integrations, todays_valid, today_stats["revenue"])
     loss_alert = None
     if recent:
         try:
