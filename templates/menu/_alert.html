@@ -1,7 +1,7 @@
 {#- Masadan yeni sipariş: her panel sayfasında sesli uyarı. -#}
 <div class="order-alert-backdrop qo-alert-backdrop" id="qo-alert" hidden>
   <div class="order-alert qo-alert" role="alertdialog" aria-modal="true" aria-labelledby="qo-alert-title">
-    <div class="order-alert-kicker">{{ icon('qr', 16) }} QR menü · yeni sipariş</div>
+    <div class="order-alert-kicker" id="qo-alert-kicker">{{ icon('qr', 16) }} QR menü · yeni sipariş</div>
     <h2 id="qo-alert-title"></h2>
     <p class="qo-alert-meta" id="qo-alert-meta"></p>
     <ul class="qo-lines" id="qo-alert-lines"></ul>
@@ -16,19 +16,33 @@
 <script>
 (function () {
   var url = "{{ url_for('menu.new_orders_json') }}", base = "{{ url_for('menu.change_status', order_id=0, status='preparing') }}";
+  var callBase = "{{ url_for('menu.call_done', call_id=0) }}", kicker = document.getElementById("qo-alert-kicker"), kickerHtml = kicker.innerHTML;
   var csrf = "{{ csrf_token() }}", box = document.getElementById("qo-alert"), current = null, busy = false, lastBeep = 0;
   function el(id) { return document.getElementById(id); }
-  function beep() {
+  function beep(isCall) {
     var now = Date.now(); if (now - lastBeep < 6000) return; lastBeep = now;
+    var notes = isCall ? [1319, 988, 1319, 988] : [784, 988, 1175];
     try { var C = window.AudioContext || window.webkitAudioContext; if (!C) return; var ctx = new C();
-      [0, .18, .36].forEach(function (d, i) { var o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = [784, 988, 1175][i];
+      notes.map(function (_, i) { return i * .18; }).forEach(function (d, i) { var o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = notes[i];
         g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.3, ctx.currentTime + d + .02);
         g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .16); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .18); });
     } catch (e) {}
     if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
   }
+  function ago(sec) { return sec < 60 ? "az önce" : Math.round(sec / 60) + " dk önce"; }
+  function showCall(c, rest) {
+    current = { call: true, id: c.id };
+    kicker.innerHTML = "🔔 Garson çağrısı";
+    el("qo-alert-title").textContent = c.table;
+    el("qo-alert-meta").textContent = "Garson çağırıyor · " + ago(c.age);
+    el("qo-alert-lines").innerHTML = ""; el("qo-alert-note").hidden = true;
+    el("qo-alert-ok").textContent = "Gidiyorum";
+    el("qo-alert-more").textContent = rest > 0 ? "Sırada " + rest + " bildirim daha var." : "";
+    box.hidden = false; box.classList.add("is-call");
+    beep(true);
+  }
   function show(o, rest) {
-    current = o;
+    current = o; kicker.innerHTML = kickerHtml; el("qo-alert-ok").textContent = "Hazırlanıyor"; box.classList.remove("is-call");
     el("qo-alert-title").textContent = o.table;
     el("qo-alert-meta").textContent = "#" + o.id + (o.name ? " · " + o.name : "") + " · " + o.total;
     var ul = el("qo-alert-lines"); ul.innerHTML = "";
@@ -41,8 +55,11 @@
   function poll() {
     if (busy || document.hidden) return;
     fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : { items: [] }; })
-      .then(function (d) { var items = d.items || []; if (!items.length) { box.hidden = true; current = null; return; }
-        if (!current || current.id !== items[0].id || box.hidden) show(items[0], items.length - 1); else beep(); })
+      .then(function (d) { var items = d.items || [], calls = d.calls || [], rest = items.length + calls.length - 1;
+        if (calls.length) { var c = calls[0];
+          if (!current || !current.call || current.id !== c.id || box.hidden) showCall(c, rest); else beep(true); return; }
+        if (!items.length) { box.hidden = true; current = null; return; }
+        if (!current || current.call || current.id !== items[0].id || box.hidden) show(items[0], rest); else beep(); })
       .catch(function () {});
   }
   function toast(text, ok) {
@@ -52,7 +69,8 @@
   }
   el("qo-alert-ok").addEventListener("click", function () {
     if (!current) return; busy = true;
-    fetch(base.replace("/0/", "/" + current.id + "/"), { method: "POST", credentials: "same-origin",
+    var target = current.call ? callBase.replace("/0/", "/" + current.id + "/") : base.replace("/0/", "/" + current.id + "/");
+    fetch(target, { method: "POST", credentials: "same-origin",
       headers: { "X-CSRF-Token": csrf, "X-Requested-With": "fetch", "Accept": "application/json" } })
       .then(function (r) { return r.json(); })
       .then(function (d) { if (d && d.adisyo) toast(d.adisyo.ok ? "✓ " + d.adisyo.message : "Adisyo'ya yazılamadı: " + d.adisyo.message, d.adisyo.ok); })

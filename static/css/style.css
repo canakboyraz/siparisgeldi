@@ -1903,3 +1903,25 @@ body:has(.qm){background:#FAF8F5}
 .tp-name .muted,.tp-val .muted{font-size:.8rem}
 .tp-bar{grid-column:1/-1;height:6px;border-radius:999px;background:var(--surface-2,#F1EEE8);overflow:hidden;margin-top:.35rem}
 .tp-bar i{display:block;height:100%;background:var(--accent,#1E5B47);border-radius:inherit}
+
+/* QR menü · Garson çağır */
+.qm-call{margin-top:16px;position:relative;z-index:1}
+.qm-call-btn{display:inline-flex;align-items:center;gap:10px;border:0;border-radius:999px;background:#fff;color:var(--qa);font-weight:800;font-size:1rem;padding:12px 20px;box-shadow:0 6px 18px rgba(0,0,0,.18);cursor:pointer;transition:transform .12s}
+.qm-call-btn:active{transform:scale(.96)}
+.qm-call-btn:disabled{opacity:.7}
+.qm-call-state{display:inline-flex;align-items:center;gap:10px;max-width:100%;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:10px 8px 10px 16px;font-weight:700;font-size:.92rem;color:#fff}
+.qm-call-state button{border:0;background:rgba(0,0,0,.2);color:#fff;border-radius:999px;padding:6px 12px;font-weight:600;font-size:.82rem;cursor:pointer}
+.qm-call-state button[hidden]{display:none}
+.qm-call-dot{width:10px;height:10px;border-radius:50%;background:#FFD27A;animation:qm-pulse 1.4s ease-in-out infinite}
+.qm-call-state.is-done{padding-right:16px}
+.qm-call-state.is-done .qm-call-dot{background:#7BE0A8;animation:none}
+.qm-call-err{margin:8px 0 0;background:rgba(0,0,0,.25);border-radius:10px;padding:8px 12px;font-size:.85rem;color:#fff}
+@keyframes qm-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+@media (prefers-reduced-motion:reduce){.qm-call-dot{animation:none}}
+.qo-alert-backdrop.is-call .qo-alert{border-top:6px solid #E0A100}
+.qo-calls{margin-bottom:1rem;border-left:4px solid #E0A100}
+.qo-calls ul{list-style:none;margin:.5rem 0 0;padding:0;display:grid;gap:.5rem}
+.qo-calls li{display:flex;align-items:center;gap:.75rem}
+.qo-calls li b{font-size:1.05rem}
+.qo-calls li form{margin-left:auto}
+.qm-call [hidden]{display:none!important}

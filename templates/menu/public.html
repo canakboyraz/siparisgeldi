@@ -13,6 +13,7 @@
     </div>
     <h1>{{ setting.title or owner.name }}</h1>
     {% if setting.welcome %}<p>{{ setting.welcome }}</p>{% endif %}
+    {% include "menu/_call.html" %}
     {% if table and not setting.ordering_open %}<p class="qm-banner">Şu an menüden sipariş alınmıyor. Siparişini kasaya söyleyebilirsin.</p>
     {% elif not table %}<p class="qm-banner">Sipariş vermek için masandaki QR kodu okut.</p>{% endif %}
   </header>

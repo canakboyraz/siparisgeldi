@@ -15,7 +15,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from flask import current_app
 
 from extensions import db
-from models import MenuCategory, MenuImage, MenuItem, MenuSetting, MenuTable, TableOrder, TableOrderLine
+from models import MenuCategory, MenuImage, MenuItem, MenuSetting, MenuTable, TableCall, TableOrder, TableOrderLine
 
 log = logging.getLogger("menu")
 
@@ -242,6 +242,69 @@ def order_json(order):
         "lines": [{"name": l.name, "qty": l.quantity, "price": tl(l.price)} for l in order.lines],
         "age": int((datetime.utcnow() - order.created_at).total_seconds()) if order.created_at else 0,
     }
+
+
+# ── Masadan çağrı: garson / hesap ──────────────────────────────────────────
+
+CALL_KINDS = {
+    "garson": {"button": "Garson çağır", "panel": "garson çağırıyor", "done": "Garson geliyor"},
+}
+CALL_DEVICE_COOLDOWN = timedelta(seconds=15)
+CALL_TABLE_LIMIT = (6, timedelta(minutes=10))
+
+
+def create_call(table, device, kind="garson"):
+    """Masadan çağrı. Aynı masada aynı türden açık çağrı varsa yenisini açmaz, onu döndürür."""
+    if kind not in CALL_KINDS:
+        raise OrderError("Geçersiz istek.")
+    setting = MenuSetting.query.filter_by(user_id=table.user_id).first()
+    if not setting or setting.calls_open is False:
+        raise OrderError("Şu an masadan çağrı alınmıyor. Lütfen kasaya seslen.")
+    open_call = (TableCall.query.filter_by(user_id=table.user_id, table_id=table.id, kind=kind, status="open")
+                 .order_by(TableCall.id.desc()).first())
+    if open_call:
+        return open_call, False
+    now = datetime.utcnow()
+    if device:
+        last = TableCall.query.filter_by(user_id=table.user_id, device=device).order_by(TableCall.id.desc()).first()
+        if last and now - last.created_at < CALL_DEVICE_COOLDOWN:
+            raise OrderError("Az önce çağırdın. Birkaç saniye sonra tekrar deneyebilirsin.")
+    recent = TableCall.query.filter(TableCall.table_id == table.id,
+                                    TableCall.created_at > now - CALL_TABLE_LIMIT[1]).count()
+    if recent >= CALL_TABLE_LIMIT[0]:
+        raise OrderError("Bu masadan çok sayıda çağrı geldi. Lütfen kasaya seslen.")
+    call = TableCall(user_id=table.user_id, table_id=table.id, table_name=table.name, kind=kind,
+                     status="open", device=(device or "")[:32] or None)
+    db.session.add(call)
+    db.session.commit()
+    _telegram(call.user_id, f"🔔 {call.table_name} {CALL_KINDS[kind]['panel']}.", f"call={call.id}")
+    return call, True
+
+
+def close_call(call, status="done"):
+    if call.status == "open":
+        call.status, call.done_at = status, datetime.utcnow()
+        db.session.commit()
+
+
+def call_json(call):
+    return {"id": call.id, "kind": call.kind, "table": call.table_name, "status": call.status,
+            "text": f"{call.table_name} {CALL_KINDS[call.kind]['panel']}",
+            "age": int((datetime.utcnow() - call.created_at).total_seconds()) if call.created_at else 0}
+
+
+def _telegram(user_id, text, ref):
+    try:
+        from models import User
+        user = db.session.get(User, user_id)
+        token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
+        chat_id = getattr(user, "telegram_chat_id", None)
+        if not token or not chat_id or current_app.config.get("TESTING"):
+            return
+        from notifications import telegram
+        threading.Thread(target=lambda: telegram.send_message(token, chat_id, text), daemon=True).start()
+    except Exception:  # noqa: BLE001
+        log.exception("[MENU] Telegram bildirimi gönderilemedi %s", ref)
 
 
 # ── Adisyo'dan ürün aktarma ────────────────────────────────────────────────

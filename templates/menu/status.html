@@ -9,6 +9,7 @@
     <div class="qm-hero-top"><div class="qm-logo" aria-hidden="true">{{ (setting.title or owner.name or 'M')[:1]|upper }}</div>
       <span class="qm-table">{{ order.table_name }}</span></div>
     <h1>{{ setting.title or owner.name }}</h1>
+    {% include "menu/_call.html" %}
   </header>
   <section class="qm-card qs-main" aria-live="polite">
     <div class="qs-icon" id="qs-icon">{% if order.status == 'cancelled' %}×{% elif order.status == 'served' %}✓{% else %}☕{% endif %}</div>

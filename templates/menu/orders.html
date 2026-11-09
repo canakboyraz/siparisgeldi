@@ -17,6 +17,10 @@
       <button class="btn btn-ghost" type="submit" title="Hazırlanıyor'a basınca sipariş Adisyo'da masanın hesabına yazılır">
         <span class="qo-dot {{ 'on' if setting.adisyo_send=='accept' }}"></span>{{ "Adisyo'ya yazılıyor" if setting.adisyo_send=='accept' else "Adisyo'ya yazma kapalı" }}</button></form>
     {% endif %}
+    <form method="post" action="{{ url_for('menu.settings') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="calls"><input type="hidden" name="next" value="{{ url_for('menu.orders') }}">
+      <button class="btn btn-ghost" type="submit" title="Müşterinin menüde gördüğü 'Garson çağır' düğmesi">
+        <span class="qo-dot {{ 'on' if setting.calls_open is not false }}"></span>{{ 'Garson çağır açık' if setting.calls_open is not false else 'Garson çağır kapalı' }}</button></form>
     <a class="btn btn-ghost" href="{{ url_for('menu.items') }}">{{ icon('list', 16) }} Menü</a>
     <a class="btn btn-ghost" href="{{ url_for('menu.tables') }}">{{ icon('qr', 16) }} Masalar ve QR</a>
   </div>
@@ -35,6 +39,18 @@
 </div>
 {% endif %}
 
+{% if calls %}
+<div class="card qo-calls" role="region" aria-label="Garson çağrıları">
+  <div class="card-title">🔔 Garson bekleyen masalar ({{ calls|length }})</div>
+  <ul>
+    {% for c in calls %}
+    <li><b>{{ c.table_name }}</b><span class="muted">{{ (c.created_at|yerel).strftime('%H:%M') }}</span>
+      <form method="post" action="{{ url_for('menu.call_done', call_id=c.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ request.full_path }}"><button class="btn btn-primary btn-sm" type="submit">Gidiyorum</button></form></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
 <div class="lc-chips">
   <a class="lc-chip {{ 'is-active' if durum=='aktif' }} {{ 'is-alert' if counts.aktif }}" href="{{ url_for('menu.orders') }}">Aktif <b>{{ counts.aktif }}</b></a>
   <a class="lc-chip {{ 'is-active' if durum=='served' }}" href="{{ url_for('menu.orders', durum='served') }}">Teslim edildi <b>{{ counts.served }}</b></a>

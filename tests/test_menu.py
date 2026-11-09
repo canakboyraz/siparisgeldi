@@ -11,7 +11,7 @@ from PIL import Image
 from app import create_app
 from extensions import db
 import menu
-from models import MenuCategory, MenuImage, MenuItem, MenuSetting, MenuTable, TableOrder, User
+from models import MenuCategory, MenuImage, MenuItem, MenuSetting, MenuTable, TableCall, TableOrder, User
 
 
 class TestConfig:
@@ -197,6 +197,54 @@ class MenuTest(unittest.TestCase):
         self.assertNotIn('id="qm-send"', html)
         self.assertNotIn("Başka", html)
         self.assertEqual(self.guest.get("/m/yokboyle").status_code, 404)
+
+    def test_call_waiter(self):
+        self._build_menu()
+        table = MenuTable.query.filter_by(name="Masa 3").one()
+        html = self.guest.get(f"/m/{table.code}").get_data(as_text=True)
+        self.assertIn("Garson çağır", html)
+        setting = MenuSetting.query.filter_by(user_id=self.owner.id).one()
+        self.assertNotIn('id="qm-call-btn"', self.guest.get(f"/m/{setting.token}").get_data(as_text=True))  # masasız bağlantıda yok
+        token = self._csrf(self.guest, f"/m/{table.code}")
+        call = lambda: self.guest.post(f"/m/{table.code}/garson", headers={"X-CSRF-Token": token})   # noqa: E731
+        r = call()
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        status_url = r.get_json()["url"]
+        self.assertEqual(self.guest.get(status_url).get_json()["status"], "open")
+        self.assertEqual(call().get_json()["url"], status_url)          # açık çağrı varken ikincisi açılmaz
+        self.assertEqual(TableCall.query.count(), 1)
+        # panelde uyarı ve liste
+        calls = self.staff.get("/panel/menu/yeni.json").get_json()["calls"]
+        self.assertEqual((calls[0]["table"], calls[0]["text"]), ("Masa 3", "Masa 3 garson çağırıyor"))
+        self.assertIn("Garson bekleyen masalar", self.staff.get("/panel/menu").get_data(as_text=True))
+        # başka işletme kapatamaz
+        other = self.app.test_client()
+        self._login(other, "baska@kafe.com")
+        tok2 = self._csrf(other, "/panel/menu")
+        self.assertEqual(other.post(f"/panel/menu/cagri/{calls[0]['id']}/tamam",
+                                    headers={"X-CSRF-Token": tok2, "X-Requested-With": "fetch"}).status_code, 404)
+        tok = self._csrf(self.staff, "/panel/menu")
+        r = self.staff.post(f"/panel/menu/cagri/{calls[0]['id']}/tamam", headers={"X-CSRF-Token": tok, "X-Requested-With": "fetch"})
+        self.assertTrue(r.get_json()["ok"])
+        self.assertEqual(self.guest.get(status_url).get_json()["status"], "done")
+        self.assertEqual(self.staff.get("/panel/menu/yeni.json").get_json()["calls"], [])
+        # aynı telefondan hemen yeniden çağrı: kısa bekleme
+        r = call()
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Az önce", r.get_json()["message"])
+        # vazgeç
+        TableCall.query.update({"created_at": datetime.utcnow() - timedelta(minutes=1)})
+        db.session.commit()
+        url2 = call().get_json()["url"]
+        self.assertTrue(self.guest.post(url2 + "/iptal", headers={"X-CSRF-Token": token}).get_json()["ok"])
+        self.assertEqual(self.guest.get(url2).get_json()["status"], "cancelled")
+        # kapatılınca düğme görünmez, çağrı reddedilir
+        self._post("/panel/menu/ayarlar", {"action": "calls"}, page="/panel/menu")
+        self.assertNotIn('id="qm-call-btn"', self.guest.get(f"/m/{table.code}").get_data(as_text=True))
+        TableCall.query.update({"created_at": datetime.utcnow() - timedelta(minutes=1)})
+        db.session.commit()
+        self.assertEqual(call().status_code, 400)
+        self.assertEqual(self.guest.post(f"/m/{setting.token}/garson", headers={"X-CSRF-Token": token}).status_code, 404)
 
     def test_adisyo_import(self):
         self.staff.get("/panel/menu")

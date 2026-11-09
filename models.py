@@ -608,6 +608,7 @@ class MenuSetting(db.Model):
     adisyo_synced_at = db.Column(db.DateTime)
     adisyo_send = db.Column(db.String(10), default="off")      # off | accept (Hazırlanıyor'a basınca açık hesaba yaz)
     adisyo_tables = db.Column(db.Text)                          # son çekilen Adisyo masa listesi (JSON)
+    calls_open = db.Column(db.Boolean, default=True)            # masadan "Garson çağır / Hesabı iste"
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -700,3 +701,19 @@ class TableOrderLine(db.Model):
     name = db.Column(db.String(80), nullable=False)
     price = db.Column(db.Numeric(10, 2), nullable=False)
     quantity = db.Column(db.Integer, nullable=False, default=1)
+
+
+class TableCall(db.Model):
+    """Masadan "Garson çağır" / "Hesabı iste"."""
+    __tablename__ = "table_calls"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    table_id = db.Column(db.Integer, index=True)
+    table_name = db.Column(db.String(40), nullable=False)
+    kind = db.Column(db.String(10), nullable=False, default="garson")     # garson | hesap
+    status = db.Column(db.String(10), nullable=False, default="open")     # open | done | cancelled
+    device = db.Column(db.String(32), index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    done_at = db.Column(db.DateTime)
+

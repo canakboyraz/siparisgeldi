@@ -9,7 +9,7 @@ from itsdangerous import BadSignature, URLSafeSerializer
 
 import menu
 from extensions import db
-from models import MenuCategory, MenuImage, MenuItem, MenuSetting, MenuTable, TableOrder
+from models import MenuCategory, MenuImage, MenuItem, MenuSetting, MenuTable, TableCall, TableOrder
 
 menu_public_bp = Blueprint("menu_public", __name__)
 menu_bp = Blueprint("menu", __name__)
@@ -56,7 +56,8 @@ def public_menu(code):
         for c, items in groups]
     response = make_response(render_template(
         "menu/public.html", setting=setting, owner=owner, table=table, groups=groups, data=data,
-        can_order=bool(table and setting.ordering_open), tl=menu.tl))
+        can_order=bool(table and setting.ordering_open), can_call=bool(table and setting.calls_open is not False),
+        tl=menu.tl))
     if table and not request.cookies.get(DEVICE_COOKIE):
         response.set_cookie(DEVICE_COOKIE, secrets.token_hex(12), max_age=365 * 24 * 3600, httponly=True,
                             samesite="Lax", secure=bool(current_app.config.get("SESSION_COOKIE_SECURE")))
@@ -92,8 +93,51 @@ def order_status(code, key):
         response.headers["Cache-Control"] = "no-store"
         return response
     return render_template("menu/status.html", setting=setting, owner=_owner(setting), table=table, order=order,
+                           can_call=bool(table and setting.calls_open is not False),
                            code=code, tl=menu.tl, status_text=menu.CUSTOMER_STATUS[order.status],
                            status_label=menu.CUSTOMER_LABEL[order.status])
+
+
+def _call_signer():
+    return URLSafeSerializer(current_app.config["SECRET_KEY"], salt="table-call")
+
+
+@menu_public_bp.post("/m/<code>/garson")
+def call_waiter(code):
+    table, _setting = _resolve(code)
+    if not table:
+        abort(404)
+    try:
+        call, _created = menu.create_call(table, request.cookies.get(DEVICE_COOKIE))
+    except menu.OrderError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    key = _call_signer().dumps(call.id)
+    return jsonify({"ok": True, "status": call.status,
+                    "url": url_for("menu_public.call_status", code=code, key=key)})
+
+
+def _call_from_key(code, key):
+    table, setting = _resolve(code)
+    try:
+        call_id = _call_signer().loads(key)
+    except BadSignature:
+        abort(404)
+    return TableCall.query.filter_by(id=call_id, user_id=setting.user_id).first_or_404()
+
+
+@menu_public_bp.get("/m/<code>/garson/<key>")
+def call_status(code, key):
+    call = _call_from_key(code, key)
+    response = jsonify({"status": call.status})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@menu_public_bp.post("/m/<code>/garson/<key>/iptal")
+def call_cancel(code, key):
+    call = _call_from_key(code, key)
+    menu.close_call(call, "cancelled")
+    return jsonify({"ok": True, "status": call.status})
 
 
 @menu_public_bp.get("/m/img/<int:image_id>.webp")
@@ -134,7 +178,9 @@ def orders():
         TableOrder.status != "cancelled")), start=0)
     has_menu = MenuItem.query.filter_by(user_id=current_user.id).first() is not None
     has_tables = MenuTable.query.filter_by(user_id=current_user.id).first() is not None
-    return render_template("menu/orders.html", setting=setting, rows=rows, durum=durum, counts=counts,
+    calls = (TableCall.query.filter_by(user_id=current_user.id, status="open")
+             .order_by(TableCall.id.asc()).all())
+    return render_template("menu/orders.html", setting=setting, rows=rows, durum=durum, counts=counts, calls=calls,
                            status=menu.STATUS, tl=menu.tl, today_total=today_total,
                            has_menu=has_menu, has_tables=has_tables,
                            adisyo_on=menu.adisyo_connection(current_user) is not None)
@@ -145,9 +191,22 @@ def orders():
 def new_orders_json():
     rows = (TableOrder.query.filter_by(user_id=current_user.id, status="new")
             .order_by(TableOrder.id.asc()).limit(10).all())
-    response = jsonify({"items": [menu.order_json(o) for o in rows]})
+    calls = (TableCall.query.filter_by(user_id=current_user.id, status="open")
+             .order_by(TableCall.id.asc()).limit(10).all())
+    response = jsonify({"items": [menu.order_json(o) for o in rows], "calls": [menu.call_json(c) for c in calls]})
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@menu_bp.post("/cagri/<int:call_id>/tamam")
+@login_required
+def call_done(call_id):
+    call = TableCall.query.filter_by(id=call_id, user_id=current_user.id).first_or_404()
+    menu.close_call(call)
+    if _wants_json():
+        return jsonify({"ok": True})
+    return redirect(request.form.get("next") if (request.form.get("next") or "").startswith("/panel/")
+                    else url_for("menu.orders"))
 
 
 @menu_bp.post("/siparis/<int:order_id>/<status>")
@@ -375,6 +434,9 @@ def settings():
         setting.adisyo_send = "accept" if request.form.get("value") == "accept" else "off"
         flash("Siparişler artık \"Hazırlanıyor\"a basınca Adisyo'da masanın hesabına yazılacak."
               if setting.adisyo_send == "accept" else "Adisyo'ya otomatik yazma kapatıldı.", "success")
+    elif request.form.get("action") == "calls":
+        setting.calls_open = setting.calls_open is False
+        flash("\"Garson çağır\" düğmesi " + ("açıldı." if setting.calls_open else "kapatıldı; müşteriler göremez."), "success")
     elif request.form.get("action") == "toggle":
         setting.ordering_open = not setting.ordering_open
         flash("Masadan sipariş alımı " + ("açıldı." if setting.ordering_open else "kapatıldı; menü sadece görüntülenir."),

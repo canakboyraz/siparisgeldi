@@ -1,0 +1,58 @@
+{#- Masadan "Garson çağır": panelde sesli uyarı. Sipariş, hesap, ne olursa garson masaya gelir. -#}
+{% if can_call %}
+<div class="qm-call" id="qm-call" data-url="{{ url_for('menu_public.call_waiter', code=table.code) }}"
+     data-csrf="{{ csrf_token() }}" data-key="garson:{{ table.code }}">
+  <button type="button" class="qm-call-btn" id="qm-call-btn">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+    <span>Garson çağır</span></button>
+  <div class="qm-call-state" id="qm-call-state" hidden role="status" aria-live="polite">
+    <span class="qm-call-dot"></span><span id="qm-call-text">Garson çağrıldı</span>
+    <button type="button" id="qm-call-cancel">Vazgeç</button>
+  </div>
+  <p class="qm-call-err" id="qm-call-err" role="alert" hidden></p>
+</div>
+<script>
+(function () {
+  var box = document.getElementById("qm-call"); if (!box) return;
+  var btn = document.getElementById("qm-call-btn"), state = document.getElementById("qm-call-state"),
+      text = document.getElementById("qm-call-text"), err = document.getElementById("qm-call-err"),
+      cancel = document.getElementById("qm-call-cancel"), skey = box.getAttribute("data-key"), timer = null, statusUrl = null;
+  function store(fn) { try { return fn(window.sessionStorage); } catch (e) { return null; } }
+  function idle() { clearInterval(timer); timer = null; statusUrl = null; store(function (s) { s.removeItem(skey); });
+    state.hidden = true; btn.hidden = false; btn.disabled = false; state.classList.remove("is-done"); }
+  function waiting(url) { statusUrl = url; store(function (s) { s.setItem(skey, url); });
+    btn.hidden = true; state.hidden = false; cancel.hidden = false; text.textContent = "Garson çağrıldı";
+    clearInterval(timer); timer = setInterval(check, 5000); }
+  function check() {
+    if (!statusUrl || document.hidden) return;
+    fetch(statusUrl, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) { idle(); return; }
+        if (d.status === "done") { clearInterval(timer); cancel.hidden = true; state.classList.add("is-done");
+          text.textContent = "Garson geliyor 👋"; store(function (s) { s.removeItem(skey); }); setTimeout(idle, 8000); }
+        else if (d.status !== "open") idle();
+      }).catch(function () {});
+  }
+  btn.addEventListener("click", function () {
+    btn.disabled = true; err.hidden = true;
+    fetch(box.getAttribute("data-url"), { method: "POST", credentials: "same-origin",
+      headers: { "X-CSRF-Token": box.getAttribute("data-csrf"), "Accept": "application/json" } })
+      .then(function (r) { return r.json().then(function (j) { return [r.ok, j]; }); })
+      .then(function (res) {
+        if (!res[0] || !res[1].ok) { err.textContent = (res[1] && res[1].message) || "Çağrı gönderilemedi."; err.hidden = false; btn.disabled = false; return; }
+        if (navigator.vibrate) { try { navigator.vibrate(30); } catch (e) {} }
+        waiting(res[1].url);
+      })
+      .catch(function () { err.textContent = "Bağlantı sorunu. Tekrar dene ya da kasaya seslen."; err.hidden = false; btn.disabled = false; });
+  });
+  cancel.addEventListener("click", function () {
+    if (!statusUrl) { idle(); return; }
+    fetch(statusUrl + "/iptal", { method: "POST", credentials: "same-origin",
+      headers: { "X-CSRF-Token": box.getAttribute("data-csrf"), "Accept": "application/json" } }).finally(idle);
+  });
+  var saved = store(function (s) { return s.getItem(skey); });
+  if (saved) { waiting(saved); check(); }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+})();
+</script>
+{% endif %}
