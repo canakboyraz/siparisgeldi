@@ -264,3 +264,31 @@ class PosEntegraTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeleteOrderTest(PosEntegraTest):
+    def test_owner_deletes_order_with_confirm(self):
+        from models import Order
+        o = Order(user_id=self.user_id, platform=ys.PLATFORM, external_id="test-750", order_number="7342", total_price=750)
+        db.session.add(o); db.session.commit(); oid = o.id
+        self._login()
+        token = self._csrf(f"/panel/siparis/{oid}")
+        r = self.client.post(f"/panel/siparis/{oid}/sil", data={"_csrf_token": token})
+        self.assertEqual(r.status_code, 302)
+        self.assertIsNotNone(db.session.get(Order, oid))          # onay kutusu yoksa silmez
+        r = self.client.post(f"/panel/siparis/{oid}/sil", data={"_csrf_token": token, "confirm": "1"})
+        self.assertEqual(r.status_code, 302)
+        db.session.expire_all()
+        self.assertIsNone(db.session.get(Order, oid))
+
+    def test_cannot_delete_other_users_order(self):
+        from models import Order, User
+        other = User(email="x@y.com", name="X", is_trial=True); other.set_password("sifre12345")
+        db.session.add(other); db.session.flush()
+        o = Order(user_id=other.id, platform=ys.PLATFORM, external_id="baska", total_price=10)
+        db.session.add(o); db.session.commit(); oid = o.id
+        self._login()
+        token = self._csrf("/panel/siparisler")
+        r = self.client.post(f"/panel/siparis/{oid}/sil", data={"_csrf_token": token, "confirm": "1"})
+        self.assertEqual(r.status_code, 404)
+        self.assertIsNotNone(db.session.get(Order, oid))

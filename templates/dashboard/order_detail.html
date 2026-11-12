@@ -267,4 +267,13 @@
   {% endif %}
 </div>
 
+<div class="card no-print">
+  <div class="card-title">Siparişi sil</div>
+  <p class="muted" style="margin:0 0 12px">Test ya da hatalı kayıtlar için. Sipariş SiparişGeldi'den kalıcı olarak silinir; ciro ve raporlardan da düşer. Platformdaki siparişi etkilemez.</p>
+  <form method="post" action="{{ url_for('dashboard.delete_order', order_id=order.id) }}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="confirm" value="1" required> Bu siparişi kalıcı olarak silmek istiyorum</label>
+    <button type="submit" class="btn btn-danger">Siparişi sil</button>
+  </form>
+</div>
+
 {% endblock %}

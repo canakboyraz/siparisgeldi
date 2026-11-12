@@ -2211,6 +2211,21 @@ def active_orders():
     )
 
 
+@dashboard_bp.route("/siparis/<int:order_id>/sil", methods=["POST"])
+@login_required
+def delete_order(order_id):
+    """Test/hatalı siparişi kalıcı siler (yalnız SiparişGeldi kaydı)."""
+    order = Order.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
+    if request.form.get("confirm") != "1":
+        flash("Silmek için onay kutusunu işaretleyin.", "error")
+        return redirect(url_for("dashboard.order_detail", order_id=order.id))
+    label = f"#{order.order_number or order.id}"
+    db.session.delete(order)
+    db.session.commit()
+    flash(f"{label} numaralı sipariş silindi.", "success")
+    return redirect(url_for("dashboard.orders"))
+
+
 @dashboard_bp.route("/aktif-siparisler/temizle", methods=["POST"])
 @login_required
 def clear_active_orders():
