@@ -12,7 +12,7 @@ import pytz
 from extensions import db
 from models import (Integration, Order, ProductCost, PlatformExpense, DailyAdvertisingExpense,
                     MonthlyExpense, PlatformCommission, AdisyoReport, AdisyoConnection)
-from integrations import getir, hepsiburada as hb, migros, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
+from integrations import getir, hepsiburada as hb, migros, posentegra as pe, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications.dispatcher import send_to_user, record_whatsapp_result
 from utils import platform_label, status_label, to_local
 
@@ -606,6 +606,8 @@ def _tmp_setup_context() -> dict:
 def yemeksepeti_setup():
     intg = Integration.query.filter_by(user_id=current_user.id, platform=ys.PLATFORM).first()
 
+    if request.method == "POST" and request.form.get("mode") in ("posentegra", "pos_switch"):
+        return _save_posentegra_setup(intg)
     if request.method == "POST":
         chain_id = request.form.get("chain_id", "").strip()
         store_id = request.form.get("store_id", "").strip()
@@ -630,6 +632,7 @@ def yemeksepeti_setup():
         intg.ys_store_id = store_id or vendor_id
         intg.ys_vendor_id = vendor_id or store_id
         intg.ys_environment = environment
+        intg.ys_mode = "pos"
         if client_id:
             intg.ys_client_id = client_id
         if client_secret:
@@ -712,8 +715,68 @@ def update_yemeksepeti_vendor_status():
     return redirect(url_for("dashboard.yemeksepeti_setup"))
 
 
+def _save_posentegra_setup(intg: Integration):
+    if request.form.get("mode") == "pos_switch":
+        if intg:
+            intg.ys_mode = "pos"
+            db.session.commit()
+        flash("Yemeksepeti bağlantısı resmi POS (Delivery Hero) moduna alındı.", "success")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    restaurant_id = request.form.get("pe_restaurant_id", "").strip()[:100]
+    api_key = request.form.get("pe_api_key", "").strip()
+    if not _can_enable_platform(intg):
+        flash("Ücretsiz planda 1 platform bağlayabilirsin. WhatsApp ve çoklu platform için Pro plana geç.", "warning")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    if not restaurant_id:
+        flash("PosEntegra restoran ID zorunlu.", "danger")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    other = Integration.query.filter(Integration.platform == ys.PLATFORM, Integration.pe_restaurant_id == restaurant_id,
+                                     Integration.user_id != current_user.id).first()
+    if other:
+        flash("Bu PosEntegra restoran ID başka bir hesaba bağlı.", "danger")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    if not intg:
+        intg = Integration(user_id=current_user.id, platform=ys.PLATFORM)
+        db.session.add(intg)
+    intg.ys_mode = "posentegra"
+    intg.pe_restaurant_id = restaurant_id
+    if api_key:
+        intg.pe_api_key = api_key
+    elif request.form.get("clear_key") == "1":
+        intg._pe_api_key = None
+    intg.is_active = True
+    intg.last_error = None
+    db.session.commit()
+    flash("PosEntegra bağlantısı kaydedildi. Webhook adresini PosEntegra paneline girmeyi unutma.", "success")
+    return redirect(url_for("dashboard.yemeksepeti_setup"))
+
+
+@dashboard_bp.route("/yemeksepeti/posentegra-test", methods=["POST"])
+@login_required
+def test_posentegra_connection():
+    intg = Integration.query.filter_by(user_id=current_user.id, platform=ys.PLATFORM).first()
+    if not intg or not intg.pe_restaurant_id:
+        flash("Önce PosEntegra restoran ID'sini kaydet.", "warning")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    key = intg.pe_api_key or current_app.config.get("POSENTEGRA_API_KEY", "")
+    try:
+        data = pe.restaurant_integrations(key, intg.pe_restaurant_id, current_app.config.get("POSENTEGRA_API_BASE", ""))
+    except pe.PosEntegraError as exc:
+        intg.last_error = f"PosEntegra test: {exc}"[:300]
+        db.session.commit()
+        flash(f"PosEntegra bağlantısı doğrulanamadı: {exc}", "danger")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    count = len(data) if isinstance(data, list) else (len(data.get("integrations") or []) if isinstance(data, dict) else 0)
+    intg.last_sync_at, intg.last_error = datetime.utcnow(), None
+    db.session.commit()
+    flash(f"PosEntegra bağlantısı çalışıyor. Restoranda {count} platform entegrasyonu görünüyor.", "success")
+    return redirect(url_for("dashboard.yemeksepeti_setup"))
+
+
 def _ys_setup_context(intg: Integration = None) -> dict:
     return {
+        "pe_webhook_url": url_for("webhooks.posentegra_webhook", _external=True),
+        "pe_shared_key": bool(current_app.config.get("POSENTEGRA_API_KEY")),
         "ys_plugin_base_url": url_for("webhooks.yemeksepeti_pos_dispatch", remote_id="REMOTE_ID", _external=True).rsplit("/order/", 1)[0],
         "ys_pos_credentials_ready": bool(
             current_app.config.get("YEMEKSEPETI_POS_USERNAME")
@@ -2047,6 +2110,9 @@ def update_yemeksepeti_order(order_id):
     if selected.get("disabled"):
         flash(selected.get("disabled_reason") or "Bu işlem şu anda kullanılamıyor.", "warning")
         return _order_action_redirect(order)
+    pe_raw = _parse_raw_json(order.raw_json)
+    if pe.is_posentegra(pe_raw):
+        return _run_posentegra_action(order, pe_raw, selected)
 
     intg = Integration.query.filter_by(
         user_id=current_user.id, platform=ys.PLATFORM, is_active=True
@@ -2470,6 +2536,8 @@ def _yemeksepeti_order_actions(order: Order, detail: dict = None) -> list:
         return []
     detail = detail or _order_detail_context(order)
     raw = detail.get("raw") or {}
+    if pe.is_posentegra(raw):
+        return _posentegra_order_actions(order, raw)
     status = order.status or ys.STATUS_RECEIVED
     actions = []
 
@@ -2497,6 +2565,89 @@ def _yemeksepeti_order_actions(order: Order, detail: dict = None) -> list:
             item["disabled"] = True
             item["disabled_reason"] = disabled_reason
     return actions
+
+
+def _posentegra_key_for(user_id: int) -> str:
+    intg = Integration.query.filter_by(user_id=user_id, platform=ys.PLATFORM, is_active=True).first()
+    return ((intg.pe_api_key if intg else "") or current_app.config.get("POSENTEGRA_API_KEY", "")), intg
+
+
+def _posentegra_reasons(order: Order, raw: dict, api_key: str) -> list:
+    """İptal nedenleri (siparişe özel). Bir kez çekilir, siparişte saklanır."""
+    cached = (raw.get("_pe") or {}).get("reasons")
+    if isinstance(cached, list):
+        return cached
+    try:
+        reasons = pe.cancel_reasons(api_key, (raw.get("_pe") or {}).get("providerOrderId") or order.external_id,
+                                    current_app.config.get("POSENTEGRA_API_BASE", ""))
+    except pe.PosEntegraError as exc:
+        current_app.logger.info("PosEntegra iptal nedenleri alınamadı order=%s: %s", order.id, exc)
+        return []
+    raw.setdefault("_pe", {})["reasons"] = reasons
+    order.raw_json = json.dumps(raw, ensure_ascii=False)
+    db.session.commit()
+    return reasons
+
+
+def _posentegra_order_actions(order: Order, raw: dict) -> list:
+    status = order.status or ys.STATUS_RECEIVED
+    actions = []
+    if status == ys.STATUS_RECEIVED:
+        actions.append({"action": "accept", "label": "Kabul et", "next_status": ys.STATUS_ACCEPTED})
+        actions.append({"action": "reject", "label": "Reddet", "next_status": ys.STATUS_REJECTED, "needs_reason": True})
+    elif status in pe.NEXT_STEP:
+        next_status, label = pe.NEXT_STEP[status]
+        actions.append({"action": "advance", "label": f"{label} yap", "next_status": next_status})
+        if status in {ys.STATUS_ACCEPTED, ys.STATUS_PREPARED}:
+            actions.append({"action": "cancel", "label": "İptal et", "next_status": ys.STATUS_CANCELLED, "needs_reason": True})
+    api_key, _intg = _posentegra_key_for(order.user_id)
+    if not api_key:
+        for item in actions:
+            item["disabled"] = True
+            item["disabled_reason"] = "PosEntegra API anahtarı tanımlanınca bu işlem açılacak."
+    for item in actions:
+        if item.get("needs_reason"):
+            item["reasons"] = []
+    if api_key and any(a.get("needs_reason") for a in actions):
+        reasons = _posentegra_reasons(order, raw, api_key)
+        for item in actions:
+            if item.get("needs_reason"):
+                item["reasons"] = reasons
+    return actions
+
+
+def _run_posentegra_action(order: Order, raw: dict, selected: dict):
+    api_key, intg = _posentegra_key_for(order.user_id)
+    base = current_app.config.get("POSENTEGRA_API_BASE", "")
+    pid = (raw.get("_pe") or {}).get("providerOrderId") or order.external_id
+    action = selected["action"]
+    try:
+        if action == "accept":
+            result = pe.verify_order(api_key, pid, base)
+        elif action == "advance":
+            result = pe.change_status(api_key, pid, base)
+        else:
+            result = pe.cancel_order(api_key, pid, request.form.get("rejection_reason", "").strip(),
+                                     request.form.get("note", "").strip()[:200], base)
+    except pe.PosEntegraError as exc:
+        if intg:
+            intg.last_error = f"PosEntegra sipariş işlemi: {exc}"[:300]
+            db.session.commit()
+        current_app.logger.warning("PosEntegra islemi basarisiz order_id=%s: %s", order.id, exc)
+        flash(f"Yemeksepeti işlemi gönderilemedi: {exc}", "danger")
+        return _order_action_redirect(order)
+    order.status = selected["next_status"]
+    info = raw.setdefault("_pe", {})
+    if isinstance(result, dict):
+        info["statusCode"] = result.get("newStatus", result.get("status", info.get("statusCode")))
+    info.setdefault("history", []).append({"action": action, "at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                                           "result": result if isinstance(result, dict) else None})
+    order.raw_json = json.dumps(raw, ensure_ascii=False)
+    if intg:
+        intg.last_sync_at, intg.last_error = datetime.utcnow(), None
+    db.session.commit()
+    flash(f"Yemeksepeti işlemi gönderildi: {selected['label']}", "success")
+    return _order_action_redirect(order)
 
 
 def _migros_order_actions(order: Order, detail: dict = None) -> list:
@@ -3209,15 +3360,28 @@ def _ys_detail_context(order: Order, raw: dict) -> dict:
         "customer": customer,
         "customer_phone": customer_data.get("mobilePhone") or customer_data.get("phone_number") or "",
         "order_created_at": _ys_order_created_at(raw),
-        "store": (raw.get("platformRestaurant") or {}).get("id") or ys.client(raw).get("name") or "-",
-        "source": "Yemeksepeti",
+        "store": (raw.get("_pe") or {}).get("restaurantName") or (raw.get("platformRestaurant") or {}).get("id") or ys.client(raw).get("name") or "-",
+        "source": "Yemeksepeti · PosEntegra" if pe.is_posentegra(raw) else "Yemeksepeti",
         "delivery": ys.delivery_label(raw),
         "payment": order.payment_type or ys.payment_type(raw),
         "address": ys.address_text(raw),
         "address_direction": ys.address_instructions(raw),
-        "flags": ["Test siparişi - mutfağa hazırlatmayın"] if raw.get("test") else [],
+        "flags": _ys_flags(raw),
         "order_note": order.customer_note or "",
     }
+
+
+def _ys_flags(raw: dict) -> list:
+    flags = ["Test siparişi - mutfağa hazırlatmayın"] if raw.get("test") else []
+    info = raw.get("_pe") or {}
+    if pe.is_posentegra(raw):
+        if info.get("doNotKnock"):
+            flags.append("Zili çalmayın")
+        if info.get("isEcoFriendly"):
+            flags.append("Çatal-bıçak / peçete istemiyor")
+        if raw.get("isPreorder"):
+            flags.append("İleri tarihli sipariş")
+    return flags
 
 
 def _ys_order_created_at(raw: dict) -> str:

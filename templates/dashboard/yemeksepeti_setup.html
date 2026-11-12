@@ -1,8 +1,42 @@
 {% extends "dashboard/_layout.html" %}
 {% block title %}Yemeksepeti · SiparişGeldi{% endblock %}
 {% block panel %}
-<div class="page-head"><h1>Yemeksepeti bağlantısı</h1></div>
-<div class="grid-2">
+<div class="page-head"><div><h1>Yemeksepeti bağlantısı</h1>
+  <p class="muted page-sub">Bağlantı yolu: {% if intg and intg.uses_posentegra %}<span class="badge green">PosEntegra</span>{% else %}<span class="badge gray">Resmi POS (Delivery Hero)</span>{% endif %}</p></div></div>
+
+<div class="card pe-card" id="posentegra">
+  <div class="section-head"><div>
+    <div class="card-title">PosEntegra ile bağlan</div>
+    <p class="muted" style="margin:0">Delivery Hero'nun resmi POS onayı beklenirken Yemeksepeti siparişlerini PosEntegra üzerinden alırsın. Siparişler panele düşer; kabul, ret, durum ve iptal buradan PosEntegra'ya gider.</p>
+  </div></div>
+  <div class="grid-2" style="margin-top:1rem">
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="posentegra">
+      <div class="field"><label>PosEntegra restoran ID</label>
+        <input type="text" name="pe_restaurant_id" required maxlength="100" value="{{ intg.pe_restaurant_id if intg and intg.pe_restaurant_id else '' }}" placeholder="PosEntegra panelindeki restoran kimliği"></div>
+      <div class="field"><label>API anahtarı <span class="muted">(restoranın kendi PosEntegra hesabı varsa)</span></label>
+        <input type="password" name="pe_api_key" autocomplete="off" placeholder="{{ 'Kayıtlı · değiştirmek için yenisini yaz' if intg and intg._pe_api_key else ('Boş bırak: SiparişGeldi ortak anahtarı kullanılır' if pe_shared_key else 'PosEntegra API anahtarı') }}"></div>
+      <button class="btn btn-primary" type="submit">{{ 'PosEntegra bağlantısını güncelle' if intg and intg.uses_posentegra else 'PosEntegra ile bağla' }}</button>
+    </form>
+    <div>
+      <div class="field"><label>PosEntegra paneline girilecek webhook adresi</label><div class="code">{{ pe_webhook_url }}</div></div>
+      <p class="hint" style="margin-top:.25rem">PosEntegra panelinde <b>Webhooklar</b> bölümüne bu adresi ekle. İstekler API anahtarıyla doğrulanır (Authorization: Bearer &lt;API anahtarı&gt;).</p>
+      <div class="check-list">
+        <div class="check-row"><div><strong>API anahtarı</strong></div>{% if (intg and intg._pe_api_key) or pe_shared_key %}<span class="badge green">hazır</span>{% else %}<span class="badge amber">bekleniyor</span>{% endif %}</div>
+        {% if intg and intg.uses_posentegra and intg.last_sync_at %}<div class="check-row"><div><strong>Son sipariş / işlem</strong></div><span class="muted">{{ (intg.last_sync_at|yerel).strftime('%d.%m %H:%M') }}</span></div>{% endif %}
+        {% if intg and intg.uses_posentegra and intg.last_error %}<div class="check-row"><div><strong>Son hata</strong><br><span class="muted">{{ intg.last_error }}</span></div></div>{% endif %}
+      </div>
+      {% if intg and intg.uses_posentegra %}
+      <div class="inline" style="margin-top:.75rem">
+        <form method="post" action="{{ url_for('dashboard.test_posentegra_connection') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost" type="submit">Bağlantıyı test et</button></form>
+        <form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="pos_switch"><button class="btn btn-ghost" type="submit">Resmi POS'a geç</button></form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-top:1rem">
   <div class="card">
     <div class="card-title">POS Plugin restoran bilgileri</div>
     <p class="muted" style="margin-top:0">Credential onayı sonrasında Yemeksepeti'nin verdiği restoran kimliğini buraya girin.</p>

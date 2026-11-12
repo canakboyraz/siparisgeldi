@@ -61,6 +61,10 @@ def _ensure_schema():
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_environment VARCHAR(20) DEFAULT 'live'",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_client_id VARCHAR(512)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_client_secret VARCHAR(512)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS ys_mode VARCHAR(20) DEFAULT 'pos'",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS pe_restaurant_id VARCHAR(100)",
+            "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS pe_api_key VARCHAR(512)",
+            "CREATE INDEX IF NOT EXISTS ix_integrations_pe_restaurant_id ON integrations (pe_restaurant_id)",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_weekly_report BOOLEAN DEFAULT TRUE",
             "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS notify_monthly_report BOOLEAN DEFAULT TRUE",
             "ALTER TABLE platform_expenses ADD COLUMN IF NOT EXISTS expense_type VARCHAR(20) DEFAULT 'fixed'",
@@ -172,6 +176,10 @@ def _ensure_schema():
                 stmts.append("ALTER TABLE integrations ADD COLUMN ys_client_id VARCHAR(512)")
             if "ys_client_secret" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN ys_client_secret VARCHAR(512)")
+            for col, ddl in (("ys_mode", "VARCHAR(20) DEFAULT 'pos'"), ("pe_restaurant_id", "VARCHAR(100)"),
+                             ("pe_api_key", "VARCHAR(512)")):
+                if col not in intg_cols:
+                    stmts.append(f"ALTER TABLE integrations ADD COLUMN {col} {ddl}")
             if "notify_weekly_report" not in intg_cols:
                 stmts.append("ALTER TABLE integrations ADD COLUMN notify_weekly_report BOOLEAN DEFAULT TRUE")
             if "notify_monthly_report" not in intg_cols:

@@ -128,7 +128,11 @@
       <form method="post" action="{{ url_for('dashboard.update_yemeksepeti_order', order_id=order.id) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="{{ action.action }}">
-        {% if action.action == 'reject' %}
+        {% if action.reasons %}
+        <select name="rejection_reason" aria-label="{{ action.label }} nedeni">
+          {% for r in action.reasons %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        {% elif action.action == 'reject' and action.reasons is not defined %}
         <select name="rejection_reason" aria-label="Reddetme nedeni">
           <option value="TOO_BUSY">Restoran çok yoğun</option>
           <option value="PRODUCT_UNAVAILABLE">Ürün mevcut değil</option>
@@ -137,7 +141,7 @@
           <option value="OTHER">Diğer</option>
         </select>
         {% endif %}
-        <button class="btn {{ 'btn-danger' if action.action == 'reject' else 'btn-primary' }}" type="submit" {% if action.disabled %}disabled title="{{ action.disabled_reason }}"{% endif %}>
+        <button class="btn {{ 'btn-danger' if action.action in ['reject', 'cancel'] else 'btn-primary' }}" type="submit" {% if action.disabled %}disabled title="{{ action.disabled_reason }}"{% endif %}>
           {{ action.label }}
         </button>
       </form>

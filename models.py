@@ -139,6 +139,9 @@ class Integration(db.Model):
     ys_environment = db.Column(db.String(20), default="live")
     _ys_client_id = db.Column("ys_client_id", db.String(512))
     _ys_client_secret = db.Column("ys_client_secret", db.String(512))
+    ys_mode = db.Column(db.String(20), default="pos")             # pos (Delivery Hero) | posentegra
+    pe_restaurant_id = db.Column(db.String(100), index=True)      # PosEntegra restoran kimliği
+    _pe_api_key = db.Column("pe_api_key", db.String(512))         # boşsa SiparişGeldi'nin ortak anahtarı
 
     # Bildirim tercihleri
     notify_new_order      = db.Column(db.Boolean, default=True)
@@ -236,6 +239,18 @@ class Integration(db.Model):
     @ys_client_secret.setter
     def ys_client_secret(self, value):
         self._ys_client_secret = security.encrypt(value)
+
+    @property
+    def pe_api_key(self):
+        return security.decrypt(self._pe_api_key)
+
+    @pe_api_key.setter
+    def pe_api_key(self, value):
+        self._pe_api_key = security.encrypt(value)
+
+    @property
+    def uses_posentegra(self):
+        return (self.ys_mode or "pos") == "posentegra"
 
     def __repr__(self):
         return f"<Integration user={self.user_id} platform={self.platform}>"

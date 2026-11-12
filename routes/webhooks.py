@@ -24,7 +24,7 @@ from flask import Blueprint, request, jsonify, current_app
 
 from extensions import db
 from models import Integration, Order, User, AdisyoConnection
-from integrations import migros, getir, trendyol_marketplace as tmp, yemeksepeti as ys
+from integrations import migros, getir, posentegra as pe, trendyol_marketplace as tmp, yemeksepeti as ys
 from integrations import adisyo
 from notifications.dispatcher import send_to_user
 from notifications import whatsapp as whatsapp_client
@@ -100,6 +100,128 @@ def _find_yemeksepeti_integration(remote_id: str):
         Integration.is_active.is_(True),
         (Integration.ys_vendor_id == remote_id) | (Integration.ys_store_id == remote_id),
     ).first()
+
+
+def _parse_json_text(text):
+    try:
+        value = json.loads(text or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _find_posentegra_integration(restaurant_id: str):
+    restaurant_id = str(restaurant_id or "").strip()
+    if not restaurant_id:
+        return None
+    return Integration.query.filter(
+        Integration.platform == ys.PLATFORM,
+        Integration.is_active.is_(True),
+        Integration.ys_mode == "posentegra",
+        Integration.pe_restaurant_id == restaurant_id,
+    ).first()
+
+
+def _check_posentegra_auth(intg) -> bool:
+    """PosEntegra webhook'ları imzasızdır; Authorization başlığında API anahtarı gelir."""
+    expected = [current_app.config.get("POSENTEGRA_WEBHOOK_TOKEN", ""), current_app.config.get("POSENTEGRA_API_KEY", "")]
+    if intg is not None:
+        expected.append(intg.pe_api_key or "")
+    expected = [str(v) for v in expected if v]
+    if not expected:
+        return bool(current_app.debug or current_app.config.get("ENV") == "development")
+    sent = (request.headers.get("Authorization") or request.headers.get("X-Api-Key") or "").strip()
+    if sent.lower().startswith("bearer "):
+        sent = sent[7:].strip()
+    return bool(sent) and any(hmac.compare_digest(sent, value) for value in expected)
+
+
+def _posentegra_key(intg) -> str:
+    return (intg.pe_api_key if intg else "") or current_app.config.get("POSENTEGRA_API_KEY", "")
+
+
+def _mark_posentegra_reported_async(app, api_key: str, provider_order_id: str):
+    def worker():
+        try:
+            with app.app_context():
+                pe.mark_reported(api_key, provider_order_id, app.config.get("POSENTEGRA_API_BASE", ""))
+        except Exception as exc:  # noqa: BLE001 - bilgi amaçlı, sipariş zaten kaydedildi
+            app.logger.info("PosEntegra reports/mark yapılamadı %s: %s", provider_order_id, exc)
+    if not app.config.get("TESTING"):
+        threading.Thread(target=worker, daemon=True, name="pe-mark").start()
+
+
+@webhooks_bp.route("/posentegra", methods=["POST"])
+def posentegra_webhook():
+    """PosEntegra (Yemeksepeti) sipariş webhook'u."""
+    event, data = pe.webhook_event(request.get_json(silent=True))
+    if not data:
+        return jsonify({"message": "Invalid payload"}), 400
+    intg = _find_posentegra_integration(pe.restaurant_id(data))
+    if not _check_posentegra_auth(intg):
+        return jsonify({"message": "Unauthorized"}), 401
+    if event == pe.EVENT_INTEGRATION:
+        if intg:
+            intg.last_sync_at = datetime.utcnow()
+            db.session.commit()
+        return jsonify({"ok": True}), 200
+    if not intg:
+        current_app.logger.warning("PosEntegra restaurantId eslesmedi: %s", pe.restaurant_id(data))
+        return jsonify({"message": "Unknown restaurantId"}), 404
+    provider_id = pe.provider_order_id(data)
+    if not provider_id:
+        return jsonify({"message": "Missing providerOrderId"}), 400
+
+    order = Order.query.filter_by(user_id=intg.user_id, platform=ys.PLATFORM, external_id=provider_id).first()
+    detail = data if pe.has_details(data) else None
+    if detail is None and (order is None or event == pe.EVENT_STATUS):
+        try:
+            detail = pe.get_order(_posentegra_key(intg), provider_id, current_app.config.get("POSENTEGRA_API_BASE", ""))
+        except pe.PosEntegraError as exc:
+            intg.last_error = f"PosEntegra sipariş detayı: {exc}"[:300]
+            db.session.commit()
+            if order is None:
+                # Kayıt yoksa 5xx dön: PosEntegra webhook'u artan aralıklarla tekrar dener.
+                return jsonify({"message": "Order detail unavailable, retry"}), 503
+            detail = None
+    if detail is not None and not pe.has_details(detail) and order is None:
+        return jsonify({"message": "Order detail has no products, retry"}), 503
+
+    prev_status = order.status if order else None
+    raw = _parse_json_text(order.raw_json) if order else {}
+    normalized = pe.normalize(detail, prev_status or "") if detail is not None else raw
+    if event == pe.EVENT_CANCELLED:
+        normalized["status"] = ys.STATUS_CANCELLED
+    is_new = order is None
+    fields = ys.extract_order_fields(normalized)
+    if is_new:
+        order = Order(user_id=intg.user_id, platform=ys.PLATFORM, **fields)
+        order.mark_status_notified("INITIAL")
+        db.session.add(order)
+    else:
+        order.status = normalized.get("status") or order.status
+        if detail is not None:
+            order.total_price = fields["total_price"]
+            order.payment_type = fields["payment_type"]
+            order.customer_note = fields["customer_note"]
+    if detail is not None:
+        normalized.setdefault("_pe", {})["webhookId"] = str(data.get("id") or "")
+        order.raw_json = json.dumps(normalized, ensure_ascii=False)
+    intg.last_sync_at = datetime.utcnow()
+    intg.last_error = None
+    db.session.commit()
+
+    app = current_app._get_current_object()
+    if is_new:
+        if intg.notify_new_order:
+            _send_yemeksepeti_async(app, intg.user_id, normalized, cancelled=order.status == ys.STATUS_CANCELLED)
+        _mark_posentegra_reported_async(app, _posentegra_key(intg), provider_id)
+    elif order.status == ys.STATUS_CANCELLED and prev_status != ys.STATUS_CANCELLED and intg.notify_cancel \
+            and not order.is_status_notified(ys.STATUS_CANCELLED):
+        order.mark_status_notified(ys.STATUS_CANCELLED)
+        db.session.commit()
+        _send_yemeksepeti_async(app, intg.user_id, normalized, cancelled=True)
+    return jsonify({"ok": True, "orderId": order.id}), 200
 
 
 def _send_yemeksepeti_async(app, user_id: int, payload: dict, cancelled: bool = False):

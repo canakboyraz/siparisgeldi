@@ -74,6 +74,10 @@ class Config:
     YEMEKSEPETI_POS_JWT_SECRET = os.environ.get("YEMEKSEPETI_POS_JWT_SECRET", "")
     YEMEKSEPETI_POS_CHAIN_CODE = os.environ.get("YEMEKSEPETI_POS_CHAIN_CODE", "")
     YEMEKSEPETI_POS_API_BASE = os.environ.get("YEMEKSEPETI_POS_API_BASE", "")
+    # PosEntegra (Yemeksepeti siparişleri için aracı servis)
+    POSENTEGRA_API_KEY = os.environ.get("POSENTEGRA_API_KEY", "")
+    POSENTEGRA_API_BASE = os.environ.get("POSENTEGRA_API_BASE", "")
+    POSENTEGRA_WEBHOOK_TOKEN = os.environ.get("POSENTEGRA_WEBHOOK_TOKEN", "")
 
     # Adisyo (rapor amaçlı, webhook kullanılmadan okuma)
     ADISYO_API_BASE = os.environ.get("ADISYO_API_BASE", "https://ext.adisyo.com/api/External/v2")
