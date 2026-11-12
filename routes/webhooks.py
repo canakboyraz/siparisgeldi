@@ -561,6 +561,22 @@ def _handle_tmp_order(intg, order_data):
     db.session.commit()
 
 
+@webhooks_bp.route("/yemeksepeti", methods=["GET", "HEAD", "POST"])
+@webhooks_bp.route("/yemeksepeti/", methods=["GET", "HEAD", "POST"])
+def yemeksepeti_plugin_root():
+    """Plugin temel adresi: erişilebilirlik / SSL kontrolü (curl) için 200 döner.
+    Siparişler /order/{remoteId} altına gelir."""
+    return jsonify({
+        "status": "ok",
+        "service": "SiparisGeldi POS Plugin",
+        "endpoints": {
+            "dispatchOrder": "POST /order/{remoteId}",
+            "orderStatus": "PUT /remoteId/{remoteId}/remoteOrder/{remoteOrderId}/posOrderStatus",
+            "availability": "PUT /remoteId/{remoteId}/availability",
+        },
+    }), 200
+
+
 @webhooks_bp.route("/yemeksepeti/order/<remote_id>", methods=["POST"])
 def yemeksepeti_pos_dispatch(remote_id):
     """Receive and acknowledge an official Delivery Hero POS dispatch."""

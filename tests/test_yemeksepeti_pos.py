@@ -111,6 +111,21 @@ class YemeksepetiPosTest(unittest.TestCase):
 
 
 
+class YemeksepetiPluginRootTest(unittest.TestCase):
+    def test_base_url_returns_200(self):
+        app = create_app(TestConfig, start_scheduler=False)
+        with app.app_context():
+            db.create_all()
+            client = app.test_client()
+            for path in ("/webhooks/yemeksepeti", "/webhooks/yemeksepeti/"):
+                r = client.get(path)
+                self.assertEqual(r.status_code, 200)
+                self.assertEqual(r.get_json()["status"], "ok")
+            self.assertEqual(client.head("/webhooks/yemeksepeti").status_code, 200)
+            self.assertEqual(client.post("/webhooks/yemeksepeti").status_code, 200)
+            db.drop_all()
+
+
 class YemeksepetiPosHelpersTest(unittest.TestCase):
     def test_conflict_and_expiry(self):
         from unittest import mock
