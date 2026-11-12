@@ -272,7 +272,9 @@ class DeleteOrderTest(PosEntegraTest):
         o = Order(user_id=self.user_id, platform=ys.PLATFORM, external_id="test-750", order_number="7342", total_price=750)
         db.session.add(o); db.session.commit(); oid = o.id
         self._login()
-        token = self._csrf(f"/panel/siparis/{oid}")
+        html = self.client.get(f"/panel/siparis/{oid}").get_data(as_text=True)
+        form = re.search(r'action="/panel/siparis/%d/sil".*?</form>' % oid, html, re.S).group(0)
+        token = re.search(r'name="_csrf_token" value="([^"]+)"', form).group(1)   # formun kendi token'ı
         r = self.client.post(f"/panel/siparis/{oid}/sil", data={"_csrf_token": token})
         self.assertEqual(r.status_code, 302)
         self.assertIsNotNone(db.session.get(Order, oid))          # onay kutusu yoksa silmez
