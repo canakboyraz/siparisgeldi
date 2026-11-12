@@ -134,11 +134,7 @@
         </select>
         {% elif action.action == 'reject' and action.reasons is not defined %}
         <select name="rejection_reason" aria-label="Reddetme nedeni">
-          <option value="TOO_BUSY">Restoran çok yoğun</option>
-          <option value="PRODUCT_UNAVAILABLE">Ürün mevcut değil</option>
-          <option value="RESTAURANT_CLOSED">Restoran kapalı</option>
-          <option value="OUTSIDE_DELIVERY_AREA">Teslimat bölgesi dışında</option>
-          <option value="OTHER">Diğer</option>
+          {% for code, label in ys_reject_reasons %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
         </select>
         {% endif %}
         <button class="btn {{ 'btn-danger' if action.action in ['reject', 'cancel'] else 'btn-primary' }}" type="submit" {% if action.disabled %}disabled title="{{ action.disabled_reason }}"{% endif %}>

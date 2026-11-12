@@ -1343,6 +1343,7 @@ def order_detail(order_id):
         migros_cancel_reasons=_migros_cancel_reasons(migros_intg) if migros_actions else [],
         getir_actions=getir_actions,
         yemeksepeti_actions=yemeksepeti_actions,
+        ys_reject_reasons=ys.REJECT_REASONS,
         trendyolgo_actions=trendyolgo_actions,
         receipt_width=current_user.receipt_width if current_user.receipt_width in {value for value, _ in RECEIPT_WIDTH_OPTIONS} else "80mm",
     )
@@ -2127,7 +2128,7 @@ def update_yemeksepeti_order(order_id):
         return _order_action_redirect(order)
 
     raw = _parse_raw_json(order.raw_json)
-    reason = request.form.get("rejection_reason", "OTHER").strip().upper()
+    reason = request.form.get("rejection_reason", "TOO_BUSY").strip().upper()
     method, callback_url, body, next_status = ys.pos_action(
         raw, action, str(order.id), rejection_reason=reason
     )
@@ -2148,6 +2149,17 @@ def update_yemeksepeti_order(order_id):
         intg.last_error = None
         db.session.commit()
         flash(f"Yemeksepeti işlemi gönderildi: {selected['label']}", "success")
+    except ys.PosConflict as e:
+        if action == "accept" and e.retryable:
+            _retry_ys_accept_async(current_app._get_current_object(), order.id, method, callback_url, body,
+                                   next_status, intg.ys_environment or "live")
+            flash("Yemeksepeti siparişi henüz kabule hazır değil; SiparişGeldi 5 dakika boyunca 10 saniyede bir "
+                  "tekrar deneyecek. Sayfayı birazdan yenile.", "info")
+        else:
+            intg.last_error = f"Yemeksepeti sipariş işlemi: {e}"[:300]
+            db.session.commit()
+            flash(f"Yemeksepeti işlemi yapılamadı ({e.current_state or 'durum uygun değil'}). "
+                  "Sipariş iptal edilmiş olabilir.", "warning")
     except Exception as e:
         intg.last_error = f"Yemeksepeti sipariş işlemi: {e}"[:300]
         db.session.commit()
@@ -2565,6 +2577,39 @@ def _yemeksepeti_order_actions(order: Order, detail: dict = None) -> list:
             item["disabled"] = True
             item["disabled_reason"] = disabled_reason
     return actions
+
+
+def _retry_ys_accept_async(app, order_id, method, callback_url, body, next_status, environment):
+    """Delivery Hero: 409 + ASSIGNED_TO_TRANSPORT/WAITING_FOR_ACKNOWLEDGEMENT → ~10 sn arayla 5 dk tekrar dene."""
+    import threading
+    import time as _time
+
+    def worker():
+        with app.app_context():
+            deadline = _time.time() + 300
+            while _time.time() < deadline:
+                _time.sleep(10)
+                try:
+                    ys.send_pos_callback(method, callback_url, body, app.config.get("YEMEKSEPETI_POS_USERNAME", ""),
+                                         app.config.get("YEMEKSEPETI_POS_PASSWORD", ""), environment,
+                                         app.config.get("YEMEKSEPETI_POS_API_BASE", ""))
+                except ys.PosConflict as exc:
+                    if exc.retryable:
+                        continue
+                    app.logger.warning("Yemeksepeti kabul tekrar denemesi durdu order=%s: %s", order_id, exc)
+                    return
+                except Exception as exc:  # noqa: BLE001
+                    app.logger.warning("Yemeksepeti kabul tekrar denemesi hata order=%s: %s", order_id, exc)
+                    continue
+                order = db.session.get(Order, order_id)
+                if order:
+                    order.status = next_status
+                    db.session.commit()
+                return
+            app.logger.warning("Yemeksepeti kabul 5 dk içinde yapılamadı order=%s", order_id)
+
+    if not app.config.get("TESTING"):
+        threading.Thread(target=worker, daemon=True, name="ys-accept-retry").start()
 
 
 def _posentegra_key_for(user_id: int) -> str:
@@ -3373,6 +3418,11 @@ def _ys_detail_context(order: Order, raw: dict) -> dict:
 
 def _ys_flags(raw: dict) -> list:
     flags = ["Test siparişi - mutfağa hazırlatmayın"] if raw.get("test") else []
+    expiry = ys.expiry_text(raw)
+    if expiry:
+        flags.append(f"Kabul/ret için son saat: {expiry} (sonra Yemeksepeti otomatik iptal eder)")
+    if raw.get("preOrder"):
+        flags.append("Ön sipariş")
     info = raw.get("_pe") or {}
     if pe.is_posentegra(raw):
         if info.get("doNotKnock"):

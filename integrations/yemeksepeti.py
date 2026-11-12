@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urljoin, urlparse
 
 import requests
@@ -661,9 +661,33 @@ def send_pos_callback(method: str, callback_url: str, body: dict, username: str,
     )
     if response.status_code == 401:
         _POS_TOKEN_CACHE.pop(((environment or "live").lower(), base, _text(username)), None)
+    if response.status_code == 409:
+        try:
+            data = response.json()
+        except ValueError:
+            data = {}
+        raise PosConflict(_text((data or {}).get("currentState")), _text((data or {}).get("message")))
     response.raise_for_status()
     if not response.content:
         return {}
+    try:
+        return response.json()
+    except ValueError:
+        return {}
+
+
+class PosConflict(Exception):
+    """409: geçersiz durum geçişi. currentState ASSIGNED_TO_TRANSPORT / WAITING_FOR_ACKNOWLEDGEMENT ise
+    kabul ~10 sn arayla 5 dk boyunca tekrar denenmeli (Delivery Hero dokümanı)."""
+    RETRY_STATES = {"ASSIGNED_TO_TRANSPORT", "WAITING_FOR_ACKNOWLEDGEMENT"}
+
+    def __init__(self, current_state="", message=""):
+        super().__init__(f"Yemeksepeti 409: {current_state or message or 'geçersiz durum geçişi'}")
+        self.current_state = current_state
+
+    @property
+    def retryable(self):
+        return self.current_state in self.RETRY_STATES
 
 
 def set_pos_reachability(chain_code: str, remote_id: str, online: bool, username: str,
@@ -682,10 +706,18 @@ def set_pos_reachability(chain_code: str, remote_id: str, online: bool, username
         {"status": state, "reason": "POS_PLUGIN_STATUS", "message": f"SiparisGeldi POS is {state}"},
         username, password, environment, configured_base,
     )
+
+
+def expiry_text(payload: dict) -> str:
+    """Siparişin kabul/ret için son anı (expiryDate), yerel saat HH:MM."""
+    value = _text(payload.get("expiryDate"))
+    if not value:
+        return ""
     try:
-        return response.json()
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return (dt.astimezone(timezone(timedelta(hours=3)))).strftime("%H:%M")
     except ValueError:
-        return {}
+        return ""
 
 
 def acceptance_time(payload: dict, minutes: int = 30) -> str:
@@ -697,7 +729,23 @@ def acceptance_time(payload: dict, minutes: int = 30) -> str:
     return (datetime.utcnow() + timedelta(minutes=minutes)).isoformat(timespec="seconds") + "Z"
 
 
-def pos_action(payload: dict, action: str, remote_order_id: str, rejection_reason: str = "OTHER",
+# Delivery Hero Middleware API, order_rejected "reason" enum'undan restoranın kullanabilecekleri.
+# Liste dışı neden gönderilirse Delivery Hero entegrasyon özelliklerini kapatabilir.
+REJECT_REASONS = [
+    ("TOO_BUSY", "Restoran çok yoğun"),
+    ("ITEM_UNAVAILABLE", "Ürün mevcut değil"),
+    ("CLOSED", "Restoran kapalı"),
+    ("OUTSIDE_DELIVERY_AREA", "Teslimat bölgesi dışında"),
+    ("ADDRESS_INCOMPLETE_MISSTATED", "Adres eksik / yanlış"),
+    ("NO_COURIER", "Kurye yok"),
+    ("TECHNICAL_PROBLEM", "Teknik sorun"),
+    ("FRAUD_PRANK", "Sahte / şaka sipariş"),
+    ("TEST_ORDER", "Test siparişi"),
+]
+REJECT_REASON_CODES = {code for code, _ in REJECT_REASONS}
+
+
+def pos_action(payload: dict, action: str, remote_order_id: str, rejection_reason: str = "TOO_BUSY",
                acceptance_minutes: int = 30) -> tuple:
     urls = callback_urls(payload)
     if action == "accept":
@@ -709,7 +757,7 @@ def pos_action(payload: dict, action: str, remote_order_id: str, rejection_reaso
     if action == "reject":
         return "POST", urls.get("orderRejectedUrl"), {
             "status": "order_rejected",
-            "reason": rejection_reason,
+            "reason": rejection_reason if rejection_reason in REJECT_REASON_CODES else "TOO_BUSY",
             "remoteOrderId": str(remote_order_id),
         }, STATUS_REJECTED
     if action == "prepared":

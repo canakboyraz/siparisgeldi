@@ -109,5 +109,32 @@ class YemeksepetiPosTest(unittest.TestCase):
         self.assertIn(b"Remote ID", response.data)
 
 
+
+
+class YemeksepetiPosHelpersTest(unittest.TestCase):
+    def test_conflict_and_expiry(self):
+        from unittest import mock
+        ok_login = mock.Mock(status_code=200)
+        ok_login.json.return_value = {"access_token": "t", "expires_in": 1800}
+        ok_login.raise_for_status = lambda: None
+        conflict = mock.Mock(status_code=409, content=b"{}")
+        conflict.json.return_value = {"currentState": "WAITING_FOR_ACKNOWLEDGEMENT"}
+        ys._POS_TOKEN_CACHE.clear()
+        with mock.patch("requests.post", return_value=ok_login), mock.patch("requests.request", return_value=conflict):
+            with self.assertRaises(ys.PosConflict) as ctx:
+                ys.send_pos_callback("POST", "https://integration-middleware.stg.restaurant-partners.com/v2/order/status/x",
+                                     {}, "u", "p", "sandbox")
+        self.assertTrue(ctx.exception.retryable)
+        self.assertFalse(ys.PosConflict("CANCELLED").retryable)
+        ok = mock.Mock(status_code=200, content=b'{"message": "ok"}')
+        ok.json.return_value = {"message": "ok"}
+        ok.raise_for_status = lambda: None
+        with mock.patch("requests.post", return_value=ok_login), mock.patch("requests.request", return_value=ok):
+            self.assertEqual(ys.send_pos_callback("POST", "https://integration-middleware.stg.restaurant-partners.com/v2/x",
+                                                  {}, "u", "p", "sandbox"), {"message": "ok"})
+        self.assertEqual(ys.expiry_text({"expiryDate": "2026-11-12T14:15:00.000Z"}), "17:15")
+        self.assertEqual(ys.expiry_text({}), "")
+
+
 if __name__ == "__main__":
     unittest.main()
