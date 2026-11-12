@@ -122,18 +122,25 @@ def _find_posentegra_integration(restaurant_id: str):
     ).first()
 
 
-def _check_posentegra_auth(intg) -> bool:
-    """PosEntegra webhook'ları imzasızdır; Authorization başlığında API anahtarı gelir."""
-    expected = [current_app.config.get("POSENTEGRA_WEBHOOK_TOKEN", ""), current_app.config.get("POSENTEGRA_API_KEY", "")]
-    if intg is not None:
-        expected.append(intg.pe_api_key or "")
-    expected = [str(v) for v in expected if v]
-    if not expected:
-        return bool(current_app.debug or current_app.config.get("ENV") == "development")
+def _check_posentegra_auth(intg) -> str:
+    """PosEntegra webhook'ları imzasızdır. Dönüş: "key" (gizli anahtar/token eşleşti),
+    "restaurant" (varsayılan başlık: Authorization: Bearer {{restaurant.id}}) ya da "" (red)."""
     sent = (request.headers.get("Authorization") or request.headers.get("X-Api-Key") or "").strip()
     if sent.lower().startswith("bearer "):
         sent = sent[7:].strip()
-    return bool(sent) and any(hmac.compare_digest(sent, value) for value in expected)
+    token = (request.headers.get("X-SiparisGeldi-Token") or "").strip()
+    secrets_ = [current_app.config.get("POSENTEGRA_WEBHOOK_TOKEN", ""), current_app.config.get("POSENTEGRA_API_KEY", "")]
+    if intg is not None:
+        secrets_.append(intg.pe_api_key or "")
+    secrets_ = [str(v) for v in secrets_ if v]
+    for candidate in (token, sent):
+        if candidate and any(hmac.compare_digest(candidate, value) for value in secrets_):
+            return "key"
+    if intg is not None and sent and intg.pe_restaurant_id and hmac.compare_digest(sent, intg.pe_restaurant_id):
+        return "restaurant"
+    if not secrets_ and intg is None and (current_app.debug or current_app.config.get("ENV") == "development"):
+        return "key"
+    return ""
 
 
 def _posentegra_key(intg) -> str:
@@ -151,20 +158,28 @@ def _mark_posentegra_reported_async(app, api_key: str, provider_order_id: str):
         threading.Thread(target=worker, daemon=True, name="pe-mark").start()
 
 
+@webhooks_bp.route("/posentegra/iptal", methods=["POST"])
+def posentegra_cancel_webhook():
+    """PosEntegra panelindeki "Sipariş İptal Webhook URL"."""
+    return posentegra_webhook(force_event=pe.EVENT_CANCELLED)
+
+
 @webhooks_bp.route("/posentegra", methods=["POST"])
-def posentegra_webhook():
-    """PosEntegra (Yemeksepeti) sipariş webhook'u."""
+def posentegra_webhook(force_event: str = ""):
+    """PosEntegra (Yemeksepeti) sipariş webhook'u. Yanıt: {"pos_ticket": "<SiparişGeldi sipariş no>"}."""
     event, data = pe.webhook_event(request.get_json(silent=True))
+    event = force_event or event
     if not data:
         return jsonify({"message": "Invalid payload"}), 400
     intg = _find_posentegra_integration(pe.restaurant_id(data))
-    if not _check_posentegra_auth(intg):
+    auth = _check_posentegra_auth(intg)
+    if not auth:
         return jsonify({"message": "Unauthorized"}), 401
     if event == pe.EVENT_INTEGRATION:
         if intg:
             intg.last_sync_at = datetime.utcnow()
             db.session.commit()
-        return jsonify({"ok": True}), 200
+        return jsonify({"pos_ticket": ""}), 200
     if not intg:
         current_app.logger.warning("PosEntegra restaurantId eslesmedi: %s", pe.restaurant_id(data))
         return jsonify({"message": "Unknown restaurantId"}), 404
@@ -174,6 +189,19 @@ def posentegra_webhook():
 
     order = Order.query.filter_by(user_id=intg.user_id, platform=ys.PLATFORM, external_id=provider_id).first()
     detail = data if pe.has_details(data) else None
+    unverified = False
+    if auth == "restaurant" and detail is not None and _posentegra_key(intg):
+        # Varsayılan başlık sadece restoran kimliğini taşır: sipariş içeriğini PosEntegra API'sinden teyit et.
+        try:
+            fetched = pe.get_order(_posentegra_key(intg), provider_id, current_app.config.get("POSENTEGRA_API_BASE", ""))
+            if pe.has_details(fetched):
+                detail = fetched
+        except pe.PosEntegraError as exc:
+            if exc.status_code == 404:
+                return jsonify({"message": "Order not found at PosEntegra"}), 404
+            unverified = True
+    elif auth == "restaurant":
+        unverified = True
     if detail is None and (order is None or event == pe.EVENT_STATUS):
         try:
             detail = pe.get_order(_posentegra_key(intg), provider_id, current_app.config.get("POSENTEGRA_API_BASE", ""))
@@ -192,6 +220,8 @@ def posentegra_webhook():
     normalized = pe.normalize(detail, prev_status or "") if detail is not None else raw
     if event == pe.EVENT_CANCELLED:
         normalized["status"] = ys.STATUS_CANCELLED
+    if unverified and detail is not None:
+        normalized.setdefault("_pe", {})["unverified"] = True
     is_new = order is None
     fields = ys.extract_order_fields(normalized)
     if is_new:
@@ -221,7 +251,7 @@ def posentegra_webhook():
         order.mark_status_notified(ys.STATUS_CANCELLED)
         db.session.commit()
         _send_yemeksepeti_async(app, intg.user_id, normalized, cancelled=True)
-    return jsonify({"ok": True, "orderId": order.id}), 200
+    return jsonify({"pos_ticket": str(order.id)}), 200
 
 
 def _send_yemeksepeti_async(app, user_id: int, payload: dict, cancelled: bool = False):

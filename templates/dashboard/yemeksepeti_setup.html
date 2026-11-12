@@ -19,8 +19,9 @@
       <button class="btn btn-primary" type="submit">{{ 'PosEntegra bağlantısını güncelle' if intg and intg.uses_posentegra else 'PosEntegra ile bağla' }}</button>
     </form>
     <div>
-      <div class="field"><label>PosEntegra paneline girilecek webhook adresi</label><div class="code">{{ pe_webhook_url }}</div></div>
-      <p class="hint" style="margin-top:.25rem">PosEntegra panelinde <b>Webhooklar</b> bölümüne bu adresi ekle. İstekler API anahtarıyla doğrulanır (Authorization: Bearer &lt;API anahtarı&gt;).</p>
+      <div class="field"><label>Sipariş Webhook URL</label><div class="code">{{ pe_webhook_url }}</div></div>
+      <div class="field"><label>Sipariş İptal Webhook URL</label><div class="code">{{ pe_webhook_url }}/iptal</div></div>
+      <p class="hint" style="margin-top:.25rem">PosEntegra paneli → Ayarlar → <b>Webhook Ayarları</b>. Başlık varsayılan kalabilir (Authorization: Bearer {{ '{{' }}restaurant.id{{ '}}' }}); API anahtarı tanımlıysa her sipariş PosEntegra'dan ayrıca teyit edilir.</p>
       <div class="check-list">
         <div class="check-row"><div><strong>API anahtarı</strong></div>{% if (intg and intg._pe_api_key) or pe_shared_key %}<span class="badge green">hazır</span>{% else %}<span class="badge amber">bekleniyor</span>{% endif %}</div>
         {% if intg and intg.uses_posentegra and intg.last_sync_at %}<div class="check-row"><div><strong>Son sipariş / işlem</strong></div><span class="muted">{{ (intg.last_sync_at|yerel).strftime('%d.%m %H:%M') }}</span></div>{% endif %}

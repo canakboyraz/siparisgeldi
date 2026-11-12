@@ -148,6 +148,7 @@ class PosEntegraTest(unittest.TestCase):
                                     headers={"Authorization": "Bearer yanlis"}).status_code, 401)
         r = self._hook({"olay": pe.EVENT_CREATED, "veri": SAMPLE})
         self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        self.assertEqual(r.get_json(), {"pos_ticket": str(Order.query.one().id)})
         self.assertEqual(self._hook({"olay": pe.EVENT_CREATED, "veri": SAMPLE}).status_code, 200)
         orders = Order.query.all()
         self.assertEqual(len(orders), 1)
@@ -232,6 +233,33 @@ class PosEntegraTest(unittest.TestCase):
         other = {**SAMPLE, "restaurantId": "yeni-rest", "providerOrderId": "o3", "pid": "o3", "id": "o3", "shortCode": "o3"}
         self.assertEqual(self._hook({"olay": pe.EVENT_CREATED, "veri": other},
                                     headers={"Authorization": "kendi-anahtar"}).status_code, 200)
+
+    def test_panel_default_header_and_cancel_url(self):
+        """PosEntegra panelinin varsayılan başlığı: Authorization: Bearer {{restaurant.id}}; gövde siparişin kendisi."""
+        hdr = {"Authorization": f"Bearer {REST_ID}"}
+        forged = copy.deepcopy(SAMPLE)
+        forged["totalDiscountedPrice"] = 1
+        with mock.patch("requests.request", return_value=_resp(SAMPLE)) as call:
+            r = self._hook(forged, headers=hdr)
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        self.assertTrue(call.call_args.args[1].endswith("/orders/zi5k-2633-qfpa"))   # API'den teyit edildi
+        order = Order.query.one()
+        self.assertEqual(order.total_price, 440.0)                                    # sahte tutar kullanılmadı
+        self.assertEqual(r.get_json()["pos_ticket"], str(order.id))
+        # PosEntegra'da olmayan sipariş reddedilir
+        ghost = {**SAMPLE, "providerOrderId": "yok", "pid": "yok", "id": "yok", "shortCode": "yok"}
+        with mock.patch("requests.request", return_value=_resp("Kayıt bulunamadı", 404, success=False)):
+            self.assertEqual(self._hook(ghost, headers=hdr).status_code, 404)
+        self.assertEqual(Order.query.count(), 1)
+        # yanlış restoran kimliği
+        self.assertEqual(self._hook(SAMPLE, headers={"Authorization": "Bearer baska-id"}).status_code, 401)
+        # iptal adresi
+        with mock.patch("requests.request", return_value=_resp({**SAMPLE, "cancelReason": "Müşteri"})):
+            r = self.client.post("/webhooks/posentegra/iptal", data=json.dumps({**SAMPLE, "cancelReason": "Müşteri"}),
+                                 headers=hdr, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        db.session.expire_all()
+        self.assertEqual(Order.query.one().status, ys.STATUS_CANCELLED)
 
 
 if __name__ == "__main__":
