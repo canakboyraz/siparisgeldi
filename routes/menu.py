@@ -180,7 +180,9 @@ def orders():
     has_tables = MenuTable.query.filter_by(user_id=current_user.id).first() is not None
     calls = (TableCall.query.filter_by(user_id=current_user.id, status="open")
              .order_by(TableCall.id.asc()).all())
+    accounts = menu.open_accounts(current_user.id, _today_start_utc())
     return render_template("menu/orders.html", setting=setting, rows=rows, durum=durum, counts=counts, calls=calls,
+                           accounts=accounts,
                            status=menu.STATUS, tl=menu.tl, today_total=today_total,
                            has_menu=has_menu, has_tables=has_tables,
                            adisyo_on=menu.adisyo_connection(current_user) is not None)
@@ -215,8 +217,7 @@ def change_status(order_id, status):
     order = TableOrder.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
     if status not in menu.STATUS:
         abort(404)
-    sending = (status == "preparing" and order.status == "new" and not order.adisyo_state
-               and (menu.get_setting(current_user, create=True).adisyo_send == "accept"))
+    sending = False   # Adisyo'ya artık masa hesabı kapanırken (Ödeme alındı) tek sipariş olarak yazılıyor
     menu.set_status(order, status)
     adisyo = None
     if sending:
@@ -239,6 +240,21 @@ def send_adisyo(order_id):
     if _wants_json():
         return jsonify({"ok": ok, "message": message})
     flash(message if ok else f"Adisyo'ya yazılamadı: {message}", "success" if ok else "warning")
+    return redirect(request.form.get("next") if (request.form.get("next") or "").startswith("/panel/")
+                    else url_for("menu.orders"))
+
+
+@menu_bp.post("/hesap/<int:table_id>/kapat")
+@login_required
+def close_account(table_id):
+    """Ödeme alındı: masanın açık siparişleri kapanır, istenirse Adisyo'ya tek sipariş yazılır."""
+    setting = menu.get_setting(current_user, create=True)
+    write = (request.form.get("adisyo") == "1" and setting.adisyo_send == "accept"
+             and menu.adisyo_connection(current_user) is not None)
+    ok, message = menu.close_account(current_user, table_id, _today_start_utc(), write)
+    if _wants_json():
+        return jsonify({"ok": ok, "message": message})
+    flash(message if ok else f"Hesap kapatılamadı: {message}", "success" if ok else "warning")
     return redirect(request.form.get("next") if (request.form.get("next") or "").startswith("/panel/")
                     else url_for("menu.orders"))
 
@@ -433,8 +449,8 @@ def settings():
     setting = menu.get_setting(current_user, create=True)
     if request.form.get("action") == "adisyo_send":
         setting.adisyo_send = "accept" if request.form.get("value") == "accept" else "off"
-        flash("Siparişler artık \"Hazırlanıyor\"a basınca Adisyo'da masanın hesabına yazılacak."
-              if setting.adisyo_send == "accept" else "Adisyo'ya otomatik yazma kapatıldı.", "success")
+        flash("Masa hesabı \"Ödeme alındı\" ile kapanınca siparişler Adisyo'ya tek sipariş olarak yazılacak."
+              if setting.adisyo_send == "accept" else "Adisyo'ya yazma kapatıldı.", "success")
     elif request.form.get("action") == "calls":
         setting.calls_open = setting.calls_open is False
         flash("\"Garson çağır\" düğmesi " + ("açıldı." if setting.calls_open else "kapatıldı; müşteriler göremez."), "success")

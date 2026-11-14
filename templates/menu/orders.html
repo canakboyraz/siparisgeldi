@@ -14,8 +14,8 @@
     <form method="post" action="{{ url_for('menu.settings') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="adisyo_send"><input type="hidden" name="next" value="{{ url_for('menu.orders') }}">
       <input type="hidden" name="value" value="{{ 'off' if setting.adisyo_send=='accept' else 'accept' }}">
-      <button class="btn btn-ghost" type="submit" title="Hazırlanıyor'a basınca sipariş Adisyo'da masanın hesabına yazılır">
-        <span class="qo-dot {{ 'on' if setting.adisyo_send=='accept' }}"></span>{{ "Adisyo'ya yazılıyor" if setting.adisyo_send=='accept' else "Adisyo'ya yazma kapalı" }}</button></form>
+      <button class="btn btn-ghost" type="submit" title="Masa hesabı 'Ödeme alındı' ile kapanınca tüm siparişler Adisyo'ya tek sipariş olarak yazılır">
+        <span class="qo-dot {{ 'on' if setting.adisyo_send=='accept' }}"></span>{{ "Ödemede Adisyo'ya yaz: açık" if setting.adisyo_send=='accept' else "Adisyo'ya yazma kapalı" }}</button></form>
     {% endif %}
     <form method="post" action="{{ url_for('menu.settings') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="calls"><input type="hidden" name="next" value="{{ url_for('menu.orders') }}">
@@ -51,6 +51,38 @@
   </ul>
 </div>
 {% endif %}
+{% if accounts %}
+{% set adisyo_write = adisyo_on and setting.adisyo_send == 'accept' %}
+<div class="card qo-accounts" role="region" aria-label="Açık masa hesapları">
+  <div class="card-title">Açık masa hesapları ({{ accounts|length }})</div>
+  <p class="hint" style="margin-top:0">Aynı masadan gelen siparişler tek hesapta toplanır. Ödemeyi alınca "Ödeme alındı"ya bas; {% if adisyo_write %}hesap Adisyo'ya tek sipariş olarak yazılır ve {% endif %}masa sıfırlanır.</p>
+  <div class="qo-acc-grid">
+  {% for a in accounts %}
+  <article class="qo-acc">
+    <header><h3>{{ a.table_name }}</h3><span class="muted">{{ a.orders|length }} sipariş · {{ (a.first_at|yerel).strftime('%H:%M') }}'den beri</span></header>
+    <ul class="qo-lines">{% for l in a.lines %}<li><b>{{ l.quantity }}×</b> {{ l.name }}</li>{% endfor %}</ul>
+    {% if a.errors %}<p class="qo-adisyo is-err">Adisyo'ya yazılamadı: {{ a.errors[-1] }}</p>{% endif %}
+    <footer>
+      <b>{{ tl(a.total) }}</b>
+      {% if a.table_id %}
+      <div class="qo-actions">
+        <form method="post" action="{{ url_for('menu.close_account', table_id=a.table_id) }}" onsubmit="this.querySelector('button').disabled=true">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+          <input type="hidden" name="adisyo" value="{{ '1' if adisyo_write else '0' }}">
+          <button class="btn btn-sm btn-primary" type="submit">{{ "Ödeme alındı · Adisyo'ya yaz" if adisyo_write else 'Ödeme alındı' }}</button></form>
+        {% if adisyo_write and a.errors %}
+        <form method="post" action="{{ url_for('menu.close_account', table_id=a.table_id) }}" onsubmit="return window.confirm('{{ a.table_name }} hesabı Adisyo\'ya yazılmadan kapatılsın mı?');">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+          <input type="hidden" name="adisyo" value="0"><button class="btn btn-sm btn-ghost" type="submit">Adisyo'suz kapat</button></form>
+        {% endif %}
+      </div>
+      {% endif %}
+    </footer>
+  </article>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
 <div class="lc-chips">
   <a class="lc-chip {{ 'is-active' if durum=='aktif' }} {{ 'is-alert' if counts.aktif }}" href="{{ url_for('menu.orders') }}">Aktif <b>{{ counts.aktif }}</b></a>
   <a class="lc-chip {{ 'is-active' if durum=='served' }}" href="{{ url_for('menu.orders', durum='served') }}">Teslim edildi <b>{{ counts.served }}</b></a>
@@ -63,11 +95,10 @@
   {% set label, tone = status[o.status] %}
   <article class="card qo-card is-{{ o.status }}">
     <header><h2>{{ o.table_name }}</h2><span class="badge {{ tone }}">{{ label }}</span></header>
-    <p class="qo-meta">#{{ o.id }} · {{ (o.created_at|yerel).strftime('%H:%M') }}{% if o.customer_name %} · {{ o.customer_name }}{% endif %}</p>
+    <p class="qo-meta">#{{ o.id }} · {{ (o.created_at|yerel).strftime('%H:%M') }}{% if o.customer_name %} · {{ o.customer_name }}{% endif %}{% if o.paid_at %} · <span class="badge green">Ödendi</span>{% endif %}</p>
     <ul class="qo-lines">{% for l in o.lines %}<li><b>{{ l.quantity }}×</b> {{ l.name }}</li>{% endfor %}</ul>
     {% if o.note %}<p class="qo-note">📝 {{ o.note }}</p>{% endif %}
-    {% if o.adisyo_state == 'sent' %}<p class="qo-adisyo is-ok">✓ Adisyo'da masanın hesabında{% if o.adisyo_order_id %} · #{{ o.adisyo_order_id }}{% endif %}</p>
-    {% elif o.adisyo_state == 'error' %}<p class="qo-adisyo is-err">Adisyo'ya yazılamadı: {{ o.adisyo_error }}</p>
+    {% if o.adisyo_state == 'sent' %}<p class="qo-adisyo is-ok">✓ Adisyo'ya yazıldı{% if o.adisyo_order_id %} · #{{ o.adisyo_order_id }}{% endif %}</p>
     {% elif o.adisyo_state == 'sending' %}<p class="qo-adisyo">Adisyo'ya gönderiliyor…</p>{% endif %}
     <footer>
       <b>{{ tl(o.total) }}</b>
@@ -77,11 +108,6 @@
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
           <button class="btn btn-sm {{ cls }}" type="submit">{{ text }}</button></form>
         {% endfor %}
-        {% if adisyo_on and o.status != 'cancelled' and o.adisyo_state in (none, 'error') %}
-        <form method="post" action="{{ url_for('menu.send_adisyo', order_id=o.id) }}" onsubmit="this.querySelector('button').disabled=true">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
-          <button class="btn btn-sm btn-ghost" type="submit">{{ 'Tekrar dene' if o.adisyo_state=='error' else "Adisyo'ya yaz" }}</button></form>
-        {% endif %}
       </div>
     </footer>
   </article>

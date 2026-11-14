@@ -700,6 +700,7 @@ class TableOrder(db.Model):
     adisyo_order_id = db.Column(db.String(40))
     adisyo_error = db.Column(db.String(200))
     adisyo_sent_at = db.Column(db.DateTime)
+    paid_at = db.Column(db.DateTime, index=True)               # "Ödeme alındı" → masa hesabı kapandı
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 

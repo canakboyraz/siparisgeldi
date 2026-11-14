@@ -320,49 +320,59 @@ class MenuTest(unittest.TestCase):
         call.assert_not_called()
         self.assertEqual(o.adisyo_state, "error")
 
-        # otomatik: Hazırlanıyor'a basınca masanın hesabına yazılır
+        # artık Hazırlanıyor'a basınca yazılmaz; masa hesabı "Ödeme alındı" ile kapanınca tek sipariş yazılır
+        TableOrder.query.filter_by(id=o.id).update({"status": "cancelled"})
+        db.session.commit()
         self._post("/panel/menu/ayarlar", {"action": "adisyo_send", "value": "accept"}, page="/panel/menu")
-        o2 = menu.create_order(t3, {"items": [{"id": latte.id, "qty": 2}], "note": "az köpük", "name": "Ayşe"}, "d2")
+        o2 = menu.create_order(t3, {"items": [{"id": latte.id, "qty": 2}], "note": "az köpük"}, "d2")
         tok = self._csrf(self.staff, "/panel/menu")
-        with mock.patch("requests.request", return_value=self._resp({"status": 100, "orderId": 55501})) as call:
-            r = self.staff.post(f"/panel/menu/siparis/{o2.id}/preparing",
-                                headers={"X-CSRF-Token": tok, "X-Requested-With": "fetch"})
-        self.assertTrue(r.get_json()["adisyo"]["ok"])
-        method, url = call.call_args.args
-        body = call.call_args.kwargs["json"]
-        self.assertEqual((method, url.endswith("/SaveOrder")), ("POST", True))
-        self.assertEqual((body["TableId"], body["OrderTotal"], body["WebOrderId"]), (101, 190.0, f"sg-qr-{o2.id}"))
-        self.assertEqual(body["OrderDetails"], [{"ProductUnitId": 9001, "Quantity": 2, "Name": "Latte", "IsMenu": False}])
-        self.assertIn("az köpük", body["OrderNote"])
-        self.assertIn("Ayşe", body["OrderNote"])
-        db.session.expire_all()
-        o2 = db.session.get(TableOrder, o2.id)
-        self.assertEqual((o2.adisyo_state, o2.adisyo_order_id), ("sent", "55501"))
-        # ikinci kez gönderilmez
         with mock.patch("requests.request") as call:
-            self.assertTrue(menu.send_to_adisyo(o2)[0])
+            self.staff.post(f"/panel/menu/siparis/{o2.id}/preparing",
+                            headers={"X-CSRF-Token": tok, "X-Requested-With": "fetch"})
         call.assert_not_called()
-        self.assertIn("Adisyo'da masanın hesabında", self.staff.get("/panel/menu").get_data(as_text=True))
-
-        # Adisyo hata dönerse siparişte görünür, tekrar denenebilir
         o3 = menu.create_order(t3, {"items": [{"id": latte.id, "qty": 1}]}, "d3")
+        page = self.staff.get("/panel/menu").get_data(as_text=True)
+        self.assertIn("Açık masa hesapları (1)", page)
+        self.assertIn("2 sipariş", page)
+        self.assertIn("<b>3×</b> Latte", page)
+        # Adisyo hata: hesap açık kalır
         with mock.patch("requests.request", return_value=self._resp({"status": 715, "message": "Hatalı"})):
-            r = self._post(f"/panel/menu/siparis/{o3.id}/adisyo", {}, page="/panel/menu")
-        self.assertEqual(r.status_code, 302)
+            self._post(f"/panel/menu/hesap/{t3.id}/kapat", {"adisyo": "1"}, page="/panel/menu")
         db.session.expire_all()
-        o3 = db.session.get(TableOrder, o3.id)
-        self.assertEqual(o3.adisyo_state, "error")
-        self.assertIn("715", o3.adisyo_error)
-        self.assertIn("Tekrar dene", self.staff.get("/panel/menu").get_data(as_text=True))
-        with mock.patch("requests.request", return_value=self._resp({"status": 713, "message": "var"})):
-            self.assertTrue(menu.send_to_adisyo(o3)[0])          # zaten kayıtlıysa başarılı sayılır
-        # eşleşmemiş masa
+        self.assertIsNone(db.session.get(TableOrder, o2.id).paid_at)
+        self.assertIn("Adisyo'suz kapat", self.staff.get("/panel/menu").get_data(as_text=True))
+        # başarılı: tek SaveOrder, ürünler birleşik, masa sıfırlanır
+        with mock.patch("requests.request", return_value=self._resp({"status": 100, "orderId": 55501})) as call:
+            self._post(f"/panel/menu/hesap/{t3.id}/kapat", {"adisyo": "1"}, page="/panel/menu")
+        self.assertEqual(call.call_count, 1)
+        body = call.call_args.kwargs["json"]
+        self.assertEqual((body["TableId"], body["OrderTotal"], body["WebOrderId"]), (101, 285.0, f"sg-qr-hesap-{o2.id}"))
+        self.assertEqual(body["OrderDetails"], [{"ProductUnitId": 9001, "Quantity": 3, "Name": "Latte", "IsMenu": False}])
+        self.assertIn("az köpük", body["OrderNote"])
+        db.session.expire_all()
+        for oid in (o2.id, o3.id):
+            row = db.session.get(TableOrder, oid)
+            self.assertEqual((row.adisyo_state, row.adisyo_order_id, row.status), ("sent", "55501", "served"))
+            self.assertIsNotNone(row.paid_at)
+        self.assertNotIn("Açık masa hesapları", self.staff.get("/panel/menu").get_data(as_text=True))
+        # yeni sipariş yeni hesap açar
+        o5 = menu.create_order(t3, {"items": [{"id": latte.id, "qty": 1}]}, "d5")
+        self.assertIn("1 sipariş", self.staff.get("/panel/menu").get_data(as_text=True))
+        # Adisyo'da eşleşmemiş masa: masasız (gel-al) sipariş olarak yazılır
         t2 = db.session.get(MenuTable, t2.id)
-        o4 = menu.create_order(t2, {"items": [{"id": latte.id, "qty": 1}]}, "d4")
-        ok, msg = menu.send_to_adisyo(o4)
-        self.assertFalse(ok)
-        self.assertIn("eşleşmemiş", msg)
-
+        menu.create_order(t2, {"items": [{"id": latte.id, "qty": 1}]}, "d4")
+        with mock.patch("requests.request", return_value=self._resp({"status": 100, "orderId": 7})) as call:
+            self._post(f"/panel/menu/hesap/{t2.id}/kapat", {"adisyo": "1"}, page="/panel/menu")
+        body = call.call_args.kwargs["json"]
+        self.assertNotIn("TableId", body)
+        self.assertEqual(body["OrderType"], 3)
+        self.assertEqual(body["CustomerName"], "Masa 2")
+        # Adisyo kapalıyken sadece kapatır
+        with mock.patch("requests.request") as call:
+            self._post(f"/panel/menu/hesap/{t3.id}/kapat", {"adisyo": "0"}, page="/panel/menu")
+        call.assert_not_called()
+        db.session.expire_all()
+        self.assertIsNotNone(db.session.get(TableOrder, o5.id).paid_at)
 
 if __name__ == "__main__":
     unittest.main()

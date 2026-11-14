@@ -1922,6 +1922,12 @@ body:has(.qm){background:#FAF8F5}
 .qo-calls{margin-bottom:1rem;border-left:4px solid #E0A100}
 .qo-calls ul{list-style:none;margin:.5rem 0 0;padding:0;display:grid;gap:.5rem}
 .qo-calls li{display:flex;align-items:center;gap:.75rem}
+.qo-accounts{margin-bottom:1rem;border-left:4px solid var(--brand,#1E5B47)}
+.qo-acc-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));margin-top:.5rem}
+.qo-acc{border:1px solid var(--line,#E7E3DC);border-radius:12px;padding:.75rem;display:flex;flex-direction:column;gap:.5rem}
+.qo-acc header{display:flex;flex-direction:column;gap:.1rem}
+.qo-acc h3{margin:0;font-size:1.05rem}
+.qo-acc footer{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;margin-top:auto}
 .qo-calls li b{font-size:1.05rem}
 .qo-calls li form{margin-left:auto}
 .qm-call [hidden]{display:none!important}

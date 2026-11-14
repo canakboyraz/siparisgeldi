@@ -730,6 +730,129 @@ def adisyo_payload(order, table):
     }
 
 
+# ── Masa hesabı: aynı masanın açık siparişleri tek hesapta ─────────────────
+
+def open_accounts(user_id: int, since):
+    """Ödenmemiş (iptal olmayan) bugünkü siparişleri masaya göre gruplar."""
+    rows = (TableOrder.query.filter(TableOrder.user_id == user_id, TableOrder.paid_at.is_(None),
+                                    TableOrder.status != "cancelled", TableOrder.created_at >= since)
+            .order_by(TableOrder.id.asc()).all())
+    accounts = {}
+    for o in rows:
+        key = o.table_id or f"ad:{o.table_name}"
+        acc = accounts.setdefault(key, {"table_id": o.table_id, "table_name": o.table_name, "orders": [],
+                                        "total": Decimal("0"), "lines": {}, "first_at": o.created_at})
+        acc["orders"].append(o)
+        acc["total"] += Decimal(str(o.total or 0))
+        for l in o.lines:
+            line = acc["lines"].setdefault((l.item_id, l.name), {"name": l.name, "quantity": 0})
+            line["quantity"] += l.quantity
+    out = list(accounts.values())
+    for acc in out:
+        acc["lines"] = list(acc["lines"].values())
+        acc["errors"] = [o.adisyo_error for o in acc["orders"] if o.adisyo_state == "error" and o.adisyo_error]
+    return sorted(out, key=lambda a: a["first_at"])
+
+
+def account_orders(user_id: int, table_id: int, since):
+    return (TableOrder.query.filter(TableOrder.user_id == user_id, TableOrder.table_id == table_id,
+                                    TableOrder.paid_at.is_(None), TableOrder.status != "cancelled",
+                                    TableOrder.created_at >= since)
+            .order_by(TableOrder.id.asc()).all())
+
+
+def account_payload(orders, table):
+    """Masanın açık siparişlerini Adisyo'ya tek sipariş olarak hazırlar (aynı ürünler birleştirilir)."""
+    from integrations.adisyo import AdisyoError
+    first = orders[0]
+    ids = [l.item_id for o in orders for l in o.lines if l.item_id]
+    items = {i.id: i for i in MenuItem.query.filter(MenuItem.user_id == first.user_id, MenuItem.id.in_(ids))} if ids else {}
+    merged, missing, total = {}, [], Decimal("0")
+    notes = []
+    for o in orders:
+        total += Decimal(str(o.total or 0))
+        if o.note:
+            notes.append(o.note)
+        for line in o.lines:
+            item = items.get(line.item_id)
+            if not item or not item.adisyo_unit_id:
+                missing.append(line.name)
+                continue
+            row = merged.setdefault(item.adisyo_unit_id, {"ProductUnitId": item.adisyo_unit_id, "Quantity": 0,
+                                                          "Name": line.name, "IsMenu": False})
+            row["Quantity"] += line.quantity
+    if missing:
+        raise AdisyoError("Adisyo'da karşılığı olmayan ürün: " + ", ".join(dict.fromkeys(missing))
+                          + ". Ürünü Adisyo'dan aktar ya da Adisyo'ya elle gir.")
+    note = f"QR menü · {first.table_name} · {len(orders)} sipariş"
+    if notes:
+        note += " · Not: " + " / ".join(notes)
+    payload = {
+        "CustomerName": first.table_name, "CustomerSurname": "",
+        "CustomerId": f"sg-masa-{first.table_id or 0}", "CustomerPhone": "", "CustomerPhone2": "",
+        "Address": "", "AddressDescription": "", "Region": "", "City": "",
+        "PaymentNote": "QR menü · ödeme kasada", "Discount": 0,
+        "OrderNote": note[:300], "WebOrderId": f"sg-qr-hesap-{first.id}",
+        "OrderTotal": float(total), "DeliveryFee": 0, "ServiceCharge": 0,
+        "OrderDetails": list(merged.values()),
+    }
+    if table is not None and table.adisyo_table_id:
+        payload["TableId"] = table.adisyo_table_id      # Adisyo masası eşleşmişse masa siparişi
+    else:
+        payload["OrderType"] = 3                         # masa yoksa gel-al (paket değil) olarak açılır
+    return payload
+
+
+def close_account(user, table_id: int, since, write_adisyo: bool):
+    """Masa hesabını kapatır. write_adisyo ise önce hepsini Adisyo'ya tek sipariş yazar.
+    Dönüş: (ok, mesaj). Adisyo hatasında hesap açık kalır."""
+    from integrations.adisyo import AdisyoError
+    orders = account_orders(user.id, table_id, since)
+    if not orders:
+        return False, "Bu masada açık hesap yok."
+    name = orders[0].table_name
+    total = sum((Decimal(str(o.total or 0)) for o in orders), Decimal("0"))
+    to_send = [o for o in orders if o.adisyo_state != "sent"]
+    adisyo_note = ""
+    if write_adisyo and to_send:
+        connection = adisyo_connection(user)
+        if not connection:
+            return False, "Adisyo bağlantısı yok."
+        ids = [o.id for o in to_send]
+        claimed = (TableOrder.query.filter(TableOrder.id.in_(ids), db.or_(TableOrder.adisyo_state.is_(None),
+                                                                          TableOrder.adisyo_state == "error"))
+                   .update({"adisyo_state": "sending"}, synchronize_session=False))
+        db.session.commit()
+        if claimed != len(ids):
+            return False, f"{name} hesabı şu an Adisyo'ya gönderiliyor."
+        for o in to_send:
+            db.session.refresh(o)
+        table = db.session.get(MenuTable, table_id) if table_id else None
+        try:
+            data = _adisyo_call(connection, "POST", "/SaveOrder", account_payload(to_send, table))
+            code = str(data.get("status"))
+            if code not in (ADISYO_OK, ADISYO_DUPLICATE):
+                raise AdisyoError(f"Adisyo kaydetmedi ({code}: {clean(str(data.get('message') or ''), 120)})")
+        except AdisyoError as exc:
+            for o in to_send:
+                o.adisyo_state, o.adisyo_error = "error", clean(str(exc), 200)
+            db.session.commit()
+            log.warning("Adisyo hesap yazma hatası masa=%s: %s", table_id, exc)
+            return False, clean(str(exc), 200)
+        now, adisyo_id = datetime.utcnow(), str(data.get("orderId") or data.get("OrderId") or "")[:40] or None
+        for o in to_send:
+            o.adisyo_state, o.adisyo_error, o.adisyo_sent_at, o.adisyo_order_id = "sent", None, now, adisyo_id
+        adisyo_note = " Adisyo'ya tek sipariş olarak yazıldı" + (f" (#{adisyo_id})." if adisyo_id else ".")
+    now = datetime.utcnow()
+    for o in orders:
+        o.paid_at = now
+        if o.status in ("new", "preparing"):
+            o.status = "served"
+        o.updated_at = now
+    db.session.commit()
+    return True, f"{name} hesabı kapandı: {len(orders)} sipariş, {tl(total)}.{adisyo_note} Masa sıfırlandı."
+
+
 def send_to_adisyo(order):
     """Siparişi Adisyo'da masanın hesabına yazar. Aynı sipariş iki kez gönderilmez.
 
