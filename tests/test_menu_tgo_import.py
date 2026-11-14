@@ -82,8 +82,8 @@ class TgoMenuImportTest(unittest.TestCase):
         form = re.search(r'action="/panel/menu/trendyol-aktar".*?</form>', page, re.S).group(0)
         tok = re.search(r'name="_csrf_token" value="([^"]+)"', form).group(1)
         with mock.patch("requests.get", side_effect=_get) as get:
-            self.client.post("/panel/menu/trendyol-aktar", data={"_csrf_token": tok})
-            self.client.post("/panel/menu/trendyol-aktar", data={"_csrf_token": tok})
+            self.client.post("/panel/menu/trendyol-aktar", data={"_csrf_token": tok, "mode": "full"})
+            self.client.post("/panel/menu/trendyol-aktar", data={"_csrf_token": tok, "mode": "full"})
         self.assertFalse(any("evil.example.com" in c.args[0] for c in get.call_args_list))
         self.assertEqual(MenuCategory.query.filter_by(user_id=self.uid).count(), 2)
         items = {i.name: i for i in MenuItem.query.filter_by(user_id=self.uid)}
@@ -91,3 +91,32 @@ class TgoMenuImportTest(unittest.TestCase):
         self.assertIsNotNone(items["Browni"].image_id)
         self.assertIsNone(items["Nata"].image_id)
         self.assertEqual(float(items["Latte"].price), 220.0)
+
+
+class TgoMediaModeTest(TgoMenuImportTest):
+    def test_match_key(self):
+        self.assertEqual(menu.match_key("Americano Büyük"), menu.match_key("Americano"))
+        self.assertEqual(menu.match_key("Türk Kahvesi (Küçük)"), menu.match_key("Türk kahvesi"))
+        self.assertEqual(menu.match_key("Ezine & Hindi Füme Sandviç"), menu.match_key("Ezine Hindi Füme"))
+        self.assertEqual(menu.match_key("Iced Salted Karamel Latte"), menu.match_key("Ice Salted Karamel Latte"))
+        self.assertNotEqual(menu.match_key("Ice Latte"), menu.match_key("Latte"))
+
+    def test_media_only(self):
+        cat = MenuCategory(user_id=self.uid, name="Tatlı")
+        db.session.add(cat); db.session.flush()
+        b = MenuItem(user_id=self.uid, category_id=cat.id, name="Browni", price=150, adisyo_product_id=7)
+        lb = MenuItem(user_id=self.uid, category_id=cat.id, name="Latte Büyük", price=180)
+        db.session.add_all([b, lb]); db.session.commit()
+        with mock.patch("requests.get", side_effect=_get):
+            n, images, unmatched = menu.import_menu_media(db.session.get(User, self.uid), menu.fetch_tgo_menu("446617"))
+            menu.attach_images(self.uid, images)
+        self.assertEqual(n, 2)
+        self.assertEqual(unmatched, ["Nata"])
+        db.session.expire_all()
+        b = db.session.get(MenuItem, b.id)
+        self.assertEqual(float(b.price), 150.0)
+        self.assertEqual(b.adisyo_product_id, 7)
+        self.assertIsNotNone(b.image_id)
+        self.assertEqual(b.description, 'Bitter "çikolata"')
+        self.assertIsNotNone(db.session.get(MenuItem, lb.id).image_id)
+        self.assertEqual(MenuItem.query.filter_by(user_id=self.uid).count(), 2)

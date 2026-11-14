@@ -31,8 +31,10 @@
     {% endif %}
     {% if has_tgo %}
     <div class="card-title" style="margin-top:1rem">Trendyol Go'dan aktar</div>
-    <p class="hint" style="margin-top:0">Trendyol Go Yemek'teki kategori, ürün, açıklama, fiyat ve fotoğrafları menüye çeker. Tekrar bastığında fiyat ve açıklamalar güncellenir; senin eklediğin fotoğraflar korunur.</p>
+    <p class="hint" style="margin-top:0">Trendyol Go Yemek menüsündeki fotoğraf ve açıklamaları kullanır. Senin eklediğin fotoğraf ve açıklamalar korunur.</p>
     <form method="post" action="{{ url_for('menu.tgo_import') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label class="hint" style="display:flex;gap:.4rem;align-items:flex-start"><input type="radio" name="mode" value="media" {% if groups %}checked{% endif %}> Mevcut ürünlere sadece fotoğraf ve açıklama ekle (ad eşleşenler; fiyatlar değişmez)</label>
+      <label class="hint" style="display:flex;gap:.4rem;align-items:flex-start"><input type="radio" name="mode" value="full" {% if not groups %}checked{% endif %}> Trendyol'daki kategori ve ürünleri fiyatlarıyla menüye ekle</label>
       <button class="btn btn-primary btn-sm" type="submit">{{ icon('refresh', 16) }} Trendyol Go menüsünü çek</button></form>
     {% endif %}
   </div>

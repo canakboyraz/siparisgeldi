@@ -516,6 +516,53 @@ def import_menu(user, data: list):
     return added, updated, images
 
 
+_SIZE_WORDS = {"büyük", "buyuk", "küçük", "kucuk", "orta", "small", "medium", "large", "xl", "boy"}
+_GENERIC_WORDS = {"sandviç", "sandvic", "ve"}
+_TR = str.maketrans("çğıöşüâî", "cgiosuai")
+
+
+def match_key(name: str) -> str:
+    """Boy ekleri, noktalama ve küçük yazım farkları olmadan eşleştirme anahtarı."""
+    import re
+    text = (name or "").replace("İ", "i").replace("I", "ı").casefold().translate(_TR)
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    words = []
+    for w in text.split():
+        if w == "iced":
+            w = "ice"
+        if w in {x.translate(_TR) for x in _SIZE_WORDS | _GENERIC_WORDS}:
+            continue
+        words.append(w)
+    return " ".join(words)
+
+
+def import_menu_media(user, data: list):
+    """Mevcut ürünlere (ad eşleşirse) yalnız görsel ve açıklama ekler; ürün/fiyat değiştirmez.
+    Dönüş: (eşleşen ürün sayısı, [(item_id, görsel_url)], eşleşmeyen Trendyol ürün adları)."""
+    by_key = {}
+    for item in MenuItem.query.filter_by(user_id=user.id).all():
+        by_key.setdefault(match_key(item.name), []).append(item)
+    matched, images, unmatched, seen = set(), [], [], set()
+    for cat_data in data:
+        for p in cat_data["items"]:
+            key = match_key(p["name"])
+            if key in seen:
+                continue
+            seen.add(key)
+            items = by_key.get(key) or []
+            if not items:
+                unmatched.append(p["name"])
+                continue
+            for item in items:
+                matched.add(item.id)
+                if p.get("description") and not item.description:
+                    item.description = p["description"]
+                if p.get("image") and not item.image_id:
+                    images.append((item.id, p["image"]))
+    db.session.commit()
+    return len(matched), images, unmatched
+
+
 def _allowed_image_url(url: str) -> bool:
     from urllib.parse import urlparse
     u = urlparse(url)

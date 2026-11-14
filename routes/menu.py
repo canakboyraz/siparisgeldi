@@ -488,15 +488,25 @@ def tgo_import():
     if not store_id:
         flash("Önce Trendyol Go bağlantısını kur (Yemek platformları → Trendyol Go).", "warning")
         return _back()
+    mode = request.form.get("mode", "media")
     try:
         data = menu.fetch_tgo_menu(store_id)
-        added, updated, images = menu.import_menu(current_user, data)
+        if mode == "full":
+            added, updated, images = menu.import_menu(current_user, data)
+        else:
+            matched, images, unmatched = menu.import_menu_media(current_user, data)
     except menu.MenuImportError as exc:
         db.session.rollback()
         flash(str(exc), "danger")
         return _back()
     menu.attach_images_async(current_app._get_current_object(), current_user.id, images)
-    msg = f"Trendyol Go menüsünden {added} yeni ürün eklendi, {updated} ürünün fiyatı/açıklaması güncellendi."
+    if mode == "full":
+        msg = f"Trendyol Go menüsünden {added} yeni ürün eklendi, {updated} ürünün fiyatı/açıklaması güncellendi."
+    else:
+        msg = f"Trendyol Go'daki ürünlerle {matched} menü ürünün eşleşti; fiyat ve ürünlere dokunulmadı."
+        if unmatched:
+            shown = ", ".join(unmatched[:12]) + (" …" if len(unmatched) > 12 else "")
+            msg += f" Eşleşmeyen {len(unmatched)} Trendyol ürünü: {shown}."
     if images:
         msg += f" {len(images)} ürün görseli arka planda ekleniyor; 1-2 dakika sonra sayfayı yenile."
     flash(msg, "success")
