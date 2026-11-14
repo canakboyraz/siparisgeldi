@@ -1,4 +1,5 @@
 """Panel: özet, Telegram bağlama, TrendyolGo kurulum, siparişler, profil."""
+import re
 import json
 import secrets
 from calendar import monthrange
@@ -632,7 +633,9 @@ def yemeksepeti_setup():
         intg.ys_store_id = store_id or vendor_id
         intg.ys_vendor_id = vendor_id or store_id
         intg.ys_environment = environment
-        intg.ys_mode = "pos"
+        keep_posentegra = intg.ys_mode == "posentegra" and bool(intg.pe_restaurant_id)
+        if not keep_posentegra:
+            intg.ys_mode = "pos"
         if client_id:
             intg.ys_client_id = client_id
         if client_secret:
@@ -641,7 +644,11 @@ def yemeksepeti_setup():
         intg.last_error = None
         db.session.commit()
 
-        flash("Yemeksepeti POS restoran kimliği kaydedildi. Sipariş endpoint'i bu remoteId için hazır.", "success")
+        if keep_posentegra:
+            flash("Yemeksepeti bilgileri kaydedildi. Siparişler PosEntegra üzerinden gelmeye devam ediyor; "
+                  "resmi POS'a geçmek için PosEntegra kartındaki \"Resmi POS'a geç\" düğmesini kullan.", "success")
+        else:
+            flash("Yemeksepeti POS restoran kimliği kaydedildi. Sipariş endpoint'i bu remoteId için hazır.", "success")
         return redirect(url_for("dashboard.yemeksepeti_setup"))
 
     return render_template("dashboard/yemeksepeti_setup.html", intg=intg, **_ys_setup_context(intg))
@@ -749,6 +756,39 @@ def _save_posentegra_setup(intg: Integration):
     db.session.commit()
     flash("PosEntegra bağlantısı kaydedildi. Webhook adresini PosEntegra paneline girmeyi unutma.", "success")
     return redirect(url_for("dashboard.yemeksepeti_setup"))
+
+
+@dashboard_bp.route("/yemeksepeti/posentegra-cek", methods=["POST"])
+@login_required
+def import_posentegra_order():
+    """Webhook'u kaçan bir siparişi PosEntegra API'sinden çekip kaydeder."""
+    from routes.webhooks import process_posentegra_order, _posentegra_key
+    intg = Integration.query.filter_by(user_id=current_user.id, platform=ys.PLATFORM).first()
+    order_ref = re.sub(r"[^A-Za-z0-9_-]", "", request.form.get("pe_order_id", ""))[:64]
+    if not intg or not intg.pe_restaurant_id:
+        flash("Önce PosEntegra restoran ID'sini kaydet.", "warning")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    if not order_ref:
+        flash("PosEntegra sipariş ID'sini yaz.", "warning")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    api_key = _posentegra_key(intg)
+    try:
+        detail = pe.get_order(api_key, order_ref, current_app.config.get("POSENTEGRA_API_BASE", ""))
+    except pe.PosEntegraError as exc:
+        flash(f"Sipariş PosEntegra'dan alınamadı: {exc}"[:240], "danger")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    if not isinstance(detail, dict) or not pe.has_details(detail):
+        flash("PosEntegra bu sipariş için ürün bilgisi döndürmedi.", "danger")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    if pe.restaurant_id(detail) != intg.pe_restaurant_id:
+        flash("Bu sipariş senin PosEntegra restoranına ait değil.", "danger")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    body, status = process_posentegra_order(intg, detail, "", "key")
+    if status != 200:
+        flash(f"Sipariş kaydedilemedi: {body.get('message', status)}", "danger")
+        return redirect(url_for("dashboard.yemeksepeti_setup"))
+    flash("Sipariş PosEntegra'dan çekildi ve kaydedildi.", "success")
+    return redirect(url_for("dashboard.order_detail", order_id=int(body["pos_ticket"])))
 
 
 @dashboard_bp.route("/yemeksepeti/posentegra-test", methods=["POST"])

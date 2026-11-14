@@ -117,9 +117,8 @@ def _find_posentegra_integration(restaurant_id: str):
     return Integration.query.filter(
         Integration.platform == ys.PLATFORM,
         Integration.is_active.is_(True),
-        Integration.ys_mode == "posentegra",
         Integration.pe_restaurant_id == restaurant_id,
-    ).first()
+    ).first()  # mod ne olursa olsun: PosEntegra webhook'u geliyorsa restoran onu kullanıyordur
 
 
 def _check_posentegra_auth(intg) -> str:
@@ -183,9 +182,16 @@ def posentegra_webhook(force_event: str = ""):
     if not intg:
         current_app.logger.warning("PosEntegra restaurantId eslesmedi: %s", pe.restaurant_id(data))
         return jsonify({"message": "Unknown restaurantId"}), 404
+    body, status = process_posentegra_order(intg, data, event, auth)
+    return jsonify(body), status
+
+
+def process_posentegra_order(intg, data: dict, event: str = "", auth: str = "key"):
+    """PosEntegra sipariş verisini kaydeder/günceller. (yanıt gövdesi, HTTP durum) döner.
+    Webhook ve paneldeki "kaçan siparişi çek" aynı yolu kullanır."""
     provider_id = pe.provider_order_id(data)
     if not provider_id:
-        return jsonify({"message": "Missing providerOrderId"}), 400
+        return {"message": "Missing providerOrderId"}, 400
 
     order = Order.query.filter_by(user_id=intg.user_id, platform=ys.PLATFORM, external_id=provider_id).first()
     detail = data if pe.has_details(data) else None
@@ -198,7 +204,7 @@ def posentegra_webhook(force_event: str = ""):
                 detail = fetched
         except pe.PosEntegraError as exc:
             if exc.status_code == 404:
-                return jsonify({"message": "Order not found at PosEntegra"}), 404
+                return {"message": "Order not found at PosEntegra"}, 404
             unverified = True
     elif auth == "restaurant":
         unverified = True
@@ -210,10 +216,10 @@ def posentegra_webhook(force_event: str = ""):
             db.session.commit()
             if order is None:
                 # Kayıt yoksa 5xx dön: PosEntegra webhook'u artan aralıklarla tekrar dener.
-                return jsonify({"message": "Order detail unavailable, retry"}), 503
+                return {"message": "Order detail unavailable, retry"}, 503
             detail = None
     if detail is not None and not pe.has_details(detail) and order is None:
-        return jsonify({"message": "Order detail has no products, retry"}), 503
+        return {"message": "Order detail has no products, retry"}, 503
 
     prev_status = order.status if order else None
     raw = _parse_json_text(order.raw_json) if order else {}
@@ -251,7 +257,7 @@ def posentegra_webhook(force_event: str = ""):
         order.mark_status_notified(ys.STATUS_CANCELLED)
         db.session.commit()
         _send_yemeksepeti_async(app, intg.user_id, normalized, cancelled=True)
-    return jsonify({"pos_ticket": str(order.id)}), 200
+    return {"pos_ticket": str(order.id)}, 200
 
 
 def _send_yemeksepeti_async(app, user_id: int, payload: dict, cancelled: bool = False):

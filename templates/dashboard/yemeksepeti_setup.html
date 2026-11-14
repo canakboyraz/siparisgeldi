@@ -33,6 +33,15 @@
         <form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="pos_switch"><button class="btn btn-ghost" type="submit">Resmi POS'a geç</button></form>
       </div>
       {% endif %}
+      {% if intg and intg.pe_restaurant_id %}
+      <form method="post" action="{{ url_for('dashboard.import_posentegra_order') }}" style="margin-top:.75rem">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="field"><label>Kaçan siparişi çek</label>
+          <div class="inline"><input name="pe_order_id" placeholder="PosEntegra sipariş ID (ör. 6af824c9e60c...)" required maxlength="64">
+          <button class="btn btn-ghost" type="submit">Siparişi çek</button></div>
+          <p class="hint">PosEntegra → Ayarlar → Webhook Gönderim Denemeleri'nde "failed" görünen siparişin ID'si.</p></div>
+      </form>
+      {% endif %}
     </div>
   </div>
 </div>

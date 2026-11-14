@@ -294,3 +294,33 @@ class DeleteOrderTest(PosEntegraTest):
         r = self.client.post(f"/panel/siparis/{oid}/sil", data={"_csrf_token": token, "confirm": "1"})
         self.assertEqual(r.status_code, 404)
         self.assertIsNotNone(db.session.get(Order, oid))
+
+
+class PosModeAndImportTest(PosEntegraTest):
+    def test_webhook_accepted_even_if_mode_flipped_to_pos(self):
+        from models import Order
+        self.intg.ys_mode = "pos"; db.session.commit()
+        r = self._hook(SAMPLE)
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        self.assertEqual(Order.query.filter_by(external_id="zi5k-2633-qfpa").count(), 1)
+
+    def test_official_form_keeps_posentegra_mode(self):
+        self._login()
+        token = self._csrf("/panel/yemeksepeti")
+        self.client.post("/panel/yemeksepeti", data={"_csrf_token": token, "remote_id": "pe-iwki", "chain_id": "0Jr67M1a"})
+        db.session.expire_all()
+        self.assertEqual(self.intg.ys_mode, "posentegra")
+        self.assertEqual(self.intg.ys_vendor_id, "pe-iwki")
+
+    def test_import_missing_order(self):
+        from models import Order
+        self._login()
+        token = self._csrf("/panel/yemeksepeti")
+        with mock.patch("requests.request", return_value=_resp(SAMPLE)):
+            r = self.client.post("/panel/yemeksepeti/posentegra-cek", data={"_csrf_token": token, "pe_order_id": "6af824c9e60c5d0bab26ad6b"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Order.query.filter_by(external_id="zi5k-2633-qfpa").count(), 1)
+        other = {**SAMPLE, "restaurantId": "baska-restoran"}
+        with mock.patch("requests.request", return_value=_resp({**other, "providerOrderId": "yabanci"})):
+            self.client.post("/panel/yemeksepeti/posentegra-cek", data={"_csrf_token": token, "pe_order_id": "abc"})
+        self.assertEqual(Order.query.filter_by(external_id="yabanci").count(), 0)
