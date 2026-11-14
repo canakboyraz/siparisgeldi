@@ -104,6 +104,91 @@ def next_sort(model, **filters):
     return (db.session.query(db.func.max(model.sort)).filter_by(**filters).scalar() or 0) + 10
 
 
+# ── Ürün seçenekleri (süt seçimi, ekstra sos …) ─────────────────────────────
+
+MAX_GROUPS, MAX_CHOICES = 6, 12
+
+
+def parse_options(text: str) -> list:
+    """Panel metnini seçenek gruplarına çevirir. Her satır bir grup:
+        Süt seçimi: Laktozsuz süt, Yulaf sütü +30, Badem sütü +30
+        Ekstra (çoklu): Çikolata sosu +30
+    "(çoklu)" birden fazla seçim, "(zorunlu)" seçim zorunlu demektir."""
+    import re
+    groups = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if ":" not in line:
+            raise ValueError(f"Seçenek satırında ':' yok: \"{clean(line, 40)}\". Örnek: Süt seçimi: Yulaf sütü +30")
+        head, body = line.split(":", 1)
+        flags = {f.strip().casefold() for f in re.findall(r"\(([^)]*)\)", head)}
+        name = clean(re.sub(r"\([^)]*\)", "", head), 40)
+        choices = []
+        for part in body.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            m = re.match(r"^(.*?)(?:\s*\+\s*(\d+(?:[.,]\d{1,2})?)\s*(?:tl|₺)?)?$", part, re.I)
+            cname = clean(m.group(1), 40)
+            if not cname:
+                continue
+            price = money(m.group(2)) if m.group(2) else Decimal("0")
+            choices.append({"name": cname, "price": float(price)})
+        if not name or not choices:
+            raise ValueError(f"\"{clean(line, 40)}\" satırında grup adı ya da seçenek eksik.")
+        groups.append({"name": name, "multi": any(f.startswith("çoklu") or f.startswith("coklu") for f in flags),
+                       "required": any(f.startswith("zorunlu") for f in flags), "choices": choices[:MAX_CHOICES]})
+    return groups[:MAX_GROUPS]
+
+
+def item_options(item) -> list:
+    import json
+    try:
+        data = json.loads(item.options or "[]")
+        return data if isinstance(data, list) else []
+    except ValueError:
+        return []
+
+
+def options_text(item) -> str:
+    def price(p):
+        return "" if not p else " +" + (str(int(p)) if float(p).is_integer() else str(p).replace(".", ","))
+    lines = []
+    for g in item_options(item):
+        flags = (" (çoklu)" if g.get("multi") else "") + (" (zorunlu)" if g.get("required") else "")
+        lines.append(f"{g['name']}{flags}: " + ", ".join(c["name"] + price(c.get("price")) for c in g["choices"]))
+    return "\n".join(lines)
+
+
+def resolve_options(item, selected) -> tuple:
+    """Müşterinin seçimini doğrular. Dönüş: (ek fiyat, seçilen adlar, normalleştirilmiş seçim)."""
+    groups = item_options(item)
+    picked = {}
+    for pair in selected or []:
+        try:
+            g, c = int(pair[0]), int(pair[1])
+        except (TypeError, ValueError, IndexError):
+            raise OrderError(f"{item.name} için geçersiz seçim.") from None
+        if not (0 <= g < len(groups) and 0 <= c < len(groups[g]["choices"])):
+            raise OrderError(f"{item.name} seçenekleri değişmiş. Ürünü sepetten çıkarıp tekrar ekle.")
+        picked.setdefault(g, set()).add(c)
+    extra, names, norm = Decimal("0"), [], []
+    for gi, group in enumerate(groups):
+        chosen = sorted(picked.get(gi, set()))
+        if len(chosen) > 1 and not group.get("multi"):
+            raise OrderError(f"{item.name}: {group['name']} için tek seçim yapılabilir.")
+        if not chosen and group.get("required"):
+            raise OrderError(f"{item.name}: {group['name']} seçmelisin.")
+        for ci in chosen:
+            choice = group["choices"][ci]
+            extra += money(choice.get("price") or 0)
+            names.append(choice["name"])
+            norm.append((gi, ci))
+    return extra, names, tuple(norm)
+
+
 def categories(user, public=False):
     q = MenuCategory.query.filter_by(user_id=user.id)
     if public:
@@ -158,7 +243,7 @@ def create_order(table, payload, device):
         raise OrderError("Sepetin boş.")
     if len(raw) > MAX_LINES:
         raise OrderError("Bir siparişte en fazla 30 farklı ürün olabilir.")
-    wanted = {}
+    rows = []
     for row in raw:
         try:
             item_id, qty = int(row.get("id")), int(row.get("qty"))
@@ -166,12 +251,16 @@ def create_order(table, payload, device):
             raise OrderError("Sepette geçersiz bir ürün var.") from None
         if qty < 1:
             continue
-        wanted[item_id] = min(MAX_QTY, wanted.get(item_id, 0) + qty)
-    if not wanted:
+        opts = row.get("opts") or []
+        if not isinstance(opts, list) or len(opts) > MAX_GROUPS * MAX_CHOICES:
+            raise OrderError("Sepette geçersiz bir seçim var.")
+        rows.append((item_id, min(MAX_QTY, qty), opts))
+    if not rows:
         raise OrderError("Sepetin boş.")
-    items = {i.id: i for i in MenuItem.query.filter(MenuItem.user_id == user_id, MenuItem.id.in_(wanted)).all()}
+    wanted_ids = {r[0] for r in rows}
+    items = {i.id: i for i in MenuItem.query.filter(MenuItem.user_id == user_id, MenuItem.id.in_(wanted_ids)).all()}
     gone = [i.name for iid, i in items.items() if not (i.is_active and i.is_available and i.category.is_active)]
-    if len(items) != len(wanted) or gone:
+    if len(items) != len(wanted_ids) or gone:
         names = ", ".join(gone) if gone else "bazı ürünler"
         raise OrderError(f"{names} şu an yok. Sepetini güncelleyip tekrar dene.")
     now = datetime.utcnow()
@@ -187,12 +276,21 @@ def create_order(table, payload, device):
     order = TableOrder(user_id=user_id, table_id=table.id, table_name=table.name, status="new",
                        note=clean(payload.get("note"), 300) or None,
                        customer_name=clean(payload.get("name"), 40) or None, device=(device or "")[:32] or None)
-    total = Decimal("0")
-    for item_id, qty in wanted.items():
+    merged = {}
+    for item_id, qty, opts in rows:
         item = items[item_id]
-        price = Decimal(item.price or 0)
-        total += price * qty
-        order.lines.append(TableOrderLine(item_id=item.id, name=item.name, price=price, quantity=qty))
+        extra, names, norm = resolve_options(item, opts)
+        key = (item_id, norm)
+        if key in merged:
+            merged[key]["qty"] = min(MAX_QTY, merged[key]["qty"] + qty)
+        else:
+            name = item.name + (" · " + ", ".join(names) if names else "")
+            merged[key] = {"item": item, "qty": qty, "price": Decimal(item.price or 0) + extra, "name": name[:160]}
+    total = Decimal("0")
+    for line in merged.values():
+        total += line["price"] * line["qty"]
+        order.lines.append(TableOrderLine(item_id=line["item"].id, name=line["name"], price=line["price"],
+                                          quantity=line["qty"]))
     order.total = total
     db.session.add(order)
     db.session.commit()
@@ -778,8 +876,11 @@ def account_payload(orders, table):
             if not item or not item.adisyo_unit_id:
                 missing.append(line.name)
                 continue
-            row = merged.setdefault(item.adisyo_unit_id, {"ProductUnitId": item.adisyo_unit_id, "Quantity": 0,
-                                                          "Name": line.name, "IsMenu": False})
+            extra_note = line.name[len(item.name) + 3:] if line.name.startswith(item.name + " · ") else ""
+            row = merged.setdefault((item.adisyo_unit_id, extra_note),
+                                    {"ProductUnitId": item.adisyo_unit_id, "Quantity": 0, "Name": item.name, "IsMenu": False})
+            if extra_note:
+                row["OrderDetailNote"] = extra_note[:200]
             row["Quantity"] += line.quantity
     if missing:
         raise AdisyoError("Adisyo'da karşılığı olmayan ürün: " + ", ".join(dict.fromkeys(missing))

@@ -61,6 +61,7 @@
     <img id="qm-d-img" alt="" hidden>
     <div class="qm-d-body">
       <h2 id="qm-d-name"></h2><p id="qm-d-desc"></p>
+      <div class="qm-opts" id="qm-d-opts"></div>
       <div class="qm-d-row"><b id="qm-d-price"></b>
         {% if can_order %}<div class="qm-qty is-big"><button type="button" id="qm-d-dec" aria-label="Azalt">−</button><b id="qm-d-qty">1</b><button type="button" id="qm-d-inc" aria-label="Artır">+</button></div>{% endif %}
       </div>
@@ -95,16 +96,26 @@
   var key = root.getAttribute("data-cart-key"), cart = {};
   function store(fn) { try { return fn(window.localStorage); } catch (e) { return null; } }
   try { cart = JSON.parse(store(function (s) { return s.getItem(key); }) || "{}") || {}; } catch (e) { cart = {}; }
-  Object.keys(cart).forEach(function (id) { if (!items[id] || !items[id].available) delete cart[id]; });
+  // sepet: {anahtar: {id, qty, opts: [[grup, seçenek], ...]}}; eski biçim {id: adet} çevrilir
+  Object.keys(cart).forEach(function (k) {
+    var e = cart[k]; if (typeof e === "number") { e = { id: +k, qty: e, opts: [] }; delete cart[k]; cart[k + "|"] = e; k = k + "|"; }
+    var it = e && items[e.id]; if (!it || !it.available || !validOpts(it, e.opts)) delete cart[k]; });
+  function validOpts(it, opts) { return (opts || []).every(function (p) { var g = (it.opts || [])[p[0]]; return g && g.choices[p[1]]; }); }
+  function keyOf(id, opts) { return id + "|" + opts.map(function (p) { return p[0] + "." + p[1]; }).join(","); }
+  function unit(e) { var it = items[e.id], p = it.price; (e.opts || []).forEach(function (q) { p += +(it.opts[q[0]].choices[q[1]].price || 0); }); return p; }
+  function optNames(e) { var it = items[e.id]; return (e.opts || []).map(function (q) { return it.opts[q[0]].choices[q[1]].name; }).join(", "); }
+  function qtyOf(id) { var n = 0; Object.keys(cart).forEach(function (k) { if (cart[k].id == id) n += cart[k].qty; }); return n; }
+  function hasOpts(id) { return !!(items[id] && items[id].opts && items[id].opts.length); }
   function tl(n) { var r = Math.round(n * 100) / 100, w = Math.floor(r), f = Math.round((r - w) * 100);
     var s = w.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); return (f ? s + "," + (f < 10 ? "0" + f : f) : s) + " TL"; }
   function save() { store(function (s) { s.setItem(key, JSON.stringify(cart)); }); }
-  function totals() { var n = 0, t = 0; Object.keys(cart).forEach(function (id) { n += cart[id]; t += cart[id] * items[id].price; }); return [n, t]; }
+  function totals() { var n = 0, t = 0; Object.keys(cart).forEach(function (k) { n += cart[k].qty; t += cart[k].qty * unit(cart[k]); }); return [n, t]; }
   function vib() { if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} } }
   function render() {
     document.querySelectorAll("[data-add]").forEach(function (box) {
-      var q = cart[box.getAttribute("data-add")] || 0;
-      box.querySelector(".qm-plus").hidden = q > 0; var qq = box.querySelector(".qm-qty"); qq.hidden = q === 0; qq.querySelector("b").textContent = q;
+      var id = box.getAttribute("data-add"), q = qtyOf(id), opt = hasOpts(id);
+      box.querySelector(".qm-plus").hidden = q > 0 && !opt; var qq = box.querySelector(".qm-qty"); qq.hidden = q === 0 || opt; qq.querySelector("b").textContent = q;
+      box.querySelector(".qm-plus").textContent = opt && q > 0 ? q + "+" : "+";
       box.closest(".qm-item").classList.toggle("in-cart", q > 0);
     });
     if (!canOrder) return;
@@ -112,15 +123,18 @@
     bar.hidden = t[0] === 0; document.getElementById("qm-count").textContent = t[0];
     document.getElementById("qm-total").textContent = tl(t[1]); document.getElementById("qm-send-total").textContent = tl(t[1]);
     var ul = document.getElementById("qm-lines"); ul.innerHTML = "";
-    Object.keys(cart).forEach(function (id) {
-      var i = items[id], li = document.createElement("li");
-      li.innerHTML = '<div><b></b><small></small></div><div class="qm-qty"><button type="button" data-cart="dec">−</button><b></b><button type="button" data-cart="inc">+</button></div>';
-      li.querySelector("div b").textContent = i.name; li.querySelector("small").textContent = tl(i.price * cart[id]);
-      li.querySelector(".qm-qty b").textContent = cart[id]; li.setAttribute("data-id", id); ul.appendChild(li);
+    Object.keys(cart).forEach(function (k) {
+      var e = cart[k], i = items[e.id], li = document.createElement("li"), on = optNames(e);
+      li.innerHTML = '<div><b></b><em class="qm-optline"></em><small></small></div><div class="qm-qty"><button type="button" data-cart="dec">−</button><b></b><button type="button" data-cart="inc">+</button></div>';
+      li.querySelector("div b").textContent = i.name; li.querySelector("em").textContent = on; li.querySelector("em").hidden = !on;
+      li.querySelector("small").textContent = tl(unit(e) * e.qty);
+      li.querySelector(".qm-qty b").textContent = e.qty; li.setAttribute("data-id", k); ul.appendChild(li);
     });
     if (t[0] === 0) closeSheet("qm-cart");
   }
-  function change(id, d) { cart[id] = Math.max(0, Math.min(20, (cart[id] || 0) + d)); if (!cart[id]) delete cart[id]; save(); render(); vib(); }
+  function change(k, d, id, opts) {
+    var e = cart[k] || { id: +(id || String(k).split("|")[0]), qty: 0, opts: opts || [] };
+    e.qty = Math.max(0, Math.min(20, e.qty + d)); if (e.qty) cart[k] = e; else delete cart[k]; save(); render(); vib(); }
   function openSheet(id) { var s = document.getElementById(id); s.hidden = false; document.body.classList.add("qm-lock");
     requestAnimationFrame(function () { s.classList.add("is-open"); }); }
   function closeSheet(id) { var s = document.getElementById(id); if (!s || s.hidden) return; s.classList.remove("is-open"); document.body.classList.remove("qm-lock");
@@ -130,10 +144,39 @@
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeSheet("qm-detail"); closeSheet("qm-cart"); } });
 
   // Kart: + / − ve detay
-  var detailId = null, detailQty = 1;
+  var detailId = null, detailQty = 1, detailSel = {};
+  function selList() { var out = []; Object.keys(detailSel).forEach(function (g) { detailSel[g].forEach(function (c) { out.push([+g, c]); }); });
+    return out.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; }); }
+  function detailUnit() { return unit({ id: detailId, opts: selList() }); }
+  function missingReq() { var it = items[detailId]; return (it.opts || []).filter(function (g, gi) { return g.required && !(detailSel[gi] || []).length; }); }
+  function updAdd() { if (!canOrder) return; var add = document.getElementById("qm-d-add"), miss = missingReq();
+    document.getElementById("qm-d-price").textContent = tl(detailUnit());
+    add.textContent = miss.length ? miss[0].name + " seç" : "Sepete ekle · " + tl(detailUnit() * detailQty); add.disabled = !!miss.length; }
+  function renderOpts(it) {
+    var box = document.getElementById("qm-d-opts"); box.innerHTML = ""; detailSel = {};
+    (it.opts || []).forEach(function (g, gi) {
+      var fs = document.createElement("fieldset"), lg = document.createElement("legend");
+      lg.textContent = g.name + (g.required ? " · zorunlu" : g.multi ? " · birden fazla seçebilirsin" : ""); fs.appendChild(lg);
+      if (g.required && !g.multi) detailSel[gi] = [0];
+      g.choices.forEach(function (c, ci) {
+        var lab = document.createElement("label"), inp = document.createElement("input"), sp = document.createElement("span"), pr = document.createElement("small");
+        inp.type = g.multi ? "checkbox" : "radio"; inp.name = "qo" + gi; inp.checked = !!(detailSel[gi] && detailSel[gi].indexOf(ci) > -1);
+        inp.disabled = !canOrder;
+        inp.addEventListener("click", function () {
+          var cur = detailSel[gi] || [];
+          if (g.multi) { cur = inp.checked ? cur.concat([ci]) : cur.filter(function (x) { return x !== ci; }); }
+          else if (cur[0] === ci && !g.required) { cur = []; inp.checked = false; }
+          else { cur = [ci]; }
+          detailSel[gi] = cur; updAdd(); });
+        sp.textContent = c.name; pr.textContent = c.price ? "+" + tl(c.price) : "";
+        lab.appendChild(inp); lab.appendChild(sp); lab.appendChild(pr); fs.appendChild(lab); });
+      box.appendChild(fs); });
+  }
   document.querySelector(".qm-list") && document.querySelector(".qm-list").addEventListener("click", function (e) {
     var act = e.target.closest("[data-act]");
-    if (act) { var id = act.closest("[data-add]").getAttribute("data-add"); change(id, act.getAttribute("data-act") === "dec" ? -1 : 1); return; }
+    if (act) { var id = act.closest("[data-add]").getAttribute("data-add");
+      if (hasOpts(id)) { openDetail(id); return; }
+      change(id + "|", act.getAttribute("data-act") === "dec" ? -1 : 1, id, []); return; }
     var card = e.target.closest(".qm-item"); if (card) openDetail(card.getAttribute("data-id"));
   });
   document.querySelectorAll(".qm-item").forEach(function (c) { c.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target === c) openDetail(c.getAttribute("data-id")); }); });
@@ -141,25 +184,25 @@
     var i = items[id]; detailId = id; detailQty = 1;
     var img = document.getElementById("qm-d-img"); img.hidden = !i.img; if (i.img) img.src = i.img;
     document.getElementById("qm-d-name").textContent = i.name; document.getElementById("qm-d-desc").textContent = i.desc;
+    renderOpts(i);
     document.getElementById("qm-d-price").textContent = tl(i.price);
     document.getElementById("qm-d-out").hidden = i.available;
-    if (canOrder) { document.getElementById("qm-d-qty").textContent = 1; var add = document.getElementById("qm-d-add"); add.hidden = !i.available;
-      add.textContent = "Sepete ekle · " + tl(i.price); }
+    if (canOrder) { document.getElementById("qm-d-qty").textContent = 1; var add = document.getElementById("qm-d-add"); add.hidden = !i.available; updAdd(); }
     openSheet("qm-detail");
   }
   if (canOrder) {
-    function dq(d) { detailQty = Math.max(1, Math.min(20, detailQty + d)); document.getElementById("qm-d-qty").textContent = detailQty;
-      document.getElementById("qm-d-add").textContent = "Sepete ekle · " + tl(items[detailId].price * detailQty); }
+    function dq(d) { detailQty = Math.max(1, Math.min(20, detailQty + d)); document.getElementById("qm-d-qty").textContent = detailQty; updAdd(); }
     document.getElementById("qm-d-dec").addEventListener("click", function () { dq(-1); });
     document.getElementById("qm-d-inc").addEventListener("click", function () { dq(1); });
-    document.getElementById("qm-d-add").addEventListener("click", function () { change(detailId, detailQty); closeSheet("qm-detail"); });
+    document.getElementById("qm-d-add").addEventListener("click", function () {
+      if (missingReq().length) return; var opts = selList(); change(keyOf(detailId, opts), detailQty, detailId, opts); closeSheet("qm-detail"); });
     document.getElementById("qm-cartbar").addEventListener("click", function () { openSheet("qm-cart"); });
     document.getElementById("qm-lines").addEventListener("click", function (e) {
       var b = e.target.closest("[data-cart]"); if (!b) return; change(b.closest("li").getAttribute("data-id"), b.getAttribute("data-cart") === "dec" ? -1 : 1); });
     var note = document.getElementById("qm-note"), nameEl = document.getElementById("qm-name");
     nameEl.value = store(function (s) { return s.getItem("qm-ad"); }) || "";
     document.getElementById("qm-send").addEventListener("click", function () {
-      var btn = this, err = document.getElementById("qm-err"), lines = Object.keys(cart).map(function (id) { return { id: +id, qty: cart[id] }; });
+      var btn = this, err = document.getElementById("qm-err"), lines = Object.keys(cart).map(function (k) { return { id: cart[k].id, qty: cart[k].qty, opts: cart[k].opts || [] }; });
       if (!lines.length) return;
       btn.disabled = true; btn.firstChild.textContent = "Gönderiliyor… "; err.hidden = true;
       store(function (s) { s.setItem("qm-ad", nameEl.value.trim()); });

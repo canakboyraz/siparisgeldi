@@ -33,6 +33,19 @@
       </div>
       <div class="field"><label for="qf-desc">Açıklama (isteğe bağlı)</label>
         <textarea id="qf-desc" name="description" maxlength="300" rows="3" placeholder="ör. Çift shot espresso, buharda ısıtılmış süt">{{ f.get('description', item.description if item and item.description else '') }}</textarea></div>
+      <div class="field"><label for="qf-opts">Seçenekler (isteğe bağlı)</label>
+        <textarea id="qf-opts" name="options" rows="3" maxlength="1500" placeholder="Süt seçimi: Laktozsuz süt, Yulaf sütü +30, Badem sütü +30&#10;Ekstra (çoklu): Çikolata sosu +30">{{ options_text }}</textarea>
+        <p class="hint">Her satır bir seçim grubu: <b>Grup adı: seçenek, seçenek +30</b>. Fiyat farkı yoksa "+" yazma. Birden fazla seçilebilsin diye grup adının yanına <b>(çoklu)</b>, mutlaka seçilsin diye <b>(zorunlu)</b> yaz. Müşteri seçmezse standart ürün gelir.</p>
+        {% if all_groups %}
+        <details class="qf-apply"><summary>Bu seçenekleri başka ürünlere de uygula</summary>
+          {% for c, its in all_groups %}{% set others = its|rejectattr('id', 'equalto', item.id if item else 0)|list %}{% if others %}
+          <fieldset><legend>{{ c.name }}</legend>{% for o in others %}
+            <label class="st-active"><input type="checkbox" name="apply_to" value="{{ o.id }}"> <span>{{ o.name }}{% if o.options %} <small class="muted">(seçenekli)</small>{% endif %}</span></label>{% endfor %}
+          </fieldset>{% endif %}{% endfor %}
+          <p class="hint">İşaretlediğin ürünlerin seçenekleri bununla değiştirilir.</p>
+        </details>
+        {% endif %}
+      </div>
       <div class="qf-checks">
         <label class="st-active"><input type="checkbox" name="is_active" value="1" {{ 'checked' if (item.is_active if item else True) }}> <span>Menüde göster</span></label>
         <label class="st-active"><input type="checkbox" name="is_available" value="1" {{ 'checked' if (item.is_available if item else True) }}> <span>Satışta (işareti kaldırırsan "Tükendi")</span></label>

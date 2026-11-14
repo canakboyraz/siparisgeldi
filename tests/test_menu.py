@@ -374,5 +374,43 @@ class MenuTest(unittest.TestCase):
         db.session.expire_all()
         self.assertIsNotNone(db.session.get(TableOrder, o5.id).paid_at)
 
+    def test_item_options(self):
+        groups = menu.parse_options("Süt seçimi: Laktozsuz süt, Yulaf sütü +30, Badem sütü +30 TL\nEkstra (çoklu): Çikolata sosu +30")
+        self.assertEqual(groups[0], {"name": "Süt seçimi", "multi": False, "required": False, "choices": [
+            {"name": "Laktozsuz süt", "price": 0.0}, {"name": "Yulaf sütü", "price": 30.0}, {"name": "Badem sütü", "price": 30.0}]})
+        self.assertTrue(groups[1]["multi"])
+        with self.assertRaises(ValueError):
+            menu.parse_options("Süt seçimi yulaf")
+        cat = self._build_menu()
+        latte = MenuItem.query.filter_by(name="Latte").one()
+        cake = MenuItem.query.filter_by(name="Cheesecake").one()
+        page = f"/panel/menu/urun/{latte.id}"
+        self._post(page, {"name": "Latte", "price": "95", "category_id": str(cat.id), "is_active": "1", "is_available": "1",
+                          "options": "Süt seçimi: Laktozsuz süt, Yulaf sütü +30, Badem sütü +30",
+                          "apply_to": str(cake.id)}, page=page)
+        db.session.expire_all()
+        self.assertEqual(len(menu.item_options(db.session.get(MenuItem, cake.id))), 1)
+        self.assertIn("Yulaf sütü +30", self.staff.get(page).get_data(as_text=True))
+        self._post(f"/panel/menu/urun/{cake.id}", {"name": "Cheesecake", "price": "120,50", "category_id": str(cat.id),
+                   "is_active": "1", "is_available": "1", "options": ""}, page=f"/panel/menu/urun/{cake.id}")
+        t = MenuTable.query.filter_by(name="Masa 1").one()
+        o = menu.create_order(t, {"items": [{"id": latte.id, "qty": 2, "opts": [[0, 1]]},
+                                            {"id": latte.id, "qty": 1, "opts": []},
+                                            {"id": latte.id, "qty": 1, "opts": [[0, 1]]}]}, "dx")
+        lines = sorted((l.name, l.quantity, float(l.price)) for l in o.lines)
+        self.assertEqual(lines, [("Latte", 1, 95.0), ("Latte · Yulaf sütü", 3, 125.0)])
+        self.assertEqual(float(o.total), 95 + 3 * 125)
+        for bad in ([[0, 9]], [[0, 1], [0, 2]], [["x", 1]]):
+            with self.assertRaises(menu.OrderError):
+                menu.create_order(t, {"items": [{"id": latte.id, "qty": 1, "opts": bad}]}, "dy")
+        # menüde seçenekler görünür (müşteri verisi)
+        self.assertIn("Yulaf s\\u00fct\\u00fc", self.app.test_client().get(f"/m/{t.code}").get_data(as_text=True))
+        # Adisyo: seçenek ürün notu olarak gider
+        latte.adisyo_unit_id = 9001
+        db.session.commit()
+        payload = menu.account_payload([o], t)
+        self.assertIn({"ProductUnitId": 9001, "Quantity": 3, "Name": "Latte", "IsMenu": False,
+                       "OrderDetailNote": "Yulaf sütü"}, payload["OrderDetails"])
+
 if __name__ == "__main__":
     unittest.main()

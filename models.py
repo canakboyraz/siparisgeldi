@@ -668,6 +668,7 @@ class MenuItem(db.Model):
     sort = db.Column(db.Integer, nullable=False, default=0)
     adisyo_product_id = db.Column(db.Integer, index=True)
     adisyo_unit_id = db.Column(db.Integer)
+    options = db.Column(db.Text)            # JSON: [{"name","multi","required","choices":[{"name","price"}]}]
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -714,8 +715,8 @@ class TableOrderLine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey("table_orders.id"), nullable=False, index=True)
     item_id = db.Column(db.Integer)
-    name = db.Column(db.String(80), nullable=False)
-    price = db.Column(db.Numeric(10, 2), nullable=False)
+    name = db.Column(db.String(160), nullable=False)       # "Latte · Yulaf sütü" (seçenekler dahil)
+    price = db.Column(db.Numeric(10, 2), nullable=False)   # seçenek farkları dahil birim fiyat
     quantity = db.Column(db.Integer, nullable=False, default=1)
 
 

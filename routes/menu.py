@@ -1,4 +1,5 @@
 """QR menü: müşterinin masadaki ekranı (/m/<kod>) ve işletme paneli (/panel/menu)."""
+import json
 import secrets
 from datetime import datetime, timedelta
 
@@ -51,7 +52,7 @@ def public_menu(code):
     groups = menu.categories(owner, public=True)
     data = [{"id": c.id, "name": c.name, "items": [
         {"id": i.id, "name": i.name, "desc": i.description or "", "price": float(i.price or 0),
-         "priceText": menu.tl(i.price), "available": bool(i.is_available),
+         "priceText": menu.tl(i.price), "available": bool(i.is_available), "opts": menu.item_options(i),
          "img": url_for("menu_public.image", image_id=i.image_id) if i.image_id else ""} for i in items]}
         for c, items in groups]
     response = make_response(render_template(
@@ -382,6 +383,13 @@ def item_form(item_id=None):
             price, error = None, "Fiyatı sayı olarak yaz (ör. 85 ya da 85,50)."
         if len(name) < 2:
             error = "Ürün adını yaz."
+        options_json = None
+        if not error:
+            try:
+                groups = menu.parse_options(form.get("options", ""))
+                options_json = json.dumps(groups, ensure_ascii=False) if groups else None
+            except ValueError as exc:
+                error = str(exc)
         upload = request.files.get("photo")
         if not error and upload and upload.filename:
             try:
@@ -396,7 +404,8 @@ def item_form(item_id=None):
             image_id = item.image_id if item else None
         if error:
             db.session.rollback()
-            return render_template("menu/item_form.html", item=item, cats=cats, form=form, error=error, tl=menu.tl), 400
+            return render_template("menu/item_form.html", item=item, cats=cats, form=form, error=error, tl=menu.tl,
+                                   options_text=form.get("options", ""), all_groups=menu.categories(current_user)), 400
         if form.get("remove_photo") == "1" and not (upload and upload.filename):
             menu.delete_image(image_id)
             image_id = None
@@ -409,11 +418,18 @@ def item_form(item_id=None):
         item.description = menu.clean(form.get("description"), 300) or None
         item.is_active = form.get("is_active") == "1"
         item.is_available = form.get("is_available") == "1"
+        item.options = options_json
+        others = [i for i in (form.getlist("apply_to", type=int) or []) if i != item.id]
+        copied = 0
+        if others:
+            copied = (MenuItem.query.filter(MenuItem.user_id == current_user.id, MenuItem.id.in_(others))
+                      .update({"options": options_json}, synchronize_session=False))
         db.session.commit()
-        flash(f"{item.name} kaydedildi.", "success")
+        flash(f"{item.name} kaydedildi." + (f" Seçenekler {copied} ürüne daha uygulandı." if copied else ""), "success")
         return _back(f"k{cat.id}")
     form = {"category_id": request.args.get("kategori", type=int)} if not item else {}
-    return render_template("menu/item_form.html", item=item, cats=cats, form=form, error=None, tl=menu.tl)
+    return render_template("menu/item_form.html", item=item, cats=cats, form=form, error=None, tl=menu.tl,
+                           options_text=menu.options_text(item) if item else "", all_groups=menu.categories(current_user))
 
 
 @menu_bp.post("/urun/<int:item_id>/sil")

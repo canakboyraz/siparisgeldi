@@ -1931,3 +1931,17 @@ body:has(.qm){background:#FAF8F5}
 .qo-calls li b{font-size:1.05rem}
 .qo-calls li form{margin-left:auto}
 .qm-call [hidden]{display:none!important}
+.qf-apply{margin-top:.5rem}.qf-apply summary{cursor:pointer;font-weight:600}
+.qf-apply fieldset{border:0;padding:.25rem 0;margin:0;display:flex;flex-wrap:wrap;gap:.25rem 1rem}
+.qf-apply legend{font-weight:600;font-size:.9rem;padding:.5rem 0 .25rem}
+.qm-opts{display:grid;gap:12px;margin:4px 0 16px}
+.qm-opts fieldset{border:0;margin:0;padding:0;display:grid;gap:6px}
+.qm-opts legend{font-weight:700;font-size:.95rem;margin-bottom:4px}
+.qm-opts label{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #E3E6E2;border-radius:12px;cursor:pointer;min-height:44px}
+.qm-opts label:has(input:checked){border-color:var(--qm-accent);background:color-mix(in srgb,var(--qm-accent) 8%,#fff)}
+.qm-opts input{width:20px;height:20px;accent-color:var(--qm-accent);flex:none}
+.qm-opts label span{flex:1}
+.qm-opts label small{color:#5A6660;font-weight:600}
+.qm-optline{display:block;font-style:normal;font-size:.85rem;color:#5A6660}
+.qm-primary:disabled{opacity:.55}
+.qm-detail img[hidden]{display:none}
