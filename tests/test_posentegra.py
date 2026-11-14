@@ -219,6 +219,19 @@ class PosEntegraTest(unittest.TestCase):
         self.assertIn("gönderilemedi", r.get_data(as_text=True))
         db.session.expire_all()
         self.assertEqual(db.session.get(Order, o2.id).status, ys.STATUS_RECEIVED)
+        # ilerletmede 404: PosEntegra siparişi kapatmış -> panelde ilerlet, iki kimlik de denenmiş olsun
+        o2.status = ys.STATUS_PREPARED
+        raw2 = json.loads(o2.raw_json); raw2["_pe"]["internalId"] = "6af82d19e60c5d0bab26afbc"
+        o2.raw_json = json.dumps(raw2); db.session.commit()
+        with mock.patch("requests.request", return_value=_resp("Kayıt bulunamadı", 404, success=False)) as call:
+            r = self.client.post(f"/panel/siparis/{o2.id}/yemeksepeti-aksiyon", data={"_csrf_token": tok, "action": "advance"},
+                                 follow_redirects=True)
+        urls = [c.args[1] for c in call.call_args_list]
+        self.assertTrue(any(u.endswith("/6af82d19e60c5d0bab26afbc") for u in urls))
+        self.assertTrue(any(u.endswith("/o2") for u in urls))
+        self.assertIn("artık takip etmiyor", r.get_data(as_text=True))
+        db.session.expire_all()
+        self.assertNotEqual(db.session.get(Order, o2.id).status, ys.STATUS_PREPARED)
         # kurulum sayfası
         page = self.client.get("/panel/yemeksepeti").get_data(as_text=True)
         self.assertIn("PosEntegra ile bağlan", page)

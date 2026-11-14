@@ -2722,23 +2722,37 @@ def _run_posentegra_action(order: Order, raw: dict, selected: dict):
     api_key, intg = _posentegra_key_for(order.user_id)
     base = current_app.config.get("POSENTEGRA_API_BASE", "")
     info0 = raw.get("_pe") or {}
-    pid = info0.get("internalId") or pe.internal_id({"id": info0.get("id")}) \
-        or pe.internal_id({"id": info0.get("webhookId")}) or info0.get("providerOrderId") or order.external_id
+    internal = info0.get("internalId") or pe.internal_id({"id": info0.get("id")}) \
+        or pe.internal_id({"id": info0.get("webhookId")})
+    provider = info0.get("providerOrderId") or order.external_id
+    ids = [i for i in dict.fromkeys([internal, provider]) if i]
     action = selected["action"]
-    try:
-        if action == "accept":
-            result = pe.verify_order(api_key, pid, base)
-        elif action == "advance":
-            result = pe.change_status(api_key, pid, base)
-        else:
-            result = pe.cancel_order(api_key, pid, request.form.get("rejection_reason", "").strip(),
-                                     request.form.get("note", "").strip()[:200], base)
-    except pe.PosEntegraError as exc:
+    result, closed_on_platform, error = None, False, None
+    for pid in ids:
+        try:
+            if action == "accept":
+                result = pe.verify_order(api_key, pid, base)
+            elif action == "advance":
+                result = pe.change_status(api_key, pid, base)
+            else:
+                result = pe.cancel_order(api_key, pid, request.form.get("rejection_reason", "").strip(),
+                                         request.form.get("note", "").strip()[:200], base)
+            error = None
+            break
+        except pe.PosEntegraError as exc:
+            error = exc
+            if "404" not in str(exc):
+                break
+    if error is not None and "404" in str(error) and action == "advance":
+        # PosEntegra siparişi artık takip etmiyor (platform kuryesi teslim almış / sipariş kapanmış):
+        # paneli gerçek duruma getir, kullanıcıyı uyar.
+        closed_on_platform, error = True, None
+    if error is not None:
         if intg:
-            intg.last_error = f"PosEntegra sipariş işlemi: {exc}"[:300]
+            intg.last_error = f"PosEntegra sipariş işlemi: {error}"[:300]
             db.session.commit()
-        current_app.logger.warning("PosEntegra islemi basarisiz order_id=%s: %s", order.id, exc)
-        flash(f"Yemeksepeti işlemi gönderilemedi: {exc}", "danger")
+        current_app.logger.warning("PosEntegra islemi basarisiz order_id=%s ids=%s: %s", order.id, ids, error)
+        flash(f"Yemeksepeti işlemi gönderilemedi: {error}", "danger")
         return _order_action_redirect(order)
     order.status = selected["next_status"]
     info = raw.setdefault("_pe", {})
@@ -2750,7 +2764,11 @@ def _run_posentegra_action(order: Order, raw: dict, selected: dict):
     if intg:
         intg.last_sync_at, intg.last_error = datetime.utcnow(), None
     db.session.commit()
-    flash(f"Yemeksepeti işlemi gönderildi: {selected['label']}", "success")
+    if closed_on_platform:
+        flash(f"PosEntegra bu siparişi artık takip etmiyor (kurye teslim almış olabilir); "
+              f"panelde '{selected['label']}' olarak işaretlendi.", "warning")
+    else:
+        flash(f"Yemeksepeti işlemi gönderildi: {selected['label']}", "success")
     return _order_action_redirect(order)
 
 
