@@ -156,7 +156,7 @@
     var box = document.getElementById("qm-d-opts"); box.innerHTML = ""; detailSel = {};
     (it.opts || []).forEach(function (g, gi) {
       var fs = document.createElement("fieldset"), lg = document.createElement("legend");
-      lg.textContent = g.name + (g.required ? " · zorunlu" : g.multi ? " · birden fazla seçebilirsin" : ""); fs.appendChild(lg);
+      lg.textContent = g.name + (g.required ? " · zorunlu" : g.multi && g.choices.length > 1 ? " · birden fazla seçebilirsin" : ""); fs.appendChild(lg);
       if (g.required && !g.multi) detailSel[gi] = [0];
       g.choices.forEach(function (c, ci) {
         var lab = document.createElement("label"), inp = document.createElement("input"), sp = document.createElement("span"), pr = document.createElement("small");
