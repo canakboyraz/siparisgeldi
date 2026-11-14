@@ -20,14 +20,18 @@
   var csrf = "{{ csrf_token() }}", box = document.getElementById("qo-alert"), current = null, busy = false, lastBeep = 0;
   function el(id) { return document.getElementById(id); }
   function beep(isCall) {
-    var now = Date.now(); if (now - lastBeep < 6000) return; lastBeep = now;
-    var notes = isCall ? [1319, 988, 1319, 988] : [784, 988, 1175];
-    try { var C = window.AudioContext || window.webkitAudioContext; if (!C) return; var ctx = new C();
-      notes.map(function (_, i) { return i * .18; }).forEach(function (d, i) { var o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = notes[i];
-        g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.3, ctx.currentTime + d + .02);
-        g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .16); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .18); });
-    } catch (e) {}
+    var now = Date.now(); if (now - lastBeep < 2500) return; lastBeep = now;
+    var notes = isCall ? [1319, 988, 1319, 988, 1319, 988] : [784, 988, 1175, 784, 988, 1175];
+    if (window.sgAlertTones) { window.sgAlertTones(notes, { type: isCall ? "triangle" : "sine", volume: 0.4, duration: 0.2, gap: 0.2 }); }
+    else { try { var C = window.AudioContext || window.webkitAudioContext; if (C) { var ctx = window.__qoCtx || (window.__qoCtx = new C());
+      if (ctx.state === "suspended") ctx.resume();
+      notes.forEach(function (f, i) { var o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * .2; o.frequency.value = f;
+        g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.35, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + .18);
+        o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + .2); }); } } catch (e) {} }
     if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
+    if (document.hidden) { var t0 = document.title; if (!/^🔔/.test(t0)) { document.title = "🔔 " + (isCall ? "Garson çağrısı" : "Masa siparişi") + " · " + t0;
+      var restore = function () { if (!document.hidden) { document.title = t0.replace(/^🔔 [^·]*· /, ""); document.removeEventListener("visibilitychange", restore); } };
+      document.addEventListener("visibilitychange", restore); } }
   }
   function ago(sec) { return sec < 60 ? "az önce" : Math.round(sec / 60) + " dk önce"; }
   function showCall(c, rest) {
@@ -53,7 +57,7 @@
     beep();
   }
   function poll() {
-    if (busy || document.hidden) return;
+    if (busy) return;   // sekme arka plandayken de kontrol et: ses ve başlık uyarısı çalsın
     fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : { items: [] }; })
       .then(function (d) { var items = d.items || [], calls = d.calls || [], rest = items.length + calls.length - 1;
         if (calls.length) { var c = calls[0];

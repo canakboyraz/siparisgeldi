@@ -232,6 +232,32 @@
         }
       }
 
+      // Paylaşılan ses: QR masa siparişi / garson çağrısı da aynı (kullanıcı dokunuşuyla açılmış) ses motorunu kullanır.
+      function ensureAudio() {
+        var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return null;
+        if (!audioContext) audioContext = new AudioContextClass();
+        if (audioContext.state === "suspended") audioContext.resume();
+        return audioContext;
+      }
+      ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
+        document.addEventListener(ev, function () { if (soundEnabled) ensureAudio(); }, {passive: true});
+      });
+      window.sgAlertTones = function (tones, opts) {
+        if (!soundEnabled) return false;
+        var ctx = ensureAudio(); if (!ctx) return false;
+        opts = opts || {}; var now = ctx.currentTime, dur = opts.duration || 0.2, gap = opts.gap || 0.18, vol = opts.volume || 0.36;
+        tones.forEach(function (f, i) {
+          var o = ctx.createOscillator(), g = ctx.createGain(), t = now + i * gap;
+          o.type = opts.type || "sine"; o.frequency.value = f;
+          g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + dur - 0.02);
+          o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + dur);
+        });
+        return ctx.state === "running";
+      };
+      window.sgSoundEnabled = function () { return soundEnabled; };
+
       updateSoundButton();
       if (soundButton) {
         soundButton.addEventListener("click", function () {
