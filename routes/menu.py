@@ -265,6 +265,7 @@ def items():
     adisyo = Integration.query.filter_by(user_id=current_user.id, platform="adisyo", is_active=True).first()
     return render_template("menu/items.html", setting=setting, groups=menu.categories(current_user), tl=menu.tl,
                            has_adisyo=bool(adisyo and adisyo.adisyo_connection),
+                           has_tgo=bool(_tgo_store_id()),
                            view_url=url_for("menu_public.public_menu", code=setting.token, _external=True))
 
 
@@ -471,6 +472,34 @@ def adisyo_import():
     if skipped:
         msg += f" Satışta fiyatı olmayan {skipped} ürün atlandı."
     flash(msg + " Fotoğraf ve açıklamaları sen ekleyebilirsin.", "success")
+    return _back()
+
+
+def _tgo_store_id():
+    from models import Integration
+    intg = Integration.query.filter_by(user_id=current_user.id, platform="trendyolgo").first()
+    return (intg.tgo_store_id or "").strip() if intg else ""
+
+
+@menu_bp.post("/trendyol-aktar")
+@login_required
+def tgo_import():
+    store_id = _tgo_store_id()
+    if not store_id:
+        flash("Önce Trendyol Go bağlantısını kur (Yemek platformları → Trendyol Go).", "warning")
+        return _back()
+    try:
+        data = menu.fetch_tgo_menu(store_id)
+        added, updated, images = menu.import_menu(current_user, data)
+    except menu.MenuImportError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+        return _back()
+    menu.attach_images_async(current_app._get_current_object(), current_user.id, images)
+    msg = f"Trendyol Go menüsünden {added} yeni ürün eklendi, {updated} ürünün fiyatı/açıklaması güncellendi."
+    if images:
+        msg += f" {len(images)} ürün görseli arka planda ekleniyor; 1-2 dakika sonra sayfayı yenile."
+    flash(msg, "success")
     return _back()
 
 

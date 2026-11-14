@@ -383,6 +383,182 @@ def import_adisyo(user, categories_data):
     return added, updated, skipped
 
 
+# ── Trendyol Go Yemek menüsünü aktarma ──────────────────────────────────────
+
+TGO_PAGE = "https://tgoyemek.com/restoranlar/{store_id}"
+TGO_IMAGE_HOST = "cdn.tgoapps.com"
+TGO_SKIP_SECTIONS = ("en sevilenleri",)
+
+
+class MenuImportError(Exception):
+    pass
+
+
+def _flight_text(html: str) -> str:
+    """Next.js sayfasındaki self.__next_f.push([1,"..."]) parçalarını birleştirir."""
+    import json
+    import re
+    out = []
+    for m in re.finditer(r'self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)', html):
+        try:
+            out.append(json.loads(m.group(1)))
+        except ValueError:
+            continue
+    return "".join(out) or html
+
+
+def _json_array_after(text: str, key: str):
+    import json
+    start = text.find(key)
+    if start < 0:
+        return None
+    i = start + len(key) - 1          # '[' karakteri
+    depth, in_str, j = 0, False, i
+    while j < len(text):
+        c = text[j]
+        if in_str:
+            if c == "\\":
+                j += 2
+                continue
+            if c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c in "[{":
+            depth += 1
+        elif c in "]}":
+            depth -= 1
+            if depth == 0:
+                return json.loads(text[i:j + 1])
+        j += 1
+    return None
+
+
+def parse_tgo_menu(html: str) -> list:
+    """Trendyol Go restoran sayfasından [{name, items:[{name, description, price, image}]}] çıkarır."""
+    sections = _json_array_after(_flight_text(html), '"sections":[')
+    if not isinstance(sections, list):
+        raise MenuImportError("Trendyol sayfasında menü bulunamadı.")
+    out = []
+    for sec in sections:
+        name = clean(str(sec.get("name") or ""), 60)
+        if not name or any(k in name.casefold() for k in TGO_SKIP_SECTIONS):
+            continue
+        items = []
+        for p in sec.get("products") or []:
+            price = (p.get("price") or {}).get("salePrice")
+            pname = clean(str(p.get("name") or ""), 80)
+            if price is None or not pname:
+                continue
+            items.append({"name": pname, "description": clean(str(p.get("description") or ""), 300),
+                          "price": price, "image": str(p.get("imageUrl") or "").split("?")[0],
+                          "active": p.get("active") is not False})
+        if items:
+            out.append({"name": name, "items": items})
+    if not out:
+        raise MenuImportError("Trendyol menüsünde ürün bulunamadı.")
+    return out
+
+
+def fetch_tgo_menu(store_id: str) -> list:
+    import requests
+    store_id = "".join(ch for ch in str(store_id or "") if ch.isdigit())
+    if not store_id:
+        raise MenuImportError("Trendyol Go mağaza ID'si yok.")
+    try:
+        resp = requests.get(TGO_PAGE.format(store_id=store_id), timeout=20, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/130.0 Safari/537.36",
+            "Accept-Language": "tr-TR,tr;q=0.9"})
+    except requests.RequestException as exc:
+        raise MenuImportError(f"Trendyol sayfasına ulaşılamadı: {exc}") from None
+    if resp.status_code != 200:
+        raise MenuImportError(f"Trendyol sayfası açılmadı (HTTP {resp.status_code}).")
+    return parse_tgo_menu(resp.text)
+
+
+def import_menu(user, data: list):
+    """Kategori adı + ürün adına göre ekler/günceller. Dönüş: (eklenen, güncellenen, [(item_id, görsel_url)])."""
+    added = updated = 0
+    images = []
+    cats = {c.name.casefold(): c for c in MenuCategory.query.filter_by(user_id=user.id)}
+    for cat_data in data:
+        cat = cats.get(cat_data["name"].casefold())
+        if not cat:
+            cat = MenuCategory(user_id=user.id, name=cat_data["name"], sort=next_sort(MenuCategory, user_id=user.id))
+            db.session.add(cat)
+            db.session.flush()
+            cats[cat.name.casefold()] = cat
+        existing = {i.name.casefold(): i for i in cat.items}
+        sort = next_sort(MenuItem, category_id=cat.id)
+        for p in cat_data["items"]:
+            try:
+                price = money(p["price"])
+            except (InvalidOperation, ValueError, TypeError):
+                continue
+            item = existing.get(p["name"].casefold())
+            if item:
+                item.price = price
+                if p.get("description"):
+                    item.description = p["description"]
+                updated += 1
+            else:
+                item = MenuItem(user_id=user.id, category_id=cat.id, name=p["name"], price=price,
+                                description=p.get("description") or None, is_active=p.get("active", True), sort=sort)
+                sort += 10
+                db.session.add(item)
+                db.session.flush()
+                existing[item.name.casefold()] = item
+                added += 1
+            if p.get("image") and not item.image_id:
+                images.append((item.id, p["image"]))
+    db.session.commit()
+    return added, updated, images
+
+
+def _allowed_image_url(url: str) -> bool:
+    from urllib.parse import urlparse
+    u = urlparse(url)
+    return u.scheme == "https" and u.hostname == TGO_IMAGE_HOST
+
+
+def attach_images(user_id: int, images: list) -> int:
+    """Ürün görsellerini indirip menüye ekler (yalnız Trendyol CDN). Eklenen görsel sayısını döner."""
+    import requests
+    from models import User
+    user = db.session.get(User, user_id)
+    done = 0
+    for item_id, url in images:
+        if not _allowed_image_url(url):
+            continue
+        item = MenuItem.query.filter_by(id=item_id, user_id=user_id).first()
+        if not item or item.image_id:
+            continue
+        try:
+            resp = requests.get(url, timeout=15)
+            if resp.status_code != 200:
+                continue
+            image = save_image(user, io.BytesIO(resp.content))
+            item.image_id = image.id
+            db.session.commit()
+            done += 1
+        except Exception as exc:  # noqa: BLE001 - tek görsel hatası aktarımı durdurmasın
+            db.session.rollback()
+            log.info("Menü görseli alınamadı %s: %s", url, exc)
+    return done
+
+
+def attach_images_async(app, user_id: int, images: list):
+    def worker():
+        with app.app_context():
+            n = attach_images(user_id, images)
+            log.info("Trendyol menü görselleri eklendi: %s/%s", n, len(images))
+    if app.config.get("TESTING"):
+        attach_images(user_id, images)
+    else:
+        threading.Thread(target=worker, daemon=True, name="menu-images").start()
+
+
 # ── Adisyo'ya masa siparişi yazma (açık hesap) ─────────────────────────────
 
 ADISYO_OK = "100"

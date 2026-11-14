@@ -29,6 +29,12 @@
     {% else %}
     <p class="hint" style="margin-top:0">Adisyo bağlıysa ürünleri tek tıkla aktarabilirsin. Önce Yemek platformları → Adisyo'dan bağlantıyı kur.</p>
     {% endif %}
+    {% if has_tgo %}
+    <div class="card-title" style="margin-top:1rem">Trendyol Go'dan aktar</div>
+    <p class="hint" style="margin-top:0">Trendyol Go Yemek'teki kategori, ürün, açıklama, fiyat ve fotoğrafları menüye çeker. Tekrar bastığında fiyat ve açıklamalar güncellenir; senin eklediğin fotoğraflar korunur.</p>
+    <form method="post" action="{{ url_for('menu.tgo_import') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary btn-sm" type="submit">{{ icon('refresh', 16) }} Trendyol Go menüsünü çek</button></form>
+    {% endif %}
   </div>
 </div>
 
