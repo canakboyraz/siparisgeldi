@@ -148,6 +148,22 @@ def restaurant_id(data: dict) -> str:
     return str(data.get("restaurantId") or rest.get("id") or "").strip()
 
 
+def internal_id(data: dict) -> str:
+    """PosEntegra'nın kendi sipariş kimliği (24 karakter hex, ör. 6af824c9e60c5d0bab26ad6b).
+    Sipariş API'leri (verify/change-status/cancel) bu kimliği bekler, Yemeksepeti numarasını değil."""
+    import re
+    if not isinstance(data, dict):
+        return ""
+    for key in ("_id", "orderId", "order_id", "id", "posentegraOrderId"):
+        value = data.get(key)
+        if isinstance(value, dict):
+            value = value.get("$oid") or value.get("id")
+        value = str(value or "").strip()
+        if re.fullmatch(r"[0-9a-fA-F]{24}", value):
+            return value
+    return ""
+
+
 def provider_order_id(data: dict) -> str:
     return str(data.get("providerOrderId") or data.get("pid") or data.get("shortCode") or "").strip()
 
@@ -264,7 +280,8 @@ def normalize(data: dict, current_status: str = "") -> dict:
         "isPreorder": bool(data.get("isScheduled")),
         "_source": SOURCE,
         "_pe": {
-            "id": str(data.get("id") or pid), "providerOrderId": pid,
+            "id": internal_id(data) or str(data.get("id") or pid), "internalId": internal_id(data),
+            "providerOrderId": pid,
             "restaurantId": restaurant_id(data),
             "restaurantName": (data.get("restaurant") or {}).get("name") if isinstance(data.get("restaurant"), dict) else "",
             "statusCode": data.get("statusCode", data.get("status")),

@@ -783,6 +783,8 @@ def import_posentegra_order():
     if pe.restaurant_id(detail) != intg.pe_restaurant_id:
         flash("Bu sipariş senin PosEntegra restoranına ait değil.", "danger")
         return redirect(url_for("dashboard.yemeksepeti_setup"))
+    if not pe.internal_id(detail) and pe.internal_id({"id": order_ref}):
+        detail = {**detail, "_id": order_ref}
     body, status = process_posentegra_order(intg, detail, "", "key")
     if status != 200:
         flash(f"Sipariş kaydedilemedi: {body.get('message', status)}", "danger")
@@ -2719,7 +2721,9 @@ def _posentegra_order_actions(order: Order, raw: dict) -> list:
 def _run_posentegra_action(order: Order, raw: dict, selected: dict):
     api_key, intg = _posentegra_key_for(order.user_id)
     base = current_app.config.get("POSENTEGRA_API_BASE", "")
-    pid = (raw.get("_pe") or {}).get("providerOrderId") or order.external_id
+    info0 = raw.get("_pe") or {}
+    pid = info0.get("internalId") or pe.internal_id({"id": info0.get("id")}) \
+        or pe.internal_id({"id": info0.get("webhookId")}) or info0.get("providerOrderId") or order.external_id
     action = selected["action"]
     try:
         if action == "accept":

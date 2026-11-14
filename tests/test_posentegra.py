@@ -182,7 +182,7 @@ class PosEntegraTest(unittest.TestCase):
         self.assertEqual(json.loads(order.raw_json)["_pe"]["webhookId"], "wo_9")
 
     def test_panel_actions_and_setup(self):
-        self._hook({"olay": pe.EVENT_CREATED, "veri": SAMPLE})
+        self._hook({"olay": pe.EVENT_CREATED, "veri": {**SAMPLE, "_id": {"$oid": "6af824c9e60c5d0bab26ad6b"}}})
         order = Order.query.one()
         self._login()
         reasons = _resp({"reasons": [{"id": "TOO_BUSY", "name": "Restoran yoğun"}]})
@@ -194,13 +194,13 @@ class PosEntegraTest(unittest.TestCase):
         tok = self._csrf(f"/panel/siparis/{order.id}")
         with mock.patch("requests.request", return_value=_resp({"message": "Verify completed successfully"})) as call:
             self.client.post(f"/panel/siparis/{order.id}/yemeksepeti-aksiyon", data={"_csrf_token": tok, "action": "accept"})
-        self.assertTrue(call.call_args.args[1].endswith("/orders/verify/zi5k-2633-qfpa"))
+        self.assertTrue(call.call_args.args[1].endswith("/orders/verify/6af824c9e60c5d0bab26ad6b"))
         db.session.expire_all()
         order = db.session.get(Order, order.id)
         self.assertEqual(order.status, ys.STATUS_ACCEPTED)
         with mock.patch("requests.request", return_value=_resp({"orderId": "x", "oldStatus": 500, "newStatus": 600})) as call:
             self.client.post(f"/panel/siparis/{order.id}/yemeksepeti-aksiyon", data={"_csrf_token": tok, "action": "advance"})
-        self.assertTrue(call.call_args.args[1].endswith("/orders/change-status/zi5k-2633-qfpa"))
+        self.assertTrue(call.call_args.args[1].endswith("/orders/change-status/6af824c9e60c5d0bab26ad6b"))
         db.session.expire_all()
         order = db.session.get(Order, order.id)
         self.assertEqual((order.status, json.loads(order.raw_json)["_pe"]["statusCode"]), (ys.STATUS_PREPARED, 600))

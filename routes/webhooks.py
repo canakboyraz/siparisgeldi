@@ -241,7 +241,11 @@ def process_posentegra_order(intg, data: dict, event: str = "", auth: str = "key
             order.payment_type = fields["payment_type"]
             order.customer_note = fields["customer_note"]
     if detail is not None:
-        normalized.setdefault("_pe", {})["webhookId"] = str(data.get("id") or "")
+        info = normalized.setdefault("_pe", {})
+        info["webhookId"] = str(data.get("id") or "")
+        known = pe.internal_id(data) or pe.internal_id(detail) or (raw.get("_pe") or {}).get("internalId", "")
+        if known:
+            info["internalId"] = info["id"] = known
         order.raw_json = json.dumps(normalized, ensure_ascii=False)
     intg.last_sync_at = datetime.utcnow()
     intg.last_error = None
