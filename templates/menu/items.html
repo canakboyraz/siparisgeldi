@@ -14,9 +14,14 @@
 <div class="qi-top">
   <form method="post" action="{{ url_for('menu.settings') }}" class="card qi-settings">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <div class="card-title">Menü başlığı</div>
+    <div class="card-title">Menü ayarları</div>
     <div class="field"><label for="qi-title">İşletme adı</label><input id="qi-title" type="text" name="title" maxlength="80" value="{{ setting.title or '' }}"></div>
     <div class="field"><label for="qi-welcome">Karşılama yazısı (isteğe bağlı)</label><input id="qi-welcome" type="text" name="welcome" maxlength="200" value="{{ setting.welcome or '' }}" placeholder="ör. Hoş geldin! Siparişin masana gelir."></div>
+    <input type="hidden" name="has_flags" value="1">
+    <label class="qf-toggle"><input type="checkbox" name="ordering_open" value="1" {% if setting.ordering_open %}checked{% endif %}>
+      <span><b>Masadan sipariş</b><small>Müşteri QR menüden sipariş verebilir. Kapalıysa menü sadece görüntülenir.</small></span></label>
+    <label class="qf-toggle"><input type="checkbox" name="calls_open" value="1" {% if setting.calls_open is not false %}checked{% endif %}>
+      <span><b>"Garson çağır" düğmesi</b><small>Menünün en üstünde görünür; basınca panelde sesli uyarı çıkar. Self servis çalışıyorsan kapat.</small></span></label>
     <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
   </form>
   <div class="card qi-import">

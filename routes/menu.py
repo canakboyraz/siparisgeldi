@@ -477,6 +477,9 @@ def settings():
     else:
         setting.title = menu.clean(request.form.get("title"), 80) or setting.title
         setting.welcome = menu.clean(request.form.get("welcome"), 200) or None
+        if request.form.get("has_flags"):
+            setting.ordering_open = request.form.get("ordering_open") == "1"
+            setting.calls_open = request.form.get("calls_open") == "1"
         flash("Menü ayarları kaydedildi.", "success")
     db.session.commit()
     return redirect(request.form.get("next") if (request.form.get("next") or "").startswith("/panel/")

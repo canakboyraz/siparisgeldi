@@ -412,5 +412,18 @@ class MenuTest(unittest.TestCase):
         self.assertIn({"ProductUnitId": 9001, "Quantity": 3, "Name": "Latte", "IsMenu": False,
                        "OrderDetailNote": "Yulaf sütü"}, payload["OrderDetails"])
 
+    def test_menu_settings_toggles(self):
+        self._build_menu()
+        t = MenuTable.query.filter_by(name="Masa 1").one()
+        anon = self.app.test_client()
+        self.assertIn('id="qm-call"', anon.get(f"/m/{t.code}").get_data(as_text=True))
+        self._post("/panel/menu/ayarlar", {"title": "Pion", "welcome": "", "has_flags": "1", "ordering_open": "1"})
+        self.assertNotIn('id="qm-call"', anon.get(f"/m/{t.code}").get_data(as_text=True))
+        self.assertEqual(anon.post(f"/m/{t.code}/garson").status_code in (400, 403, 404, 409), True)
+        self._post("/panel/menu/ayarlar", {"title": "Pion", "welcome": "", "has_flags": "1", "calls_open": "1"})
+        page = anon.get(f"/m/{t.code}").get_data(as_text=True)
+        self.assertIn('id="qm-call"', page)
+        self.assertIn('data-can-order="0"', page)
+
 if __name__ == "__main__":
     unittest.main()

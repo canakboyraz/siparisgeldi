@@ -1945,3 +1945,6 @@ body:has(.qm){background:#FAF8F5}
 .qm-optline{display:block;font-style:normal;font-size:.85rem;color:#5A6660}
 .qm-primary:disabled{opacity:.55}
 .qm-detail img[hidden]{display:none}
+.qf-toggle{display:flex;gap:.6rem;align-items:flex-start;padding:.55rem 0;cursor:pointer}
+.qf-toggle input{width:20px;height:20px;margin-top:2px;flex:none;accent-color:var(--brand,#1E5B47)}
+.qf-toggle span{display:flex;flex-direction:column;gap:.1rem}.qf-toggle small{color:var(--muted,#5A6660);font-size:.85rem}
