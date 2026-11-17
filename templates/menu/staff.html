@@ -1,0 +1,63 @@
+{% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Personel bildirimi · SiparişGeldi{% endblock %}
+{% block panel %}
+<div class="page-head">
+  <div><h1>Personel bildirimi</h1><p class="muted page-sub">Barista kasa önünde değilken de masa siparişlerini ve garson çağrılarını telefonundan duysun.</p></div>
+  <div class="lc-head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('menu.orders') }}">{{ icon('receipt', 16) }} Masa siparişleri</a>
+  </div>
+</div>
+
+<div class="qs-grid">
+  <div class="card">
+    <div class="card-title">Personeli bağla</div>
+    {% if link %}
+    <ol class="qs-steps">
+      <li>Baristanın telefonunda <b>Telegram</b> kurulu olsun.</li>
+      <li>Bu QR'ı baristanın telefon kamerasıyla okut <span class="muted">(ya da linki ona WhatsApp'tan gönder)</span>.</li>
+      <li>Telegram açılınca <b>Başlat</b>'a bassın. "Personel bildirimleri açıldı" mesajı gelir.</li>
+    </ol>
+    <div class="qs-qr" id="qs-qr" data-url="{{ link }}" aria-label="Personel bağlantı QR kodu"></div>
+    <div class="qs-link"><input type="text" readonly value="{{ link }}" id="qs-link" aria-label="Personel bağlantı linki">
+      <button class="btn btn-ghost btn-sm" type="button" id="qs-copy">Kopyala</button></div>
+    <p class="hint">Personele <b>sadece</b> masa siparişleri ve garson çağrıları gider; ciro, rapor ve platform siparişleri gitmez. Birden fazla personel aynı linkle bağlanabilir.</p>
+    {% else %}
+    <p class="flash warning">Telegram botu tanımlı değil (<code>TELEGRAM_BOT_USERNAME</code>).</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Bildirim alanlar</div>
+    <ul class="qs-list">
+      <li><span>{{ icon('user', 16) }} Sen (işletme sahibi)</span>
+        {% if owner_linked %}<span class="badge green">Bağlı</span>{% else %}<a href="{{ url_for('dashboard.connect_telegram') }}">Telegram'ı bağla</a>{% endif %}</li>
+      {% for c in chats %}
+      <li><span>{{ icon('user', 16) }} {{ c.name or 'Personel' }} <small class="muted">· {{ (c.created_at|yerel).strftime('%d.%m.%Y') }}</small></span>
+        <form method="post" onsubmit="return window.confirm('Bu kişi artık bildirim almasın mı?');">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="id" value="{{ c.id }}">
+          <button class="btn btn-ghost btn-sm" type="submit">Kaldır</button></form></li>
+      {% else %}
+      <li class="muted">Henüz bağlı personel yok.</li>
+      {% endfor %}
+    </ul>
+    <form method="post" style="margin-top:1rem" onsubmit="return window.confirm('Yeni link oluşturulsun mu? Eski link çalışmaz; bağlı olanlar etkilenmez.');">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="renew">
+      <button class="btn btn-ghost btn-sm" type="submit">{{ icon('refresh', 16) }} Linki yenile</button></form>
+    <p class="hint">Personel işten ayrılırsa onu buradan kaldır, linki de yenile.</p>
+    <p class="hint">İpucu: Telegram'da bu sohbetin bildirim sesini açık bırak; telefon kilitliyken de sesli bildirim gelir.</p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+(function () {
+  var box = document.getElementById("qs-qr");
+  if (box && window.qrcode) { var q = qrcode(0, "M"); q.addData(box.getAttribute("data-url")); q.make();
+    box.innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); }
+  var copy = document.getElementById("qs-copy");
+  if (copy) copy.addEventListener("click", function () { var i = document.getElementById("qs-link"); i.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.reject()).then(function () { copy.textContent = "Kopyalandı"; },
+      function () { document.execCommand("copy"); copy.textContent = "Kopyalandı"; }); });
+})();
+</script>
+{% endblock %}

@@ -90,6 +90,8 @@ def _ensure_schema():
             "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS adisyo_sent_at TIMESTAMP",
             "ALTER TABLE table_orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP",
             "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS options TEXT",
+            "ALTER TABLE menu_settings ADD COLUMN IF NOT EXISTS staff_tg_token VARCHAR(40)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_menu_settings_staff_tg_token ON menu_settings (staff_tg_token)",
             "ALTER TABLE table_order_lines ALTER COLUMN name TYPE VARCHAR(160)",
             "ALTER TABLE menu_settings ADD COLUMN IF NOT EXISTS calls_open BOOLEAN DEFAULT TRUE",
             "ALTER TABLE stock_counts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP",

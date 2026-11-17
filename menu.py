@@ -316,20 +316,68 @@ def order_text(order) -> str:
     return "\n".join(lines)
 
 
-def notify_owner(order):
-    """Telegram bağlıysa sahibine kısa mesaj (arka planda; hata siparişi bozmasın)."""
+STAFF_PREFIX = "p_"          # Telegram /start yükü: p_<token> → personel
+
+
+def staff_link_token(setting) -> str:
+    import secrets
+    if not setting.staff_tg_token:
+        setting.staff_tg_token = STAFF_PREFIX + secrets.token_urlsafe(18)
+    return setting.staff_tg_token
+
+
+def bind_staff_chat(link_token: str, chat_id: str, name: str = ""):
+    """Personel /start p_<token> yazınca sohbeti bağlar. Dönüş: (MenuSetting, yeni_mi) ya da (None, False)."""
+    from models import StaffChat
+    setting = MenuSetting.query.filter_by(staff_tg_token=link_token).first() if link_token else None
+    if not setting:
+        return None, False
+    row = StaffChat.query.filter_by(user_id=setting.user_id, chat_id=str(chat_id)).first()
+    if row:
+        return setting, False
+    if StaffChat.query.filter_by(user_id=setting.user_id).count() >= 10:
+        return None, False
+    db.session.add(StaffChat(user_id=setting.user_id, chat_id=str(chat_id), name=clean(name, 80) or None))
+    db.session.commit()
+    return setting, True
+
+
+def _send_all(user_id: int, text: str, ref: str):
+    """Sahibine ve bağlı personele Telegram mesajı (arka planda; hata siparişi bozmasın)."""
     try:
-        from models import User
-        user = db.session.get(User, order.user_id)
+        from models import StaffChat, User
         token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
-        chat_id = getattr(user, "telegram_chat_id", None)
-        if not token or not chat_id or current_app.config.get("TESTING"):
+        if not token or current_app.config.get("TESTING"):
+            return
+        user = db.session.get(User, user_id)
+        chats = [getattr(user, "telegram_chat_id", None)] + [c.chat_id for c in StaffChat.query.filter_by(user_id=user_id)]
+        chats = [c for c in dict.fromkeys(chats) if c]
+        if not chats:
             return
         from notifications import telegram
-        text = order_text(order)
-        threading.Thread(target=lambda: telegram.send_message(token, chat_id, text), daemon=True).start()
+
+        def worker():
+            for chat_id in chats:
+                try:
+                    telegram.send_message(token, chat_id, text)
+                except Exception:  # noqa: BLE001
+                    log.exception("[MENU] Telegram gönderilemedi chat=%s %s", chat_id, ref)
+        threading.Thread(target=worker, daemon=True).start()
     except Exception:  # noqa: BLE001
-        log.exception("[MENU] Telegram bildirimi gönderilemedi order=%s", order.id)
+        log.exception("[MENU] Telegram bildirimi gönderilemedi %s", ref)
+
+
+def staff_targets(user_id: int) -> list:
+    """Test/arayüz için: bildirimin gideceği sohbetler."""
+    from models import StaffChat, User
+    user = db.session.get(User, user_id)
+    chats = [getattr(user, "telegram_chat_id", None)] + [c.chat_id for c in StaffChat.query.filter_by(user_id=user_id)]
+    return [c for c in dict.fromkeys(chats) if c]
+
+
+def notify_owner(order):
+    """Masa siparişi: sahibine ve bağlı personele Telegram."""
+    _send_all(order.user_id, order_text(order), f"order={order.id}")
 
 
 def order_json(order):
@@ -392,17 +440,7 @@ def call_json(call):
 
 
 def _telegram(user_id, text, ref):
-    try:
-        from models import User
-        user = db.session.get(User, user_id)
-        token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
-        chat_id = getattr(user, "telegram_chat_id", None)
-        if not token or not chat_id or current_app.config.get("TESTING"):
-            return
-        from notifications import telegram
-        threading.Thread(target=lambda: telegram.send_message(token, chat_id, text), daemon=True).start()
-    except Exception:  # noqa: BLE001
-        log.exception("[MENU] Telegram bildirimi gönderilemedi %s", ref)
+    _send_all(user_id, text, ref)
 
 
 # ── Adisyo'dan ürün aktarma ────────────────────────────────────────────────

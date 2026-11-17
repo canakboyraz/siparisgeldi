@@ -21,6 +21,7 @@
       <input type="hidden" name="action" value="calls"><input type="hidden" name="next" value="{{ url_for('menu.orders') }}">
       <button class="btn btn-ghost" type="submit" title="Müşterinin menüde gördüğü 'Garson çağır' düğmesi">
         <span class="qo-dot {{ 'on' if setting.calls_open is not false }}"></span>{{ 'Garson çağır açık' if setting.calls_open is not false else 'Garson çağır kapalı' }}</button></form>
+    <a class="btn btn-ghost" href="{{ url_for('menu.staff') }}">{{ icon('bell', 16) }} Personel bildirimi</a>
     <a class="btn btn-ghost" href="{{ url_for('menu.items') }}">{{ icon('list', 16) }} Menü</a>
     <a class="btn btn-ghost" href="{{ url_for('menu.tables') }}">{{ icon('qr', 16) }} Masalar ve QR</a>
   </div>

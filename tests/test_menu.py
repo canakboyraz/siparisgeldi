@@ -425,5 +425,46 @@ class MenuTest(unittest.TestCase):
         self.assertIn('id="qm-call"', page)
         self.assertIn('data-can-order="0"', page)
 
+    def test_staff_telegram(self):
+        from models import StaffChat, User
+        import worker
+        self._build_menu()
+        page = self.staff.get("/panel/menu/personel").get_data(as_text=True)
+        setting = MenuSetting.query.one()
+        self.assertTrue(setting.staff_tg_token.startswith("p_"))
+        # worker /start p_<token> → personel bağlanır, sahibin bağı değişmez
+        owner = User.query.one()
+        owner.telegram_chat_id = "111"
+        db.session.commit()
+        upd = [{"update_id": 5, "message": {"text": f"/start {setting.staff_tg_token}", "chat": {"id": 222, "first_name": "Doğa"}}}]
+        self.app.config["TELEGRAM_BOT_TOKEN"] = "x"
+        with mock.patch("notifications.telegram.get_updates", return_value=upd), \
+             mock.patch("notifications.telegram.send_message") as sent:
+            worker.poll_telegram_binds(self.app)
+            worker.poll_telegram_binds(self.app)   # aynı güncelleme tekrar gelse de çift kayıt olmaz
+        self.assertIn("personel bildirimleri açıldı", sent.call_args_list[0].args[2])
+        self.assertEqual(StaffChat.query.count(), 1)
+        self.assertEqual(StaffChat.query.one().name, "Doğa")
+        self.assertEqual(db.session.get(User, owner.id).telegram_chat_id, "111")
+        self.assertEqual(menu.staff_targets(owner.id), ["111", "222"])
+        self.assertIn("Doğa", self.staff.get("/panel/menu/personel").get_data(as_text=True))
+        # sipariş ve çağrı herkese gider
+        self.app.config["TESTING"] = False
+        t = MenuTable.query.filter_by(name="Masa 1").one()
+        latte = MenuItem.query.filter_by(name="Latte").one()
+        with mock.patch("notifications.telegram.send_message") as sent, \
+             mock.patch("threading.Thread", side_effect=lambda target, **kw: mock.Mock(start=target)):
+            menu.notify_owner(menu.create_order(t, {"items": [{"id": latte.id, "qty": 1}]}, "dz"))
+        self.app.config["TESTING"] = True
+        self.assertEqual(sorted(c.args[1] for c in sent.call_args_list), ["111", "222"])
+        # link yenile: eski link çalışmaz; kaldır
+        old = setting.staff_tg_token
+        self._post("/panel/menu/personel", {"action": "renew"}, page="/panel/menu/personel")
+        db.session.expire_all()
+        self.assertNotEqual(MenuSetting.query.one().staff_tg_token, old)
+        self.assertEqual(menu.bind_staff_chat(old, "333", "X"), (None, False))
+        self._post("/panel/menu/personel", {"action": "remove", "id": str(StaffChat.query.one().id)}, page="/panel/menu/personel")
+        self.assertEqual(StaffChat.query.count(), 0)
+
 if __name__ == "__main__":
     unittest.main()

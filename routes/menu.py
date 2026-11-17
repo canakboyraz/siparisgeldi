@@ -245,6 +245,33 @@ def send_adisyo(order_id):
                     else url_for("menu.orders"))
 
 
+@menu_bp.route("/personel", methods=["GET", "POST"])
+@login_required
+def staff():
+    """Baristanın telefonuna masa siparişi / garson çağrısı bildirimi (Telegram)."""
+    from models import StaffChat
+    setting = menu.get_setting(current_user, create=True)
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "renew":
+            setting.staff_tg_token = None
+            menu.staff_link_token(setting)
+            flash("Yeni personel linki oluşturuldu; eski link artık çalışmaz. Bağlı personel bildirim almaya devam eder.", "success")
+        elif action == "remove":
+            row = StaffChat.query.filter_by(id=request.form.get("id", type=int), user_id=current_user.id).first()
+            if row:
+                db.session.delete(row)
+                flash(f"{row.name or 'Personel'} artık bildirim almayacak.", "success")
+        db.session.commit()
+        return redirect(url_for("menu.staff"))
+    menu.staff_link_token(setting)
+    db.session.commit()
+    bot = current_app.config.get("TELEGRAM_BOT_USERNAME", "")
+    link = f"https://t.me/{bot}?start={setting.staff_tg_token}" if bot else ""
+    chats = StaffChat.query.filter_by(user_id=current_user.id).order_by(StaffChat.id).all()
+    return render_template("menu/staff.html", link=link, chats=chats, owner_linked=bool(current_user.telegram_chat_id))
+
+
 @menu_bp.post("/hesap/<int:table_id>/kapat")
 @login_required
 def close_account(table_id):

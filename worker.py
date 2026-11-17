@@ -449,6 +449,22 @@ def poll_telegram_binds(app):
             if not chat_id:
                 continue
 
+            if link_token and link_token.startswith("p_"):
+                # Personel: yalnız masa siparişi ve garson çağrısı bildirimleri
+                import menu as qr_menu
+                chat = (upd.get("message") or {}).get("chat") or {}
+                who = " ".join(x for x in (chat.get("first_name"), chat.get("last_name")) if x) or chat.get("title") or ""
+                setting, created = qr_menu.bind_staff_chat(link_token, chat_id, who)
+                if setting:
+                    biz = setting.title or "işletme"
+                    telegram.send_message(bot_token, chat_id,
+                        f"✅ <b>{biz}</b> personel bildirimleri açıldı.\n\nQR menüden gelen masa siparişleri ve "
+                        f"garson çağrıları artık buraya da gelecek. 🔔" if created else
+                        f"ℹ️ Bu sohbet zaten <b>{biz}</b> personel bildirimlerine bağlı.")
+                    print(f"[TG STAFF] user={setting.user_id} ↔ chat={chat_id}")
+                    continue
+                # eşleşmediyse sahibin bağlama linki olabilir (rastgele token "p_" ile başlayabilir) → aşağıda dene
+
             if link_token:
                 user = User.query.filter_by(telegram_link_token=link_token).first()
                 if user:

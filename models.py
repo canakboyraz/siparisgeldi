@@ -624,6 +624,19 @@ class MenuSetting(db.Model):
     adisyo_send = db.Column(db.String(10), default="off")      # off | accept (Hazırlanıyor'a basınca açık hesaba yaz)
     adisyo_tables = db.Column(db.Text)                          # son çekilen Adisyo masa listesi (JSON)
     calls_open = db.Column(db.Boolean, default=True)            # masadan "Garson çağır / Hesabı iste"
+    staff_tg_token = db.Column(db.String(40), unique=True, index=True)  # personel Telegram bağlama linki
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class StaffChat(db.Model):
+    """Masa siparişi ve garson çağrısı bildirimlerini alan personel Telegram sohbeti (ciro/rapor gitmez)."""
+    __tablename__ = "staff_chats"
+    __table_args__ = (db.UniqueConstraint("user_id", "chat_id", name="uq_staff_chat"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    chat_id = db.Column(db.String(50), nullable=False)
+    name = db.Column(db.String(80))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
