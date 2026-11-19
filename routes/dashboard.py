@@ -1924,10 +1924,67 @@ def product_cost_entry():
                             .order_by(DailyAdvertisingExpense.day.desc())
                             .paginate(page=advertising_page, per_page=15, error_out=False))
     commissions = {row.platform: row.percentage for row in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
-    return render_template("dashboard/product_cost_entry.html", products=missing,
+    suggestions = cost_suggestions(missing, existing)
+    return render_template("dashboard/product_cost_entry.html", products=missing, suggestions=suggestions,
                            platform_expenses=platform_expenses, order_counts=order_counts,
                            advertising_expenses=advertising_expenses, commissions=commissions,
                            today=datetime.now(TURKEY_TZ).date().isoformat())
+
+
+_COST_TR = str.maketrans("çğıöşüâîû", "cgiosuaiu")
+_COST_SIZE = {"buyuk", "kucuk", "orta", "l", "m", "s", "xl", "small", "medium", "large", "double", "tek", "cift"}
+_COST_FILLER = {"ve", "ile", "adet", "porsiyon", "boy", "bardak", "menu", "menusu"}
+
+
+def _cost_tokens(name: str) -> list:
+    text = (name or "").replace("İ", "i").replace("I", "ı").casefold().translate(_COST_TR)
+    text = re.sub(r"\d+\s*(ml|cl|lt|l|gr|g|oz)\b", " ", text)
+    words = []
+    for w in re.sub(r"[^a-z0-9 ]+", " ", text).split():
+        if w == "iced":
+            w = "ice"
+        if w not in _COST_FILLER:
+            words.append(w)
+    return words
+
+
+def cost_suggestions(missing: list, existing: list) -> dict:
+    """Maliyeti olmayan ürünler için daha önce girilmiş benzer adlı ürünün maliyetini önerir.
+    Dönüş: {eksik_ad: {"name": benzer ürün, "cost": maliyet, "exact": boy farkı yok mu}}"""
+    from difflib import SequenceMatcher
+    known = []
+    for row in existing:
+        if row.unit_cost is None or not row.product_name:
+            continue
+        tokens = _cost_tokens(row.product_name)
+        if tokens:
+            known.append((row, tokens, " ".join(t for t in tokens if t not in _COST_SIZE)))
+    out = {}
+    for name in missing:
+        tokens = _cost_tokens(name)
+        core = " ".join(t for t in tokens if t not in _COST_SIZE)
+        if not core:
+            continue
+        best, best_score = None, 0.0
+        for row, row_tokens, row_core in known:
+            if not row_core:
+                continue
+            if row_core == core:
+                score = 1.0 if row_tokens == tokens else 0.95
+            else:
+                score = SequenceMatcher(None, core, row_core).ratio()
+                a, b = set(core.split()), set(row_core.split())
+                if a and b and (a <= b or b <= a):
+                    score = max(score, 0.82)
+            if ("ice" in tokens) != ("ice" in row_tokens):
+                score = min(score, 0.6)          # sıcak ↔ buzlu ürün birbirine önerilmesin
+            if score > best_score:
+                best, best_score = (row, row_tokens), score
+        if best and best_score >= 0.82:
+            row, row_tokens = best
+            out[name] = {"name": row.product_name, "cost": round(float(row.unit_cost), 2),
+                         "exact": row_tokens == tokens or (best_score >= 0.95 and set(row_tokens) == set(tokens))}
+    return out
 
 
 def _cost_product_category(name: str) -> str:
