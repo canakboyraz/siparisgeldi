@@ -1743,6 +1743,27 @@ def product_costs():
                            today=datetime.now(TURKEY_TZ).date().isoformat())
 
 
+@dashboard_bp.route("/menu-analizi")
+@login_required
+def menu_analysis():
+    """Menü mühendisliği (ürün sınıfları) ve günlük hazırlık tahmini."""
+    import menu_insights
+    import profit_report
+    today = datetime.now(TURKEY_TZ).date()
+    days = request.args.get("gun", 30, type=int)
+    if days not in (7, 14, 30, 60, 90):
+        days = 30
+    end_day = today - timedelta(days=1)
+    start_day = end_day - timedelta(days=days - 1)
+    target = request.args.get("hedef", "bugun")
+    target_day = today + timedelta(days=1) if target == "yarin" else today
+    allowed = _is_pro_user() or _can_use_multi_platform()
+    eng = menu_insights.engineering(current_user.id, start_day, end_day) if allowed else None
+    fc = menu_insights.forecast(current_user.id, target_day) if allowed else None
+    return render_template("dashboard/menu_analysis.html", eng=eng, fc=fc, days=days, target=target,
+                           allowed=allowed, tl=profit_report.tl)
+
+
 @dashboard_bp.route("/kar-karnesi", methods=["GET", "POST"])
 @login_required
 def profit_card():

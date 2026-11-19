@@ -126,6 +126,7 @@ def compute(user_id: int, start_day, end_day) -> dict:
         "top_products": sorted([p for p in costed if p["profit"] > 0], key=lambda p: -p["profit"])[:3],
         "loss_products": [dict(p, orders=sorted(p["orders"], key=lambda o: o["profit"])) for p in sorted(
             [p for p in costed if p["profit"] < 0 and p["quantity"] >= LOSS_MIN_QUANTITY], key=lambda p: p["profit"])],
+        "all_products": product_rows,
         "uncosted_count": len(uncosted),
         "uncosted_revenue_share": uncosted_revenue / revenue * 100 if revenue else 0,
         "costs_complete": bool(product_rows) and not uncosted,

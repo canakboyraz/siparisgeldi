@@ -1,0 +1,83 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Menü analizi · SiparişGeldi{% endblock %}
+{% block panel %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Menü analizi</h1>
+    <p class="muted" style="margin:0">Hangi ürün kazandırıyor, hangisi yoruyor — ve bugün neyi ne kadar hazırlamalı.</p>
+  </div>
+</div>
+
+{% if not allowed %}
+<div class="card empty"><strong>Menü analizi Pro'da.</strong><p class="muted">Ürünlerini Yıldız / Beygir / Bilmece / Zayıf olarak ayırır ve günlük hazırlık önerisi verir.</p>
+  <a class="btn btn-primary" href="{{ url_for('dashboard.subscription') }}">Pro'ya geç</a></div>
+{% else %}
+
+{# ---------------- HAZIRLIK TAHMİNİ ---------------- #}
+<div class="card ma-forecast">
+  <div class="section-head">
+    <div>
+      <div class="card-title">{{ icon('bolt', 18) }}Hazırlık tahmini · {{ fc.target.strftime('%d.%m.%Y') }} {{ ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'][fc.target.weekday()] }}</div>
+      <p class="muted" style="margin:.2rem 0 0">Geçen haftanın aynı günü ({{ fc.days.last_week.strftime('%d.%m') }}) temel alınır, dünkü satış eğilimiyle ({{ fc.days.yesterday.strftime('%d.%m') }}) düzeltilir.</p>
+    </div>
+    <form method="get" class="inline"><input type="hidden" name="gun" value="{{ days }}">
+      <div class="seg">
+        <button class="btn btn-sm {{ 'btn-primary' if target != 'yarin' else 'btn-ghost' }}" name="hedef" value="bugun">Bugün</button>
+        <button class="btn btn-sm {{ 'btn-primary' if target == 'yarin' else 'btn-ghost' }}" name="hedef" value="yarin">Yarın</button>
+      </div>
+    </form>
+  </div>
+  {% set pct = ((fc.trend - 1) * 100)|round|int %}
+  <div class="ma-trend">
+    <div><span class="muted">Dün ({{ fc.days.yesterday.strftime('%d.%m') }})</span><b>{{ '%.0f'|format(fc.yesterday_total) }} ürün</b></div>
+    <div><span class="muted">Geçen hafta aynı gün ({{ fc.days.yesterday_last_week.strftime('%d.%m') }})</span><b>{{ '%.0f'|format(fc.yesterday_last_week_total) }} ürün</b></div>
+    <div><span class="muted">Eğilim</span><b class="{{ 'pc-pos' if pct > 0 else 'pc-neg' if pct < 0 }}">{{ '+' if pct > 0 }}{{ pct }}%</b>{% if fc.raw_trend != fc.trend %}<small class="muted">(±%30 ile sınırlandı)</small>{% endif %}</div>
+  </div>
+  {% if not fc.rows %}
+    <div class="empty">Karşılaştırılacak satış yok.</div>
+  {% else %}
+  <div class="table-wrap ma-wrap"><table class="ma-table">
+    <thead><tr><th>Ürün</th><th>Geçen hafta {{ fc.days.last_week.strftime('%d.%m') }}</th><th>Dün</th><th>Öneri</th></tr></thead>
+    <tbody>{% for r in fc.rows %}<tr>
+      <td>{{ r.name }}</td><td>{{ '%.0f'|format(r.last_week) }}</td>
+      <td>{{ '%.0f'|format(r.yesterday) }}{% if r.delta > 0 %} <span class="pc-change up">▲</span>{% elif r.delta < 0 %} <span class="pc-change down">▼</span>{% endif %}</td>
+      <td><b>{{ r.suggestion }}</b></td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="hint">Öneri = geçen haftanın aynı günündeki adet × dünkü eğilim (yukarı yuvarlanır). Geçen hafta satılmayıp dün satılan ürünlerde dünkü adet gösterilir. Bayram, kampanya, hava gibi özel günlerde kendi tecrübenle düzelt.</p>
+  {% endif %}
+</div>
+
+{# ---------------- MENÜ MÜHENDİSLİĞİ ---------------- #}
+<div class="card ma-eng">
+  <div class="section-head">
+    <div>
+      <div class="card-title">{{ icon('trend', 18) }}Menü mühendisliği</div>
+      <p class="muted" style="margin:.2rem 0 0">{{ eng.start.strftime('%d.%m.%Y') }} – {{ eng.end.strftime('%d.%m.%Y') }} · komisyon ve ürün maliyeti sonrası birim kâr</p>
+    </div>
+    <form method="get" class="inline"><input type="hidden" name="hedef" value="{{ target }}">
+      <select name="gun" onchange="this.form.submit()">{% for d in (7, 14, 30, 60, 90) %}<option value="{{ d }}" {{ 'selected' if d == days }}>Son {{ d }} gün</option>{% endfor %}</select>
+    </form>
+  </div>
+  {% if not eng.items %}
+    <div class="empty">Bu dönemde maliyeti girilmiş ürün satışı yok.</div>
+  {% else %}
+  <p class="hint" style="margin-top:0">Popüler sayılma eşiği: <b>{{ '%.0f'|format(eng.pop_threshold) }} adet</b> · kârlı sayılma eşiği: birim kâr <b>{{ tl(eng.margin_threshold) }}</b> (dönem ortalaması).</p>
+  <div class="ma-grid">
+    {% for key in ('star', 'puzzle', 'horse', 'dog') %}{% set c = eng.classes[key] %}{% set items = eng.groups[key] %}
+    <section class="ma-box ma-{{ key }}">
+      <header><span class="ma-ic">{{ c.icon }}</span><div><b>{{ c.label }}</b> <span class="muted">{{ items|length }} ürün</span><p>{{ c.tip }}</p></div></header>
+      {% if items %}<table><thead><tr><th>Ürün</th><th>Adet</th><th>Birim kâr</th><th>Toplam</th></tr></thead><tbody>
+        {% for i in items %}<tr><td>{{ i.name }}</td><td>{{ '%.0f'|format(i.quantity) }}</td><td class="{{ 'pc-neg' if i.unit_profit < 0 }}">{{ tl(i.unit_profit) }}</td><td class="{{ 'pc-neg' if i.profit < 0 }}">{{ tl(i.profit) }}</td></tr>{% endfor %}
+      </tbody></table>{% else %}<p class="muted ma-none">Bu grupta ürün yok.</p>{% endif %}
+    </section>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if eng.uncosted %}
+  <div class="account-banner warn" style="margin-top:1rem"><span>{{ icon('alert', 17) }}{{ eng.uncosted|length }} ürünün maliyeti girilmediği için analize katılmadı: {{ eng.uncosted[:6]|map(attribute='name')|join(', ') }}{% if eng.uncosted|length > 6 %} ve diğerleri{% endif %}.</span>
+    <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.product_cost_entry') }}">Maliyet gir</a></div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

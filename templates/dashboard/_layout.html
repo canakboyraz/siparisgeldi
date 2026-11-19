@@ -5,7 +5,7 @@
   {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.trendyolgo_market_setup', 'dashboard.migros_setup', 'dashboard.yemeksepeti_setup', 'adisyo.setup'] %}
   {% set ecommerce_endpoints = ['dashboard.trendyol_marketplace_setup', 'dashboard.hepsiburada_setup'] %}
   {% set contact_endpoints = ['dashboard.connect_telegram', 'dashboard.reset_telegram', 'dashboard.connect_whatsapp'] %}
-  {% set cost_endpoints = ['dashboard.profit_card', 'dashboard.product_costs', 'dashboard.product_cost_entry', 'dashboard.monthly_expenses', 'dashboard.reports', 'dashboard.analytics'] %}
+  {% set cost_endpoints = ['dashboard.profit_card', 'dashboard.product_costs', 'dashboard.product_cost_entry', 'dashboard.monthly_expenses', 'dashboard.reports', 'dashboard.analytics', 'dashboard.menu_analysis'] %}
   <aside class="sidebar" id="app-nav" aria-label="Menü">
     <div class="sheet-grabber" aria-hidden="true"><span></span></div>
     <div class="sidebar-head">
@@ -21,6 +21,7 @@
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.profit_card') }}" class="{{ 'active' if request.endpoint=='dashboard.profit_card' }}">Kâr karnesi</a>
           <a href="{{ url_for('dashboard.product_costs') }}" class="{{ 'active' if request.endpoint=='dashboard.product_costs' }}">Kârlılık</a>
+          <a href="{{ url_for('dashboard.menu_analysis') }}" class="{{ 'active' if request.endpoint=='dashboard.menu_analysis' }}">Menü analizi</a>
           <a href="{{ url_for('dashboard.product_cost_entry') }}" class="{{ 'active' if request.endpoint=='dashboard.product_cost_entry' }}">Maliyet girişi</a>
           <a href="{{ url_for('dashboard.monthly_expenses') }}" class="{{ 'active' if request.endpoint=='dashboard.monthly_expenses' }}">Aylık giderler</a>
           <a href="{{ url_for('dashboard.reports') }}" class="{{ 'active' if request.endpoint=='dashboard.reports' }}">Raporlar</a>
