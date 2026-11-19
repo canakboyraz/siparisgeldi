@@ -53,14 +53,20 @@ def compute(user_id: int, start_day, end_day) -> dict:
         return platforms.setdefault(platform, {"platform": platform, "orders": 0, "revenue": 0.0,
                                                "commission": 0.0, "cost": 0.0, "other": 0.0})
 
-    def add_line(platform, name, quantity, revenue):
+    def add_line(platform, name, quantity, revenue, order=None):
         rate = rates.get(platform, 0) / 100
         unit_cost = costs.get(_norm(name))
         prow = platform_row(platform)
         prow["revenue"] += revenue
         prow["commission"] += revenue * rate
         product = products.setdefault(_norm(name), {"name": name, "quantity": 0.0, "revenue": 0.0,
-                                                    "commission": 0.0, "cost": 0.0, "has_cost": unit_cost is not None})
+                                                    "commission": 0.0, "cost": 0.0, "has_cost": unit_cost is not None,
+                                                    "orders": []})
+        if order is not None:
+            line_profit = revenue - revenue * rate - (quantity * unit_cost if unit_cost is not None else 0)
+            product["orders"].append({"id": order.id, "code": order.order_number or order.external_id,
+                                      "platform": platform, "created_at": order.created_at,
+                                      "quantity": quantity, "revenue": revenue, "profit": line_profit})
         product["quantity"] += quantity
         product["revenue"] += revenue
         product["commission"] += revenue * rate
@@ -75,7 +81,7 @@ def compute(user_id: int, start_day, end_day) -> dict:
             continue
         platform_row(order.platform)["orders"] += 1
         for line in _cost_product_lines(order.platform, _parse_raw_json(order.raw_json)):
-            add_line(order.platform, line["name"], line["quantity"], line["revenue"])
+            add_line(order.platform, line["name"], line["quantity"], line["revenue"], order)
 
     for expense in per_order:
         if expense.platform == "genel":
@@ -118,8 +124,8 @@ def compute(user_id: int, start_day, end_day) -> dict:
         "margin": profit / revenue * 100 if revenue else 0,
         "platforms": sorted(platforms.values(), key=lambda p: -p["revenue"]),
         "top_products": sorted([p for p in costed if p["profit"] > 0], key=lambda p: -p["profit"])[:3],
-        "loss_products": sorted([p for p in costed if p["profit"] < 0 and p["quantity"] >= LOSS_MIN_QUANTITY],
-                                key=lambda p: p["profit"]),
+        "loss_products": [dict(p, orders=sorted(p["orders"], key=lambda o: o["profit"])) for p in sorted(
+            [p for p in costed if p["profit"] < 0 and p["quantity"] >= LOSS_MIN_QUANTITY], key=lambda p: p["profit"])],
         "uncosted_count": len(uncosted),
         "uncosted_revenue_share": uncosted_revenue / revenue * 100 if revenue else 0,
         "costs_complete": bool(product_rows) and not uncosted,

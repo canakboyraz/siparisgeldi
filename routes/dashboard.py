@@ -3315,11 +3315,20 @@ def _cost_product_lines(platform, data):
             lines.append({"key": " ".join(name.casefold().split()), "name": name,
                           "quantity": float(item.get("quantity") or 0), "revenue": float(item.get("amount") or 0)})
     elif platform == ys.PLATFORM:
+        # Fiyat "pricing" altında satır toplamı olarak gelir (resmi API ve PosEntegra).
         for item in ys.items(data):
             qty = ys.item_quantity(item)
             name = ys.item_name(item)
-            lines.append({"key": str(item.get("id") or name), "name": name, "quantity": qty,
-                          "revenue": float(item.get("total_price") or item.get("unit_price") or 0) * qty})
+            revenue = ys.item_price(item)
+            if not revenue and (item.get("total_price") or item.get("unit_price")):
+                revenue = float(item.get("total_price") or (item.get("unit_price") or 0) * qty)
+            lines.append({"key": str(item.get("id") or name), "name": name, "quantity": qty, "revenue": revenue})
+        # Satır fiyatı hiç yoksa sipariş toplamını adetlere göre dağıt.
+        total = ys.total_price(data)
+        if lines and total and not sum(line["revenue"] for line in lines):
+            quantity_total = sum(line["quantity"] for line in lines) or 1
+            for line in lines:
+                line["revenue"] = total * line["quantity"] / quantity_total
     else:
         for item in data.get("lines") or []:
             qty = tgo._line_quantity(item)

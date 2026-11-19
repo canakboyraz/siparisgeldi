@@ -1967,3 +1967,8 @@ body:has(.qm){background:#FAF8F5}
 .cost-sug{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.35rem;font-size:.85rem;color:var(--muted,#5A6660)}
 .cost-sug b{color:var(--ink,#13231D);font-weight:600}
 .cost-sug .btn{padding:.2rem .6rem}
+
+.pc-loss-orders{display:flex;flex-direction:column;gap:.25rem;margin-top:.35rem}
+.pc-loss-orders a{font-size:.8rem;font-weight:600;color:var(--brand);text-decoration:none}
+.pc-loss-orders a:hover{text-decoration:underline}
+.pc-loss-orders small{display:block;font-weight:400;color:var(--muted)}
