@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 import pytz
 
 from extensions import db
-from models import (Integration, Order, ProductCost, PlatformExpense, DailyAdvertisingExpense,
+from models import (Integration, Order, ProductCost, ProductAlias, PlatformExpense, DailyAdvertisingExpense,
                     MonthlyExpense, PlatformCommission, AdisyoReport, AdisyoConnection)
 from integrations import getir, hepsiburada as hb, migros, posentegra as pe, trendyol_marketplace as tmp, trendyolgo as tgo, yemeksepeti as ys
 from notifications.dispatcher import send_to_user, record_whatsapp_result
@@ -1530,6 +1530,7 @@ def product_costs():
         start_date, end_date = "", ""
     rows = ProductCost.query.filter_by(user_id=current_user.id).all()
     costs = {" ".join((r.product_name or "").casefold().split()): r for r in rows}
+    aliases = _product_aliases(current_user.id)
     products = {}
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since, Order.created_at < until).all():
         if platform_filter and order.platform not in platform_filter:
@@ -1538,7 +1539,7 @@ def product_costs():
         if order.status in PROBLEM_STATUSES:
             continue
         data = _parse_raw_json(order.raw_json)
-        for item in _cost_product_lines(order.platform, data):
+        for item in _cost_product_lines(order.platform, data, aliases):
             key = (order.platform, item["key"])
             row = products.setdefault(key, {"platform": order.platform, "key": item["key"], "name": item["name"], "quantity": 0.0, "revenue": 0.0})
             row["quantity"] += item["quantity"]
@@ -1603,7 +1604,7 @@ def product_costs():
         row["orders"] += 1
         row["platform_orders"][order.platform] = row["platform_orders"].get(order.platform, 0) + 1
         data = _parse_raw_json(order.raw_json)
-        for item in _cost_product_lines(order.platform, data):
+        for item in _cost_product_lines(order.platform, data, aliases):
             row["revenue"] += item["revenue"]
             row["platform_revenue"][order.platform] = row["platform_revenue"].get(order.platform, 0.0) + item["revenue"]
             saved = costs.get(" ".join(item["name"].casefold().split()))
@@ -1924,10 +1925,11 @@ def product_cost_entry():
 
     since = datetime.utcnow() - timedelta(days=365)
     names = set()
+    aliases = _product_aliases(current_user.id)
     for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
         if _is_cancelled_order(order) or _is_refunded_order(order):
             continue
-        for item in _cost_product_lines(order.platform, _parse_raw_json(order.raw_json)):
+        for item in _cost_product_lines(order.platform, _parse_raw_json(order.raw_json), aliases):
             names.add(" ".join(item["name"].casefold().split()))
     existing = ProductCost.query.filter_by(user_id=current_user.id).all()
     cost_names = {" ".join((row.product_name or "").casefold().split()) for row in existing}
@@ -1991,6 +1993,115 @@ def saved_costs_update():
         flash(f"{invalid} değer geçersiz olduğu için atlandı.", "warning")
     flash(f"{changed} ürün maliyeti güncellendi." if changed else "Değişiklik yapılmadı.", "success" if changed else "info")
     return redirect(url_for("dashboard.product_cost_entry") + "#kayitli-maliyetler")
+
+
+def alias_suggestions(names: list) -> list:
+    """Aynı ürün olabilecek ad gruplarını önerir (boy ve sıcak/buzlu farkı olanları ayırır)."""
+    from difflib import SequenceMatcher
+    info = []
+    for name in names:
+        tokens = _cost_tokens(name)
+        if not tokens:
+            continue
+        size = frozenset(t for t in tokens if t in _COST_SIZE)
+        core = [t for t in tokens if t not in _COST_SIZE]
+        info.append({"name": name, "ice": "ice" in tokens, "size": size,
+                     "set": frozenset(core), "joined": "".join(sorted(core)), "flat": "".join(core)})
+    parent = list(range(len(info)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, a in enumerate(info):
+        for j in range(i + 1, len(info)):
+            b = info[j]
+            if a["ice"] != b["ice"] or a["size"] != b["size"] or not a["set"] or not b["set"]:
+                continue
+            same = (a["set"] == b["set"] or a["flat"] == b["flat"] or a["joined"] == b["joined"]
+                    or SequenceMatcher(None, a["flat"], b["flat"]).ratio() >= 0.86)
+            if same:
+                parent[find(i)] = find(j)
+    groups = {}
+    for i, a in enumerate(info):
+        groups.setdefault(find(i), []).append(a["name"])
+    return sorted([sorted(g, key=str.casefold) for g in groups.values() if len(g) > 1], key=lambda g: g[0].casefold())
+
+
+@dashboard_bp.route("/urun-eslestirme", methods=["GET", "POST"])
+@login_required
+def product_aliases():
+    """Platformlarda farklı adla gelen aynı ürünü tek ürün olarak birleştirme."""
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "unlink":
+            row = ProductAlias.query.filter_by(user_id=current_user.id, id=request.form.get("alias_id", type=int)).first()
+            if row:
+                name = row.alias_name
+                db.session.delete(row)
+                db.session.commit()
+                flash(f"“{name}” artık ayrı ürün olarak sayılacak.", "success")
+            return redirect(url_for("dashboard.product_aliases"))
+        selected = [n.strip()[:180] for n in request.form.getlist("names") if n.strip()]
+        canonical = (request.form.get("canonical") or "").strip()[:180]
+        if not canonical and selected:
+            canonical = selected[0]
+        names = {_norm_product(n): n for n in selected}
+        canonical_key = _norm_product(canonical)
+        names.pop(canonical_key, None)
+        if not canonical or not names:
+            flash("Birleştirmek için en az iki ürün seç ve ana adı belirle.", "warning")
+            return redirect(url_for("dashboard.product_aliases"))
+        existing = {a.alias_key: a for a in ProductAlias.query.filter_by(user_id=current_user.id).all()}
+        # Ana ad başka bir gruba bağlıysa o grubu çöz; seçilen adların altındaki eşleşmeleri de yeni ana ada taşı.
+        if canonical_key in existing:
+            db.session.delete(existing.pop(canonical_key))
+        for a in existing.values():
+            if _norm_product(a.canonical_name) in names:
+                a.canonical_name = canonical
+        for key, name in names.items():
+            row = existing.get(key) or ProductAlias(user_id=current_user.id, alias_key=key)
+            row.alias_name, row.canonical_name = name, canonical
+            db.session.add(row)
+        # Ana ürünün maliyeti yoksa eşleşen adlardan birinin maliyetini kullan.
+        costs = {_norm_product(c.product_name): c for c in ProductCost.query.filter_by(user_id=current_user.id).all()}
+        copied = None
+        if canonical_key not in costs:
+            donor = next((costs[k] for k in names if k in costs), None)
+            if donor:
+                db.session.add(ProductCost(user_id=current_user.id, platform="all", product_key=canonical_key,
+                                           product_name=canonical, unit_cost=donor.unit_cost))
+                copied = donor
+        db.session.commit()
+        msg = f"{len(names)} ürün “{canonical}” altında birleştirildi."
+        if copied:
+            msg += f" Maliyet olarak “{copied.product_name}” için girdiğin {copied.unit_cost:.2f} TL kullanıldı."
+        flash(msg, "success")
+        return redirect(url_for("dashboard.product_aliases"))
+
+    since = datetime.utcnow() - timedelta(days=365)
+    seen = {}
+    for order in Order.query.filter(Order.user_id == current_user.id, Order.created_at >= since).all():
+        if _is_cancelled_order(order) or _is_refunded_order(order):
+            continue
+        for item in _raw_cost_product_lines(order.platform, _parse_raw_json(order.raw_json)):
+            key = _norm_product(item["name"])
+            row = seen.setdefault(key, {"name": item["name"], "quantity": 0.0, "platforms": set()})
+            row["quantity"] += item["quantity"]
+            row["platforms"].add(order.platform)
+    alias_rows = ProductAlias.query.filter_by(user_id=current_user.id).order_by(ProductAlias.canonical_name, ProductAlias.alias_name).all()
+    alias_keys = {a.alias_key for a in alias_rows}
+    groups = {}
+    for a in alias_rows:
+        groups.setdefault(a.canonical_name, []).append(a)
+    products = sorted([dict(v, key=k, linked=k in alias_keys) for k, v in seen.items()],
+                      key=lambda r: r["name"].casefold())
+    free_names = [p["name"] for p in products if not p["linked"]]
+    suggestions = alias_suggestions(free_names)
+    return render_template("dashboard/product_aliases.html", products=products, groups=groups,
+                           suggestions=suggestions, quantities={k: v["quantity"] for k, v in seen.items()})
 
 
 _COST_TR = str.maketrans("çğıöşüâîû", "cgiosuaiu")
@@ -3287,8 +3398,28 @@ def _report_products(orders: list, max_items: int = 15) -> list:
     ]
 
 
-def _cost_product_lines(platform, data):
-    """Farklı platform payload'larını maliyet ekranının ortak satırlarına çevirir."""
+def _norm_product(name):
+    return " ".join((name or "").casefold().split())
+
+
+def _product_aliases(user_id):
+    """{normalize platform adı: ana ürün adı}"""
+    return {a.alias_key: a.canonical_name for a in ProductAlias.query.filter_by(user_id=user_id).all()}
+
+
+def _cost_product_lines(platform, data, aliases=None):
+    """Farklı platform payload'larını maliyet ekranının ortak satırlarına çevirir.
+    aliases verilirse eşleştirilmiş ürünler ana adla döner."""
+    lines = _raw_cost_product_lines(platform, data)
+    if aliases:
+        for line in lines:
+            canonical = aliases.get(_norm_product(line["name"]))
+            if canonical:
+                line["name"], line["key"] = canonical, _norm_product(canonical)
+    return lines
+
+
+def _raw_cost_product_lines(platform, data):
     lines = []
     if platform == "migros":
         source = data.get("items") or []

@@ -40,7 +40,7 @@ def compute(user_id: int, start_day, end_day) -> dict:
     from models import (AdisyoConnection, AdisyoReport, DailyAdvertisingExpense, Integration,
                         Order, PlatformCommission, PlatformExpense, ProductCost)
     from routes.dashboard import (_cost_product_lines, _is_cancelled_order, _is_refunded_order,
-                                  _parse_raw_json)
+                                  _parse_raw_json, _product_aliases)
 
     since, until = _utc_bounds(start_day, end_day)
     costs = {_norm(r.product_name): r.unit_cost for r in ProductCost.query.filter_by(user_id=user_id).all()}
@@ -48,6 +48,7 @@ def compute(user_id: int, start_day, end_day) -> dict:
     per_order = [e for e in PlatformExpense.query.filter_by(user_id=user_id, expense_type="per_order").all()]
 
     platforms, products = {}, {}
+    aliases = _product_aliases(user_id)
 
     def platform_row(platform):
         return platforms.setdefault(platform, {"platform": platform, "orders": 0, "revenue": 0.0,
@@ -80,7 +81,7 @@ def compute(user_id: int, start_day, end_day) -> dict:
         if _is_cancelled_order(order) or _is_refunded_order(order):
             continue
         platform_row(order.platform)["orders"] += 1
-        for line in _cost_product_lines(order.platform, _parse_raw_json(order.raw_json)):
+        for line in _cost_product_lines(order.platform, _parse_raw_json(order.raw_json), aliases):
             add_line(order.platform, line["name"], line["quantity"], line["revenue"], order)
 
     for expense in per_order:

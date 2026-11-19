@@ -1,0 +1,83 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Ürün eşleştirme · SiparişGeldi{% endblock %}
+{% block panel %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Ürün eşleştirme</h1>
+    <p class="muted" style="margin:0">Platformlarda farklı adla gelen aynı ürünü birleştir. Maliyet girişi, kâr karnesi, kârlılık ve menü analizi tek ürün olarak hesaplar.</p>
+  </div>
+  <div class="inline"><a class="btn btn-ghost" href="{{ url_for('dashboard.menu_analysis') }}">Menü analizi</a><a class="btn btn-ghost" href="{{ url_for('dashboard.product_cost_entry') }}">Maliyet girişi</a></div>
+</div>
+
+{% if suggestions %}
+<div class="card al-card">
+  <div class="card-title">{{ icon('bolt', 18) }}Önerilen eşleşmeler</div>
+  <p class="muted">Adı çok benzeyen ürünler. Boy (küçük/büyük) ve sıcak/buzlu farkı olanlar önerilmez. Ana adı seçip birleştir.</p>
+  <div class="al-sugs">
+  {% for g in suggestions %}
+    <form method="post" class="al-sug"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="merge">
+      {% for n in g %}{% set q = quantities.get(n.casefold().split()|join(' '), 0) %}
+        <input type="hidden" name="names" value="{{ n }}">
+        <label><input type="radio" name="canonical" value="{{ n }}" {{ 'checked' if loop.first }}> <span>{{ n }}</span> <small class="muted">{{ '%.0f'|format(q) }} adet</small></label>
+      {% endfor %}
+      <button class="btn btn-primary btn-sm" type="submit">Birleştir</button>
+    </form>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if groups %}
+<div class="card al-card">
+  <div class="card-title">{{ icon('list', 18) }}Birleştirilmiş ürünler</div>
+  <div class="al-groups">
+  {% for canonical, rows in groups.items() %}
+    <div class="al-group"><b>{{ canonical }}</b>
+      <div class="al-aliases">{% for a in rows %}
+        <form method="post" class="al-alias"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="unlink"><input type="hidden" name="alias_id" value="{{ a.id }}">
+          <span>{{ a.alias_name }}</span><button class="btn btn-ghost btn-sm" type="submit" title="Ayrı ürün yap">Ayır</button></form>{% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<form method="post" class="card al-card al-manual" id="al-form">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="merge">
+  <div class="saved-cost-head" style="padding:0 0 .6rem">
+    <div><div class="card-title">{{ icon('trend', 18) }}Elle eşleştir</div><p class="muted" style="margin:.2rem 0 0">Aynı ürün olanları işaretle, ana adı seç, birleştir. (Son 1 yılda satılan ürünler)</p></div>
+    <input type="search" id="al-search" placeholder="Ürün ara… (ör. magnolia)" autocomplete="off">
+  </div>
+  <div class="table-wrap al-wrap"><table class="al-table"><thead><tr><th></th><th>Ürün adı (platformdan gelen)</th><th>Adet</th><th>Platform</th></tr></thead><tbody>
+    {% for p in products %}<tr data-name="{{ p.name|lower }}" class="{{ 'is-linked' if p.linked }}">
+      <td><input type="checkbox" name="names" value="{{ p.name }}" {{ 'disabled' if p.linked }} aria-label="{{ p.name }} seç"></td>
+      <td>{{ p.name }}{% if p.linked %} <span class="badge gray">eşleşmiş</span>{% endif %}</td>
+      <td>{{ '%.0f'|format(p.quantity) }}</td>
+      <td class="muted">{% for pl in p.platforms|sort %}{{ platform_label(pl) }}{{ ', ' if not loop.last }}{% endfor %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="al-bar">
+    <span class="muted"><b id="al-count">0</b> ürün seçili</span>
+    <label class="al-canon">Ana ad <select name="canonical" id="al-canon"><option value="">Önce ürün seç</option></select></label>
+    <button class="btn btn-primary" type="submit" id="al-submit" disabled>Seçilenleri birleştir</button>
+  </div>
+</form>
+<script>
+(function () {
+  var form = document.getElementById("al-form"), sel = document.getElementById("al-canon"), btn = document.getElementById("al-submit"), cnt = document.getElementById("al-count");
+  function refresh() {
+    var picked = Array.prototype.map.call(form.querySelectorAll("input[name=names]:checked"), function (i) { return i.value; });
+    var cur = sel.value; sel.innerHTML = "";
+    if (!picked.length) { sel.innerHTML = '<option value="">Önce ürün seç</option>'; }
+    picked.forEach(function (n) { var o = document.createElement("option"); o.value = o.textContent = n; if (n === cur) o.selected = true; sel.appendChild(o); });
+    cnt.textContent = picked.length; btn.disabled = picked.length < 2;
+  }
+  form.addEventListener("change", function (e) { if (e.target.name === "names") refresh(); });
+  var q = document.getElementById("al-search");
+  q.addEventListener("input", function () { var v = q.value.trim().toLocaleLowerCase("tr");
+    form.querySelectorAll("tbody tr").forEach(function (r) { r.hidden = v && r.getAttribute("data-name").toLocaleLowerCase("tr").indexOf(v) < 0 && !r.querySelector("input:checked"); }); });
+  q.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+})();
+</script>
+{% endblock %}

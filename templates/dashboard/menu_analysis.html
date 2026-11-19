@@ -62,7 +62,7 @@
   {% if not eng.items %}
     <div class="empty">Bu dönemde maliyeti girilmiş ürün satışı yok.</div>
   {% else %}
-  <p class="hint" style="margin-top:0">Popüler sayılma eşiği: <b>{{ '%.0f'|format(eng.pop_threshold) }} adet</b> · kârlı sayılma eşiği: birim kâr <b>{{ tl(eng.margin_threshold) }}</b> (dönem ortalaması).</p>
+  <p class="hint" style="margin-top:0">Aynı ürün farklı adlarla mı görünüyor? <a href="{{ url_for('dashboard.product_aliases') }}" style="color:var(--brand);font-weight:600">Ürün eşleştirme</a>'den birleştir. Popüler sayılma eşiği: <b>{{ '%.0f'|format(eng.pop_threshold) }} adet</b> · kârlı sayılma eşiği: birim kâr <b>{{ tl(eng.margin_threshold) }}</b> (dönem ortalaması).</p>
   <div class="ma-grid">
     {% for key in ('star', 'puzzle', 'horse', 'dog') %}{% set c = eng.classes[key] %}{% set items = eng.groups[key] %}
     <section class="ma-box ma-{{ key }}">

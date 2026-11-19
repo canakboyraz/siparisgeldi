@@ -2009,3 +2009,21 @@ body:has(.qm){background:#FAF8F5}
 .ma-dog{border-color:#F2C9C4;background:#FEF5F4}
 .ma-none{margin:.3rem 0 0;font-size:.85rem}
 @media (max-width:760px){.ma-grid,.ma-trend{grid-template-columns:1fr}}
+
+/* Ürün eşleştirme */
+.al-card{margin-bottom:1rem}
+.al-sugs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.7rem;margin-top:.6rem}
+.al-sug{border:1px solid var(--line);border-radius:12px;padding:.7rem .8rem;display:flex;flex-direction:column;gap:.35rem}
+.al-sug label{display:flex;gap:.45rem;align-items:center;font-size:.9rem}
+.al-sug .btn{align-self:flex-start;margin-top:.2rem}
+.al-groups{display:grid;gap:.6rem;margin-top:.6rem}
+.al-group{border:1px solid var(--line);border-radius:12px;padding:.6rem .8rem}
+.al-aliases{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem}
+.al-alias{display:inline-flex;align-items:center;gap:.3rem;background:var(--bg-soft,#F6F5F2);border-radius:999px;padding:.15rem .25rem .15rem .7rem;font-size:.86rem}
+.al-wrap{max-height:520px;overflow:auto}
+.al-table td:first-child{width:2rem}
+.al-table td:nth-child(3){text-align:right}
+.al-table tr.is-linked{opacity:.55}
+.al-bar{position:sticky;bottom:0;display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;justify-content:space-between;padding:.8rem 0 0;background:var(--card,#fff)}
+.al-canon{display:flex;gap:.4rem;align-items:center;font-weight:600}
+.al-canon select{min-width:220px}

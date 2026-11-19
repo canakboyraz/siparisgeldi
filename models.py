@@ -355,6 +355,18 @@ class ProductCost(db.Model):
     __table_args__ = (db.UniqueConstraint("user_id", "platform", "product_key", name="uq_product_cost"),)
 
 
+class ProductAlias(db.Model):
+    """Platformlarda farklı adla gelen aynı ürünü tek ana ada bağlar (rapor/maliyet için)."""
+    __tablename__ = "product_aliases"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    alias_key = db.Column(db.String(180), nullable=False)       # normalize edilmiş platform adı
+    alias_name = db.Column(db.String(180), nullable=False)      # görünen platform adı
+    canonical_name = db.Column(db.String(180), nullable=False)  # ana ürün adı
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "alias_key", name="uq_product_alias"),)
+
+
 class PlatformExpense(db.Model):
     """Platforma ve döneme bağlı paketleme/diğer gider toplamı."""
     __tablename__ = "platform_expenses"
