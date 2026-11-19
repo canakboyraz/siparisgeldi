@@ -260,6 +260,14 @@ footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-s
 .bulk-cost-form{padding:0;overflow:hidden}
 .bulk-cost-form table{min-width:520px}
 .bulk-cost-form input[type=number]{width:150px}
+.saved-cost-card{padding:0;overflow:hidden}
+.saved-cost-head{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap;padding:1.1rem 1.1rem .6rem}
+.saved-cost-head input[type=search]{min-width:240px;padding:.6rem .8rem;border:1px solid var(--line);border-radius:10px;font:inherit}
+.saved-cost-wrap{max-height:520px;overflow:auto}
+.saved-cost-table{min-width:520px}
+.saved-cost-table input[type=number]{width:150px}
+.saved-cost-table input.is-dirty{border-color:var(--brand);background:#fff8ec}
+.saved-cost-empty{padding:1rem 1.1rem}
 .bulk-cost-actions{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.1rem;border-top:1px solid var(--line)}
 .advertising-pagination{justify-content:flex-start;margin-top:.75rem}
 .cost-daily-card .table-wrap{overflow-x:auto}

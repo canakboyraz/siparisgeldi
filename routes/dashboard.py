@@ -1925,10 +1925,51 @@ def product_cost_entry():
                             .paginate(page=advertising_page, per_page=15, error_out=False))
     commissions = {row.platform: row.percentage for row in PlatformCommission.query.filter_by(user_id=current_user.id).all()}
     suggestions = cost_suggestions(missing, existing)
+    saved_costs = sorted(existing, key=lambda r: (r.product_name or "").casefold())
     return render_template("dashboard/product_cost_entry.html", products=missing, suggestions=suggestions,
+                           saved_costs=saved_costs,
                            platform_expenses=platform_expenses, order_counts=order_counts,
                            advertising_expenses=advertising_expenses, commissions=commissions,
                            today=datetime.now(TURKEY_TZ).date().isoformat())
+
+
+@dashboard_bp.route("/maliyet-girisi/kayitli", methods=["POST"])
+@login_required
+def saved_costs_update():
+    """Daha önce girilmiş ürün maliyetlerini düzeltme veya silme."""
+    rows = {row.id: row for row in ProductCost.query.filter_by(user_id=current_user.id).all()}
+    delete_id = request.form.get("delete_id", type=int)
+    if delete_id:
+        row = rows.get(delete_id)
+        if row:
+            name = row.product_name
+            db.session.delete(row)
+            db.session.commit()
+            flash(f"“{name}” maliyeti silindi; ürün yeniden eksik maliyet listesine düşer.", "success")
+        return redirect(url_for("dashboard.product_cost_entry") + "#kayitli-maliyetler")
+    changed, invalid = 0, 0
+    for row_id, row in rows.items():
+        raw = request.form.get(f"saved_cost_{row_id}")
+        if raw is None:
+            continue
+        raw = raw.strip().replace(",", ".")
+        if not raw:
+            continue
+        try:
+            amount = float(raw)
+            if amount < 0 or amount > 1000000:
+                raise ValueError
+        except ValueError:
+            invalid += 1
+            continue
+        if abs((row.unit_cost or 0) - amount) > 0.0001:
+            row.unit_cost = amount
+            changed += 1
+    db.session.commit()
+    if invalid:
+        flash(f"{invalid} değer geçersiz olduğu için atlandı.", "warning")
+    flash(f"{changed} ürün maliyeti güncellendi." if changed else "Değişiklik yapılmadı.", "success" if changed else "info")
+    return redirect(url_for("dashboard.product_cost_entry") + "#kayitli-maliyetler")
 
 
 _COST_TR = str.maketrans("çğıöşüâîû", "cgiosuaiu")
