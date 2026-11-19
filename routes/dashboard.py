@@ -2004,8 +2004,9 @@ def alias_suggestions(names: list) -> list:
         if not tokens:
             continue
         size = frozenset(t for t in tokens if t in _COST_SIZE)
+        weight = bool(re.search(r"\d+\s*(ml|cl|lt|l|gr|g|kg|oz)\b", (name or "").casefold()))
         core = [t for t in tokens if t not in _COST_SIZE]
-        info.append({"name": name, "ice": "ice" in tokens, "size": size,
+        info.append({"name": name, "ice": "ice" in tokens, "size": size, "weight": weight,
                      "set": frozenset(core), "joined": "".join(sorted(core)), "flat": "".join(core)})
     parent = list(range(len(info)))
 
@@ -2018,10 +2019,15 @@ def alias_suggestions(names: list) -> list:
     for i, a in enumerate(info):
         for j in range(i + 1, len(info)):
             b = info[j]
-            if a["ice"] != b["ice"] or a["size"] != b["size"] or not a["set"] or not b["set"]:
+            if (a["ice"] != b["ice"] or a["size"] != b["size"] or a["weight"] != b["weight"]
+                    or not a["set"] or not b["set"]):
                 continue
-            same = (a["set"] == b["set"] or a["flat"] == b["flat"] or a["joined"] == b["joined"]
-                    or SequenceMatcher(None, a["flat"], b["flat"]).ratio() >= 0.86)
+            same = a["set"] == b["set"] or a["flat"] == b["flat"] or a["joined"] == b["joined"]
+            if not same:
+                # Yalnız yazım farkı (karamel/caramel, mangolia/magnolia) eşleşir; farklı aroma/çeşit eşleşmez.
+                only_a, only_b = sorted(a["set"] - b["set"]), sorted(b["set"] - a["set"])
+                same = (len(only_a) == len(only_b) == 1 and len(a["set"]) <= 4
+                        and SequenceMatcher(None, only_a[0], only_b[0]).ratio() >= 0.8)
             if same:
                 parent[find(i)] = find(j)
     groups = {}
