@@ -53,6 +53,7 @@ def public_menu(code):
     data = [{"id": c.id, "name": c.name, "items": [
         {"id": i.id, "name": i.name, "desc": i.description or "", "price": float(i.price or 0),
          "priceText": menu.tl(i.price), "available": bool(i.is_available), "opts": menu.item_options(i),
+         "allergens": menu.item_allergens(i), "kcal": i.calories, "info": i.info or "",
          "img": url_for("menu_public.image", image_id=i.image_id) if i.image_id else ""} for i in items]}
         for c, items in groups]
     response = make_response(render_template(
@@ -410,6 +411,15 @@ def item_form(item_id=None):
             price, error = None, "Fiyatı sayı olarak yaz (ör. 85 ya da 85,50)."
         if len(name) < 2:
             error = "Ürün adını yaz."
+        calories = None
+        raw_kcal = (form.get("calories") or "").strip()
+        if raw_kcal and not error:
+            try:
+                calories = int(float(raw_kcal.replace(",", ".")))
+                if not 0 <= calories <= 5000:
+                    raise ValueError
+            except ValueError:
+                error = "Kaloriyi 0–5000 arası sayı olarak yaz (ör. 320)."
         options_json = None
         if not error:
             try:
@@ -432,7 +442,8 @@ def item_form(item_id=None):
         if error:
             db.session.rollback()
             return render_template("menu/item_form.html", item=item, cats=cats, form=form, error=error, tl=menu.tl,
-                                   options_text=form.get("options", ""), all_groups=menu.categories(current_user)), 400
+                                   options_text=form.get("options", ""), all_groups=menu.categories(current_user),
+                                   allergen_list=menu.ALLERGENS), 400
         if form.get("remove_photo") == "1" and not (upload and upload.filename):
             menu.delete_image(image_id)
             image_id = None
@@ -446,6 +457,9 @@ def item_form(item_id=None):
         item.is_active = form.get("is_active") == "1"
         item.is_available = form.get("is_available") == "1"
         item.options = options_json
+        item.allergens = menu.clean_allergens(form.getlist("allergens"))
+        item.calories = calories
+        item.info = menu.clean(form.get("info"), 200) or None
         others = [i for i in (form.getlist("apply_to", type=int) or []) if i != item.id]
         copied = 0
         if others:
@@ -456,7 +470,8 @@ def item_form(item_id=None):
         return _back(f"k{cat.id}")
     form = {"category_id": request.args.get("kategori", type=int)} if not item else {}
     return render_template("menu/item_form.html", item=item, cats=cats, form=form, error=None, tl=menu.tl,
-                           options_text=menu.options_text(item) if item else "", all_groups=menu.categories(current_user))
+                           options_text=menu.options_text(item) if item else "", all_groups=menu.categories(current_user),
+                           allergen_list=menu.ALLERGENS)
 
 
 @menu_bp.post("/urun/<int:item_id>/sil")

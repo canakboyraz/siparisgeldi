@@ -682,6 +682,9 @@ class MenuItem(db.Model):
     adisyo_product_id = db.Column(db.Integer, index=True)
     adisyo_unit_id = db.Column(db.Integer)
     options = db.Column(db.Text)            # JSON: [{"name","multi","required","choices":[{"name","price"}]}]
+    allergens = db.Column(db.String(200))   # virgüllü anahtarlar: "gluten,sut"
+    calories = db.Column(db.Integer)        # kcal (porsiyon)
+    info = db.Column(db.String(200))        # ek bilgi: gramaj, vegan, içindekiler…
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 

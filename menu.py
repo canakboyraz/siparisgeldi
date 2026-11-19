@@ -1032,3 +1032,24 @@ def send_to_adisyo(order):
     order.adisyo_order_id = str(data.get("orderId") or "")[:40] or None
     db.session.commit()
     return True, f"{order.table_name} siparişi Adisyo'da masanın hesabına eklendi."
+
+
+# Türk Gıda Kodeksi Ek-1'deki 14 alerjen (anahtar, etiket, simge)
+ALLERGENS = [
+    ("gluten", "Gluten", "🌾"), ("sut", "Süt / laktoz", "🥛"), ("yumurta", "Yumurta", "🥚"),
+    ("findik", "Sert kabuklu yemiş", "🌰"), ("yerfistigi", "Yer fıstığı", "🥜"), ("susam", "Susam", "⚪"),
+    ("soya", "Soya", "🫘"), ("balik", "Balık", "🐟"), ("kabuklu", "Kabuklu deniz ürünü", "🦐"),
+    ("yumusakca", "Yumuşakça", "🦑"), ("kereviz", "Kereviz", "🥬"), ("hardal", "Hardal", "🟡"),
+    ("sulfit", "Sülfit", "🍷"), ("acibakla", "Acı bakla (lupin)", "🌼"),
+]
+ALLERGEN_KEYS = {k for k, _, _ in ALLERGENS}
+
+
+def clean_allergens(values):
+    keys = [k for k, _, _ in ALLERGENS if k in set(values or [])]
+    return ",".join(keys) or None
+
+
+def item_allergens(item):
+    keys = set((getattr(item, "allergens", None) or "").split(","))
+    return [{"key": k, "name": n, "icon": ic} for k, n, ic in ALLERGENS if k in keys]

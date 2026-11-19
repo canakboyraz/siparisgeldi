@@ -1972,3 +1972,18 @@ body:has(.qm){background:#FAF8F5}
 .pc-loss-orders a{font-size:.8rem;font-weight:600;color:var(--brand);text-decoration:none}
 .pc-loss-orders a:hover{text-decoration:underline}
 .pc-loss-orders small{display:block;font-weight:400;color:var(--muted)}
+
+/* QR menü: alerjen / besin bilgisi */
+.qf-nutri{border:1px solid var(--line);border-radius:12px;padding:.7rem .9rem;margin:.2rem 0 1rem}
+.qf-nutri summary{cursor:pointer;font-weight:700}
+.qf-allergens{border:0;padding:0;margin:.8rem 0 .4rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.35rem .8rem}
+.qf-allergens legend{font-weight:600;font-size:.9rem;margin-bottom:.4rem}
+.qf-nutri .qf-row{display:grid;grid-template-columns:160px 1fr;gap:.8rem}
+@media (max-width:560px){.qf-nutri .qf-row{grid-template-columns:1fr}}
+.qm-mini{display:flex;gap:8px;flex-wrap:wrap;font-size:.75rem;color:#6B746F;margin:2px 0 4px}
+.qm-nutri{margin:2px 0 14px}
+.qm-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.qm-meta span{font-size:.8rem;padding:3px 9px;border-radius:999px;background:#F1EEE8;color:#3D4A44}
+.qm-al-title{font-size:.8rem;font-weight:700;color:#8A4B10;margin-bottom:5px}
+.qm-al{display:flex;flex-wrap:wrap;gap:6px}
+.qm-al span{font-size:.8rem;padding:3px 9px;border-radius:999px;background:#FFF3E2;color:#7A4510;border:1px solid #F3D7B0}

@@ -412,6 +412,30 @@ class MenuTest(unittest.TestCase):
         self.assertIn({"ProductUnitId": 9001, "Quantity": 3, "Name": "Latte", "IsMenu": False,
                        "OrderDetailNote": "Yulaf sütü"}, payload["OrderDetails"])
 
+    def test_item_allergens_and_calories(self):
+        cat = self._build_menu()
+        latte = MenuItem.query.filter_by(name="Latte").one()
+        page = f"/panel/menu/urun/{latte.id}"
+        base = {"name": "Latte", "price": "95", "category_id": str(cat.id), "is_active": "1", "is_available": "1"}
+        self._post(page, dict(base, allergens=["sut", "gluten", "uydurma"], calories="180", info="350 ml"), page=page)
+        db.session.expire_all()
+        latte = db.session.get(MenuItem, latte.id)
+        self.assertEqual(latte.allergens, "gluten,sut")
+        self.assertEqual((latte.calories, latte.info), (180, "350 ml"))
+        self.assertEqual([a["key"] for a in menu.item_allergens(latte)], ["gluten", "sut"])
+        t = MenuTable.query.filter_by(name="Masa 1").one()
+        html = self.app.test_client().get(f"/m/{t.code}").get_data(as_text=True)
+        self.assertIn("180 kcal", html)
+        self.assertRegex(html, r'"kcal": ?180')
+        # geçersiz kalori kaydedilmez
+        r = self._post(page, dict(base, calories="abc"), page=page)
+        self.assertEqual(r.status_code, 400)
+        # boş bırakınca temizlenir
+        self._post(page, dict(base), page=page)
+        db.session.expire_all()
+        latte = db.session.get(MenuItem, latte.id)
+        self.assertEqual((latte.allergens, latte.calories, latte.info), (None, None, None))
+
     def test_menu_settings_toggles(self):
         self._build_menu()
         t = MenuTable.query.filter_by(name="Masa 1").one()

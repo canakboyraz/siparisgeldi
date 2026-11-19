@@ -31,6 +31,7 @@
         <div class="qm-text">
           <h3>{{ i.name }}</h3>
           {% if i.description %}<p>{{ i.description }}</p>{% endif %}
+          {% if i.calories is not none or i.allergens %}<div class="qm-mini">{% if i.calories is not none %}<span>{{ i.calories }} kcal</span>{% endif %}{% if i.allergens %}<span title="Alerjen bilgisi için dokun">⚠︎ Alerjen</span>{% endif %}</div>{% endif %}
           <div class="qm-price">{{ tl(i.price) }}{% if not i.is_available %} <span class="qm-out">Tükendi</span>{% endif %}</div>
         </div>
         {% if i.image_id %}<img class="qm-img" src="{{ url_for('menu_public.image', image_id=i.image_id) }}" alt="" loading="lazy" decoding="async">{% endif %}
@@ -61,6 +62,7 @@
     <img id="qm-d-img" alt="" hidden>
     <div class="qm-d-body">
       <h2 id="qm-d-name"></h2><p id="qm-d-desc"></p>
+      <div class="qm-nutri" id="qm-d-nutri" hidden></div>
       <div class="qm-opts" id="qm-d-opts"></div>
       <div class="qm-d-row"><b id="qm-d-price"></b>
         {% if can_order %}<div class="qm-qty is-big"><button type="button" id="qm-d-dec" aria-label="Azalt">−</button><b id="qm-d-qty">1</b><button type="button" id="qm-d-inc" aria-label="Artır">+</button></div>{% endif %}
@@ -180,11 +182,26 @@
     var card = e.target.closest(".qm-item"); if (card) openDetail(card.getAttribute("data-id"));
   });
   document.querySelectorAll(".qm-item").forEach(function (c) { c.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target === c) openDetail(c.getAttribute("data-id")); }); });
+  function renderNutri(i) {
+    var box = document.getElementById("qm-d-nutri"), al = i.allergens || [];
+    box.innerHTML = ""; box.hidden = !(al.length || i.kcal != null || i.info);
+    if (i.kcal != null || i.info) {
+      var meta = document.createElement("div"); meta.className = "qm-meta";
+      [i.kcal != null ? i.kcal + " kcal" : "", i.info].filter(Boolean).forEach(function (t) { var s = document.createElement("span"); s.textContent = t; meta.appendChild(s); });
+      box.appendChild(meta);
+    }
+    if (al.length) {
+      var h = document.createElement("div"); h.className = "qm-al-title"; h.textContent = "Alerjen içerir"; box.appendChild(h);
+      var w = document.createElement("div"); w.className = "qm-al";
+      al.forEach(function (a) { var s = document.createElement("span"); s.textContent = a.icon + " " + a.name; w.appendChild(s); });
+      box.appendChild(w);
+    }
+  }
   function openDetail(id) {
     var i = items[id]; detailId = id; detailQty = 1;
     var img = document.getElementById("qm-d-img"); img.hidden = !i.img; if (i.img) img.src = i.img;
     document.getElementById("qm-d-name").textContent = i.name; document.getElementById("qm-d-desc").textContent = i.desc;
-    renderOpts(i);
+    renderOpts(i); renderNutri(i);
     document.getElementById("qm-d-price").textContent = tl(i.price);
     document.getElementById("qm-d-out").hidden = i.available;
     if (canOrder) { document.getElementById("qm-d-qty").textContent = 1; var add = document.getElementById("qm-d-add"); add.hidden = !i.available; updAdd(); }

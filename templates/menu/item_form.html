@@ -46,6 +46,20 @@
         </details>
         {% endif %}
       </div>
+      {% set chosen = (f.getlist('allergens') if f.getlist is defined else ((item.allergens or '').split(',') if item else [])) %}
+      <details class="qf-nutri" {{ 'open' if chosen|select|list or (item and (item.calories is not none or item.info)) }}>
+        <summary>Alerjen ve besin bilgisi (isteğe bağlı)</summary>
+        <fieldset class="qf-allergens"><legend>İçerdiği alerjenler</legend>
+          {% for key, label, ic in allergen_list %}<label class="st-active"><input type="checkbox" name="allergens" value="{{ key }}" {{ 'checked' if key in chosen }}> <span>{{ ic }} {{ label }}</span></label>{% endfor %}
+        </fieldset>
+        <div class="qf-row">
+          <div class="field"><label for="qf-kcal">Kalori (kcal, porsiyon)</label>
+            <input id="qf-kcal" name="calories" type="number" min="0" max="5000" step="1" inputmode="numeric" placeholder="ör. 320" value="{{ f.get('calories', item.calories if item and item.calories is not none else '') }}"></div>
+          <div class="field"><label for="qf-info">Ek bilgi</label>
+            <input id="qf-info" name="info" maxlength="200" placeholder="ör. 350 ml · Vegan · Glutensiz seçeneği var" value="{{ f.get('info', item.info if item and item.info else '') }}"></div>
+        </div>
+        <p class="hint">Girersen müşteri ürüne dokununca görür. Boş bırakırsan menüde hiçbir şey gösterilmez.</p>
+      </details>
       <div class="qf-checks">
         <label class="st-active"><input type="checkbox" name="is_active" value="1" {{ 'checked' if (item.is_active if item else True) }}> <span>Menüde göster</span></label>
         <label class="st-active"><input type="checkbox" name="is_available" value="1" {{ 'checked' if (item.is_available if item else True) }}> <span>Satışta (işareti kaldırırsan "Tükendi")</span></label>
