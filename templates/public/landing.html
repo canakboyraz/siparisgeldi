@@ -1,10 +1,17 @@
 {% extends "base.html" %}
-{% block title %}SiparişGeldi · Paket servis siparişleri ve gerçek kâr tek panelde{% endblock %}
+{% block title %}SiparişGeldi · Online siparişler ve gerçek kâr tek panelde{% endblock %}
 {% block head %}
-  <meta name="description" content="Trendyol Go, Migros Yemek, Adisyo, Trendyol ve Hepsiburada siparişlerini tek panelde yönetin. Anında Telegram/WhatsApp bildirimi, fiş yazdırma ve komisyon sonrası gerçek kâr raporu.">
+  <meta name="description" content="Trendyol Go, Yemeksepeti, Migros Yemek, Adisyo, Trendyol ve Hepsiburada siparişlerini tek panelde yönetin. Anında Telegram/WhatsApp bildirimi, komisyon sonrası gerçek kâr, masada QR menü, garson çağır ve sayım.">
   <meta property="og:title" content="SiparişGeldi · Siparişi kaçırma, gerçek kârını gör">
-  <meta property="og:description" content="Paket servis siparişlerin tek ekranda, komisyon ve maliyet sonrası kârın her akşam telefonunda.">
+  <meta property="og:description" content="Yemek platformu ya da pazaryeri: tüm siparişlerin tek ekranda, komisyon ve maliyet sonrası kârın her akşam telefonunda.">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.siparisgeldi.net/">
+  <meta property="og:image" content="https://www.siparisgeldi.net{{ url_for('static', filename='og.png') }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="tr_TR">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 {% endblock %}
 {% block body %}
 {% from "_icons.html" import icon %}
@@ -13,6 +20,7 @@
     <a class="brand" href="{{ url_for('public.landing') }}"><span class="brand-mark" aria-hidden="true"></span> SiparişGeldi</a>
     <nav class="lp-links" aria-label="Sayfa bölümleri">
       <a href="#ozellikler">Özellikler</a>
+      <a href="#kimler-icin">Kimler için</a>
       <a href="#karlilik">Kârlılık</a>
       <a href="#fiyatlandirma">Fiyat</a>
       <a href="#sss">SSS</a>
@@ -27,7 +35,7 @@
   <section class="container lp-hero">
     <div class="lp-hero-text">
       <h1>Siparişi kaçırma,<br>gerçek kârını gör.</h1>
-      <p class="lp-lead">Trendyol Go, Migros Yemek ve diğer kanallardan gelen siparişler tek ekranda ve telefonunda.
+      <p class="lp-lead">Trendyol Go, Yemeksepeti, Migros Yemek, Trendyol, Hepsiburada ve diğer kanallardan gelen siparişler tek ekranda ve telefonunda.
         Gün sonunda komisyon, ürün maliyeti ve paket giderinden sonra ne kazandığını gör.</p>
       <div class="lp-cta">
         <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">{% if trial_days %}{{ trial_days }} gün ücretsiz dene{% else %}Ücretsiz başla{% endif %}</a>
@@ -72,7 +80,7 @@
     <span class="lp-chip">Adisyo</span>
     <span class="lp-chip">Trendyol Pazaryeri</span>
     <span class="lp-chip">Hepsiburada</span>
-    <span class="lp-chip lp-chip-soon">Yemeksepeti · yakında</span>
+    <span class="lp-chip">Yemeksepeti</span>
   </section>
 
   <section class="container lp-problems">
@@ -134,6 +142,64 @@
         <div class="feature-ic">{{ icon('lock', 22) }}</div>
         <h3>Güvenli bağlantı</h3>
         <p>Platform API anahtarların şifrelenerek saklanır. Kart bilgilerin bizde tutulmaz, ödeme PayTR ile alınır.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="container" id="kimler-icin">
+    <div class="lp-section-head">
+      <h2>Kimler için?</h2>
+      <p class="muted">Restoran olman gerekmiyor. Online satış yapan herkes kullanabilir.</p>
+    </div>
+    <div class="lp-audience">
+      <div class="lp-aud">
+        <div class="feature-ic">{{ icon('coffee', 22) }}</div>
+        <h3>Kafe ve restoranlar</h3>
+        <p>Trendyol Go, Yemeksepeti, Migros Yemek ve Adisyo siparişleri tek ekranda. Masada QR menü ve garson çağır ile salon da aynı panelde.</p>
+      </div>
+      <div class="lp-aud">
+        <div class="feature-ic">{{ icon('store', 22) }}</div>
+        <h3>Online mağazalar ve pazaryeri satıcıları</h3>
+        <p>Trendyol ve Hepsiburada siparişlerin telefonuna düşer. Komisyon ve ürün maliyeti sonrası hangi üründe ne kazandığını görürsün.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="container" id="salon">
+    <div class="lp-section-head">
+      <h2>Salonda da işini kolaylaştırır</h2>
+      <p class="muted">Kafe ve restoranlar için paket servisin yanında masadaki işler de SiparişGeldi'de.</p>
+    </div>
+    <div class="features lp-features">
+      <div class="feature">
+        <div class="feature-ic">{{ icon('qr', 22) }}</div>
+        <h3>Masada QR menü</h3>
+        <p>Müşteri masadaki QR'ı okutur, fotoğraflı menüden seçer, siparişi verir. Uygulama indirmek gerekmez. Ekstralar, alerjen ve kalori bilgisi de menüde.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-ic">{{ icon('bell', 22) }}</div>
+        <h3>Garson çağır</h3>
+        <p>Tek dokunuşla çağrı gelir; panelde sesli uyarı, personelin telefonuna da Telegram bildirimi düşer.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-ic">{{ icon('receipt', 22) }}</div>
+        <h3>Masa hesabı</h3>
+        <p>Aynı masadan gelen siparişler tek hesapta birleşir; ödeme alınınca kapanır, istersen adisyon programına da yazılır.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-ic">{{ icon('clipboard', 22) }}</div>
+        <h3>Sayım ve stok</h3>
+        <p>Personel günlük sayımı paylaştığın bağlantıdan telefonla girer; minimum stokun altına düşen ürünü hemen görürsün.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-ic">{{ icon('trend', 22) }}</div>
+        <h3>Menü analizi</h3>
+        <p>Hangi ürün hem çok satıyor hem kazandırıyor, hangisi yoruyor. Geçen haftanın aynı gününe göre bugün ne kadar hazırlaman gerektiğini de söyler.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-ic">{{ icon('gift', 22) }}</div>
+        <h3>Damga kartı</h3>
+        <p>Müşterin kasadaki QR afişinden dijital kartını alır, Apple Cüzdan'a ekler, damga biriktirip ödülünü alır.</p>
       </div>
     </div>
   </section>
@@ -229,8 +295,12 @@
       <p>Hayır. Aylık Pro 30 gün, yıllık Pro 365 gün geçerlidir; bitmeden önce hatırlatma gönderilir, yenilemek istersen panelden ödeme yaparsın. Yıllık pakette erken ayrılırsan kullanmadığın aylar iade edilir.</p>
     </details>
     <details>
-      <summary>Yemeksepeti ve Getir ne zaman geliyor?</summary>
-      <p>Yemeksepeti entegrasyonu için altyapı hazır, platform onayı tamamlanınca açılacak. Kullanmak istediğin platformu bize yaz, önceliği buna göre belirliyoruz.</p>
+      <summary>Sadece restoranlar mı kullanabilir?</summary>
+      <p>Hayır. Trendyol ve Hepsiburada'da satış yapan online mağazalar da siparişlerini telefonuna alır, komisyon sonrası kârını takip eder. QR menü, garson çağır ve masa hesabı ise kafe ve restoranlara özel.</p>
+    </details>
+    <details>
+      <summary>Getir ve diğer platformlar ne zaman geliyor?</summary>
+      <p>Kullanmak istediğin platformu bize yaz, önceliği buna göre belirliyoruz.</p>
     </details>
   </section>
 

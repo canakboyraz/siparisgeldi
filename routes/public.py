@@ -1,5 +1,5 @@
 """Herkese açık sayfalar (landing)."""
-from flask import Blueprint, current_app, jsonify, render_template, redirect, url_for
+from flask import Blueprint, Response, current_app, jsonify, render_template, redirect, url_for
 from sqlalchemy import text
 from flask_login import current_user
 
@@ -46,6 +46,31 @@ def privacy_policy():
 @public_bp.route("/kvkk-aydinlatma-metni")
 def kvkk_notice():
     return render_template("public/legal_kvkk.html")
+
+
+SITE = "https://www.siparisgeldi.net"
+PUBLIC_PAGES = ["public.landing", "public.profit_calculator", "public.contact", "auth.register", "auth.login",
+                "public.kvkk_notice"]
+
+
+@public_bp.route("/robots.txt")
+def robots_txt():
+    body = ("User-agent: *\nDisallow: /panel/\nDisallow: /admin/\nDisallow: /payment/\nDisallow: /webhooks/\n"
+            "Disallow: /m/\nAllow: /\n\nSitemap: " + SITE + "/sitemap.xml\n")
+    return Response(body, mimetype="text/plain")
+
+
+@public_bp.route("/sitemap.xml")
+def sitemap_xml():
+    urls = []
+    for endpoint in PUBLIC_PAGES:
+        try:
+            urls.append(SITE + url_for(endpoint))
+        except Exception:
+            continue
+    items = "".join(f"<url><loc>{u}</loc></url>" for u in urls)
+    xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + items + "</urlset>"
+    return Response(xml, mimetype="application/xml")
 
 
 @public_bp.route("/healthz")

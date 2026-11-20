@@ -54,6 +54,16 @@ class DemoTest(unittest.TestCase):
             self.assertEqual(self.client.get(path).status_code, 200, path)
         karne = self.client.get("/panel/kar-karnesi").get_data(as_text=True)
         self.assertIn("Ayran", karne)
+        # salon: QR menü, masa siparişi ve sayım da dolu gelir
+        from models import MenuItem, MenuTable, StockCount, TableOrder
+        self.assertGreater(MenuItem.query.filter_by(user_id=user.id).count(), 5)
+        self.assertEqual(MenuTable.query.filter_by(user_id=user.id).count(), 6)
+        self.assertEqual(TableOrder.query.filter_by(user_id=user.id).count(), 2)
+        self.assertEqual(StockCount.query.filter_by(user_id=user.id).count(), 1)
+        for path in ("/panel/menu", "/panel/menu/urunler", "/panel/sayim", "/panel/menu-analizi"):
+            self.assertEqual(self.client.get(path, follow_redirects=True).status_code, 200, path)
+        table = MenuTable.query.filter_by(user_id=user.id).first()
+        self.assertIn("Tavuk Dürüm", self.client.get(f"/m/{table.code}").get_data(as_text=True))
 
     def test_demo_accept_is_local_and_other_posts_blocked(self):
         user = self.start_demo()
@@ -82,6 +92,9 @@ class DemoTest(unittest.TestCase):
         self.assertIsNone(db.session.get(User, uid))
         self.assertEqual(Order.query.filter_by(user_id=uid).count(), 0)
         self.assertEqual(ProductCost.query.filter_by(user_id=uid).count(), 0)
+        from models import MenuItem, StockItem
+        self.assertEqual(MenuItem.query.filter_by(user_id=uid).count(), 0)
+        self.assertEqual(StockItem.query.filter_by(user_id=uid).count(), 0)
 
     def test_register_from_demo_logs_out_demo(self):
         self.start_demo()
