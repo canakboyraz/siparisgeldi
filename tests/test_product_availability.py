@@ -71,6 +71,14 @@ class ProductAvailabilityTest(unittest.TestCase):
         self.client.post("/panel/urun-durumu", data={"_csrf_token": "test", "key": "latte", "action": "open"})
         set_status.assert_called_once_with("1", "2", "k", "s", 12, True)
 
+    @patch("integrations.trendyolgo.get_meal_products", return_value=TGO_MENU)
+    def test_merge_from_page(self, _menu):
+        self.client.post("/panel/urun-durumu", data={"_csrf_token": "test", "action": "merge",
+                                                     "names": ["Latte", "Sahlep"], "canonical": "Sahlep"})
+        self.assertEqual(ProductAlias.query.filter_by(user_id=self.uid, alias_key="latte").first().canonical_name, "Sahlep")
+        self.client.post("/panel/urun-durumu", data={"_csrf_token": "test", "action": "split", "key": "sahlep"})
+        self.assertEqual(ProductAlias.query.filter_by(user_id=self.uid).count(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,7 +17,26 @@
   <span class="av-chip {{ 'on' if migros_ready else 'off' }}">{{ icon('check' if migros_ready else 'x', 14) }} Migros Yemek{% if not migros_ready %} · <a href="{{ url_for('dashboard.migros_setup') }}">bağla</a>{% endif %}</span>
 </div>
 
+{% set plabel = {'trendyolgo': 'Trendyol Go', 'migros': 'Migros', 'qr': 'QR menü'} %}
+{% if suggestions %}
+<details class="card av-sugs" open>
+  <summary class="card-title">{{ icon('bolt', 18) }} Aynı ürün olabilir ({{ suggestions|length }})</summary>
+  <p class="muted" style="margin:.2rem 0 .7rem">Adı çok benzeyen ürünler. Doğruysa ana adı seçip eşleştir; yanlışsa geç.</p>
+  {% for g in suggestions %}
+  <form method="post" class="al-sug">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="merge"><input type="hidden" name="q" value="{{ q }}">
+    {% for n in g %}
+      <input type="hidden" name="names" value="{{ n }}">
+      <label><input type="radio" name="canonical" value="{{ n }}" {{ 'checked' if loop.first }}> <span>{{ n }}</span> <small class="muted">{% for pl in row_platforms.get(n) or [] %}{{ plabel[pl] }}{{ ', ' if not loop.last }}{% endfor %}</small></label>
+    {% endfor %}
+    <button class="btn btn-primary btn-sm" type="submit">Aynı ürün · eşleştir</button>
+  </form>
+  {% endfor %}
+</details>
+{% endif %}
+
 <div class="card">
+  <p class="muted" style="margin:0 0 .6rem">Trendyol'daki ve Migros'taki aynı ürünü birleştirmek için satırların solundaki kutuları işaretle, alttaki çubuktan <b>Aynı ürün</b>'e bas.</p>
   <div class="av-tools">
     <input type="search" id="av-q" value="{{ q }}" placeholder="Ürün ara (ör. sahlep)" autocomplete="off">
     <label class="av-only"><input type="checkbox" id="av-off"> Sadece kapalılar</label>
@@ -26,8 +45,9 @@
   <ul class="av-list" id="av-list">
     {% for r in rows %}
     <li class="av-row {{ 'is-off' if r.all_off }}" id="{{ r.anchor }}" data-name="{{ r.name|lower }}" data-off="{{ '1' if r.all_off else '0' }}">
+      <label class="av-pick" title="Eşleştirmek için seç"><input type="checkbox" class="av-sel" value="{{ r.name }}"></label>
       <div class="av-name">
-        <b>{{ r.name }}</b>
+        <b>{{ r.name }}</b>{% if r.merged %} <small class="av-merged" title="Eşleştirilmiş ürün">eşleşmiş</small>{% endif %}
         <div class="av-badges">
           {% for p in r.trendyolgo %}<span class="av-b {{ 'on' if p.on else 'off' }}" title="{{ p.name }}">Trendyol Go · {{ 'Açık' if p.on else 'Kapalı' }}</span>{% endfor %}
           {% for p in r.migros %}<span class="av-b {{ 'on' if p.on else 'off' }}" title="{{ p.name }}">Migros · {{ 'Açık' if p.on else 'Kapalı' }}</span>{% endfor %}
@@ -41,6 +61,7 @@
         {% if r.any_on %}
         <button class="btn btn-danger btn-sm" name="action" value="close" type="submit">Bitti · kapat</button>
         {% endif %}
+        {% if r.merged %}<button class="btn btn-ghost btn-sm" name="action" value="split" type="submit" title="Eşleşmeyi kaldır">Ayır</button>{% endif %}
         {% if r.any_off %}
         <button class="btn btn-primary btn-sm" name="action" value="open" type="submit">Satışa aç</button>
         {% endif %}
@@ -55,7 +76,33 @@
   <p class="hint" style="margin-top:.8rem">Aynı ürün platformlarda farklı adla duruyorsa <a href="{{ url_for('dashboard.product_aliases') }}">Ürün eşleştirme</a>'den birleştir; burada tek satır olur ve hepsi birlikte kapanır.</p>
 </div>
 
+<form method="post" class="av-bar" id="av-bar" hidden>
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="merge"><input type="hidden" name="q" value="{{ q }}">
+  <div id="av-bar-names"></div>
+  <span class="av-bar-txt"><b id="av-bar-n">0</b> ürün seçildi · ana ad:</span>
+  <select name="canonical" id="av-bar-main"></select>
+  <button class="btn btn-primary btn-sm" type="submit">Aynı ürün · eşleştir</button>
+  <button class="btn btn-ghost btn-sm" type="button" id="av-bar-clear">Vazgeç</button>
+</form>
+
 <script>
+(function () {
+  var sels = document.querySelectorAll(".av-sel"), bar = document.getElementById("av-bar");
+  var main = document.getElementById("av-bar-main"), box = document.getElementById("av-bar-names");
+  function sync() {
+    var picked = [].filter.call(sels, function (c) { return c.checked; }).map(function (c) { return c.value; });
+    bar.hidden = picked.length < 2;
+    document.getElementById("av-bar-n").textContent = picked.length;
+    var cur = main.value; main.innerHTML = ""; box.innerHTML = "";
+    picked.forEach(function (n) {
+      var o = document.createElement("option"); o.value = o.textContent = n; main.appendChild(o);
+      var h = document.createElement("input"); h.type = "hidden"; h.name = "names"; h.value = n; box.appendChild(h);
+    });
+    if (picked.indexOf(cur) !== -1) main.value = cur;
+  }
+  sels.forEach(function (c) { c.addEventListener("change", sync); });
+  document.getElementById("av-bar-clear").addEventListener("click", function () { sels.forEach(function (c) { c.checked = false; }); sync(); });
+})();
 (function () {
   var q = document.getElementById("av-q"), off = document.getElementById("av-off");
   var rows = document.querySelectorAll(".av-row"), empty = document.getElementById("av-empty");
@@ -68,7 +115,7 @@
       r.hidden = !ok; if (ok) shown++;
     });
     if (empty) empty.hidden = shown !== 0;
-    document.querySelectorAll('.av-act input[name="q"]').forEach(function (i) { i.value = q.value; });
+    document.querySelectorAll('input[name="q"]').forEach(function (i) { i.value = q.value; });
   }
   q.addEventListener("input", apply); off.addEventListener("change", apply); apply();
   document.querySelectorAll(".av-act").forEach(function (f) {

@@ -2036,6 +2036,43 @@ def alias_suggestions(names: list) -> list:
     return sorted([sorted(g, key=str.casefold) for g in groups.values() if len(g) > 1], key=lambda g: g[0].casefold())
 
 
+def _merge_product_names(user_id, selected, canonical=None):
+    """Seçilen adları tek ana ürün altında birleştirir (ProductAlias). Başarıda mesaj döner."""
+    canonical = (canonical or "").strip()[:180]
+    if not canonical and selected:
+        canonical = selected[0]
+    names = {_norm_product(n): n for n in selected}
+    canonical_key = _norm_product(canonical)
+    names.pop(canonical_key, None)
+    if not canonical or not names:
+        return None
+    existing = {a.alias_key: a for a in ProductAlias.query.filter_by(user_id=user_id).all()}
+    # Ana ad başka bir gruba bağlıysa o grubu çöz; seçilen adların altındaki eşleşmeleri de yeni ana ada taşı.
+    if canonical_key in existing:
+        db.session.delete(existing.pop(canonical_key))
+    for a in existing.values():
+        if _norm_product(a.canonical_name) in names:
+            a.canonical_name = canonical
+    for key, name in names.items():
+        row = existing.get(key) or ProductAlias(user_id=user_id, alias_key=key)
+        row.alias_name, row.canonical_name = name, canonical
+        db.session.add(row)
+    # Ana ürünün maliyeti yoksa eşleşen adlardan birinin maliyetini kullan.
+    costs = {_norm_product(c.product_name): c for c in ProductCost.query.filter_by(user_id=user_id).all()}
+    copied = None
+    if canonical_key not in costs:
+        donor = next((costs[k] for k in names if k in costs), None)
+        if donor:
+            db.session.add(ProductCost(user_id=user_id, platform="all", product_key=canonical_key,
+                                       product_name=canonical, unit_cost=donor.unit_cost))
+            copied = donor
+    db.session.commit()
+    msg = f"{len(names)} ürün “{canonical}” altında birleştirildi."
+    if copied:
+        msg += f" Maliyet olarak “{copied.product_name}” için girdiğin {copied.unit_cost:.2f} TL kullanıldı."
+    return msg
+
+
 @dashboard_bp.route("/urun-eslestirme", methods=["GET", "POST"])
 @login_required
 def product_aliases():
@@ -2051,39 +2088,10 @@ def product_aliases():
                 flash(f"“{name}” artık ayrı ürün olarak sayılacak.", "success")
             return redirect(url_for("dashboard.product_aliases"))
         selected = [n.strip()[:180] for n in request.form.getlist("names") if n.strip()]
-        canonical = (request.form.get("canonical") or "").strip()[:180]
-        if not canonical and selected:
-            canonical = selected[0]
-        names = {_norm_product(n): n for n in selected}
-        canonical_key = _norm_product(canonical)
-        names.pop(canonical_key, None)
-        if not canonical or not names:
+        msg = _merge_product_names(current_user.id, selected, request.form.get("canonical"))
+        if not msg:
             flash("Birleştirmek için en az iki ürün seç ve ana adı belirle.", "warning")
             return redirect(url_for("dashboard.product_aliases"))
-        existing = {a.alias_key: a for a in ProductAlias.query.filter_by(user_id=current_user.id).all()}
-        # Ana ad başka bir gruba bağlıysa o grubu çöz; seçilen adların altındaki eşleşmeleri de yeni ana ada taşı.
-        if canonical_key in existing:
-            db.session.delete(existing.pop(canonical_key))
-        for a in existing.values():
-            if _norm_product(a.canonical_name) in names:
-                a.canonical_name = canonical
-        for key, name in names.items():
-            row = existing.get(key) or ProductAlias(user_id=current_user.id, alias_key=key)
-            row.alias_name, row.canonical_name = name, canonical
-            db.session.add(row)
-        # Ana ürünün maliyeti yoksa eşleşen adlardan birinin maliyetini kullan.
-        costs = {_norm_product(c.product_name): c for c in ProductCost.query.filter_by(user_id=current_user.id).all()}
-        copied = None
-        if canonical_key not in costs:
-            donor = next((costs[k] for k in names if k in costs), None)
-            if donor:
-                db.session.add(ProductCost(user_id=current_user.id, platform="all", product_key=canonical_key,
-                                           product_name=canonical, unit_cost=donor.unit_cost))
-                copied = donor
-        db.session.commit()
-        msg = f"{len(names)} ürün “{canonical}” altında birleştirildi."
-        if copied:
-            msg += f" Maliyet olarak “{copied.product_name}” için girdiğin {copied.unit_cost:.2f} TL kullanıldı."
         flash(msg, "success")
         return redirect(url_for("dashboard.product_aliases"))
 
@@ -4143,12 +4151,15 @@ def _availability_rows(user_id):
             errors.append(f"Migros Yemek menüsü alınamadı: {e}")
     for item in MenuItem.query.filter_by(user_id=user_id, is_active=True).all():
         row_for(item.name)["qr"].append({"id": item.id, "on": bool(item.is_available), "name": item.name})
+    linked = {_norm_product(c) for c in aliases.values()}
     out = sorted(rows.values(), key=lambda r: r["name"].casefold())
     for r in out:
         states = [x["on"] for plat in ("trendyolgo", "migros", "qr") for x in r[plat]]
         r["any_on"] = any(states)
         r["all_off"] = bool(states) and not any(states)
         r["any_off"] = bool(states) and not all(states)
+        r["merged"] = r["key"] in linked
+        r["platforms"] = [plat for plat in ("trendyolgo", "migros", "qr") if r[plat]]
     return out, intg, mig, secret, errors
 
 
@@ -4157,6 +4168,21 @@ def _availability_rows(user_id):
 def product_availability():
     """Bir ürünü (ör. Sahlep bitti) bağlı tüm platformlarda tek tıkla satışa kapat/aç."""
     from models import MenuItem
+    if request.method == "POST" and request.form.get("action") == "merge":
+        selected = [n.strip()[:180] for n in request.form.getlist("names") if n.strip()]
+        msg = _merge_product_names(current_user.id, selected, request.form.get("canonical"))
+        flash(msg or "Eşleştirmek için en az iki ürün seç.", "success" if msg else "warning")
+        return redirect(url_for("dashboard.product_availability", q=request.form.get("q", "")))
+    if request.method == "POST" and request.form.get("action") == "split":
+        key = (request.form.get("key") or "").strip()
+        links = [a for a in ProductAlias.query.filter_by(user_id=current_user.id).all()
+                 if _norm_product(a.canonical_name) == key]
+        for a in links:
+            db.session.delete(a)
+        db.session.commit()
+        flash(f"{len(links)} eşleşme kaldırıldı; ürünler ayrı satırlarda görünecek." if links
+              else "Bu satırda kaldırılacak eşleşme yok.", "success" if links else "info")
+        return redirect(url_for("dashboard.product_availability", q=request.form.get("q", "")))
     if request.method == "POST":
         key = (request.form.get("key") or "").strip()
         turn_on = request.form.get("action") == "open"
@@ -4207,6 +4233,10 @@ def product_availability():
         flash(msg, "warning")
     for r in rows:
         r["anchor"] = _avail_anchor(r["key"])
+    # Öneri: tek platformda duran ve adı başka bir satıra çok benzeyen ürünler
+    single = [r["name"] for r in rows if len(r["platforms"]) == 1]
+    suggestions = alias_suggestions(single)[:20] if single else []
     has_ys = Integration.query.filter_by(user_id=current_user.id, platform="yemeksepeti", is_active=True).first() is not None
     return render_template("dashboard/product_availability.html", rows=rows, tgo_ready=bool(intg),
-                           migros_ready=bool(mig), has_ys=has_ys, q=request.args.get("q", ""))
+                           migros_ready=bool(mig), has_ys=has_ys, q=request.args.get("q", ""),
+                           suggestions=suggestions, row_platforms={r["name"]: r["platforms"] for r in rows})
