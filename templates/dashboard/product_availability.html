@@ -119,7 +119,11 @@
   }
   q.addEventListener("input", apply); off.addEventListener("change", apply); apply();
   document.querySelectorAll(".av-act").forEach(function (f) {
-    f.addEventListener("submit", function () {
+    f.addEventListener("submit", function (ev) {
+      var btn = ev.submitter || document.activeElement;
+      if (btn && btn.name) {  // devre dışı düğmenin değeri gönderilmez; gizli alana taşı
+        var h = document.createElement("input"); h.type = "hidden"; h.name = btn.name; h.value = btn.value; f.appendChild(h);
+      }
       f.querySelectorAll("button").forEach(function (b) { b.disabled = true; });
       f.insertAdjacentHTML("beforeend", '<span class="muted av-wait">Gönderiliyor…</span>');
     });

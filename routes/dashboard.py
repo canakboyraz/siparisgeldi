@@ -4185,7 +4185,11 @@ def product_availability():
         return redirect(url_for("dashboard.product_availability", q=request.form.get("q", "")))
     if request.method == "POST":
         key = (request.form.get("key") or "").strip()
-        turn_on = request.form.get("action") == "open"
+        action = request.form.get("action")
+        if action not in ("open", "close"):
+            flash("İşlem anlaşılamadı; sayfayı yenileyip tekrar dene.", "warning")
+            return redirect(url_for("dashboard.product_availability", q=request.form.get("q", "")))
+        turn_on = action == "open"
         q = request.form.get("q", "")
         rows, intg, mig, secret, errors = _availability_rows(current_user.id)
         row = next((r for r in rows if r["key"] == key), None)

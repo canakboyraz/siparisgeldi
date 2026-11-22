@@ -2098,3 +2098,5 @@ body.pm-open .main{padding-bottom:170px}
 .pm-link{display:inline-flex;align-items:center;gap:.3rem;background:#f1f3f1;border-radius:999px;padding:.2rem .3rem .2rem .7rem;font-size:.85rem}
 .pm-x{border:0;background:none;cursor:pointer;color:#8a928d;padding:.15rem;border-radius:50%;display:inline-flex}
 .pm-x:hover{background:#fbe9e6;color:#b33a24}
+
+.av-row[hidden],.pm-item[hidden]{display:none!important}
