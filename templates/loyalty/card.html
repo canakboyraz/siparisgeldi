@@ -199,6 +199,9 @@
   }
   window.setInterval(poll, 2500);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) { polls = 1; poll(); } });
+  // Ana ekrandan/geri tuşuyla açılınca önbellekteki eski kart görünmesin: hemen güncelle.
+  window.addEventListener("pageshow", function () { polls = 1; poll(); });
+  window.addEventListener("focus", function () { polls = 1; poll(); });
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>

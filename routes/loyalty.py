@@ -102,10 +102,13 @@ def join(token):
 def _render_card(program, customer):
     key = card_key(program, customer)
     import wallet
-    return render_template("loyalty/card.html", program=program, customer=customer, card_key=key,
-                           wallet_ready=wallet.is_configured(),
-                           card_url=url_for("loyalty_public.my_card", token=program.token, key=key, _external=True),
-                           state=loyalty.card_state(program, customer))
+    response = make_response(render_template(
+        "loyalty/card.html", program=program, customer=customer, card_key=key,
+        wallet_ready=wallet.is_configured(),
+        card_url=url_for("loyalty_public.my_card", token=program.token, key=key, _external=True),
+        state=loyalty.card_state(program, customer)))
+    response.headers["Cache-Control"] = "no-store"   # damga/ödül her açılışta güncel görünsün
+    return response
 
 
 @loyalty_public_bp.route("/k/<token>/kart")

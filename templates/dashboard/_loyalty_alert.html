@@ -24,6 +24,8 @@
   var decideBase = "{{ url_for('loyalty.decide', req_id=0, action='onay') }}".replace("/0/onay", "/");
   var rewardBase = "{{ url_for('loyalty.give_reward', customer_id=0) }}".replace("/0/odul", "/");
   var csrf = "{{ csrf_token() }}";
+  var loyaltyPath = "{{ url_for('loyalty.setup') }}";
+  var changed = false;
   var box = document.getElementById("loyalty-alert");
   var current = null, busy = false, lastBeep = 0, dismissed = {};
   function el(id) { return document.getElementById(id); }
@@ -61,7 +63,17 @@
     el("loyalty-alert-more").textContent = rest > 0 ? ("Sırada " + rest + " istek daha var.") : "";
     if (box.hidden) { box.hidden = false; beep(); }
   }
-  function hide() { box.hidden = true; current = null; }
+  function typing() {
+    var a = document.activeElement;
+    return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !box.contains(a);
+  }
+  function refreshPage() {
+    // Damga kartı sayfalarında liste/damga sayıları eski kalmasın; form doldururken sayfayı bozma.
+    if (!changed || location.pathname.indexOf(loyaltyPath) !== 0 || typing()) return;
+    changed = false;
+    location.reload();
+  }
+  function hide() { var was = !box.hidden; box.hidden = true; current = null; if (was) refreshPage(); }
   function poll() {
     if (busy || document.hidden) return;
     fetch(pollUrl, { headers: { "Accept": "application/json" }, credentials: "same-origin", cache: "no-store" })
@@ -82,16 +94,16 @@
   }
   el("loyalty-alert-approve").addEventListener("click", function () {
     if (!current) return; var id = current.id;
-    post(decideBase + id + "/onay").then(function () { hide(); poll(); });
+    post(decideBase + id + "/onay").then(function () { changed = true; hide(); poll(); });
   });
   el("loyalty-alert-reject").addEventListener("click", function () {
     if (!current) return; var id = current.id;
-    post(decideBase + id + "/red").then(function () { hide(); poll(); });
+    post(decideBase + id + "/red").then(function () { changed = true; hide(); poll(); });
   });
   el("loyalty-alert-reward").addEventListener("click", function () {
     if (!current) return; var btn = this;
     post(rewardBase + current.customer_id + "/odul").then(function (res) {
-      if (res && res.ok) { current.current = res.current; current.reward_ready = res.current >= current.required; show(current, 0); btn.hidden = true; }
+      if (res && res.ok) { changed = true; current.current = res.current; current.reward_ready = res.current >= current.required; show(current, 0); btn.hidden = true; }
     });
   });
   poll();
