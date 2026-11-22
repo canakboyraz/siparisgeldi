@@ -68,11 +68,15 @@
       </form>
       <div class="pm-links">
         {% for it in g["items"] %}
+        {% if it.id is none %}
+        <span class="pm-link pm-link-same" title="Adı grubun adıyla aynı olduğu için kendiliğinden bu grupta. Ayırmak için grubun adını değiştir.">{{ it.name }} <small class="muted">· {% for p in it.platforms %}{{ plabel[p] }}{{ ', ' if not loop.last }}{% endfor %}</small></span>
+        {% else %}
         <form method="post" class="pm-link">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="unlink"><input type="hidden" name="alias_id" value="{{ it.id }}">
           <span>{{ it.name }}{% if it.platforms %} <small class="muted">· {% for p in it.platforms %}{{ plabel[p] }}{{ ', ' if not loop.last }}{% endfor %}</small>{% endif %}</span>
           <button type="submit" class="pm-x" title="Bağlantıyı kaldır" aria-label="{{ it.name }} bağlantısını kaldır">{{ icon('x', 14) }}</button>
         </form>
+        {% endif %}
         {% endfor %}
       </div>
     </li>

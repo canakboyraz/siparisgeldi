@@ -4343,6 +4343,10 @@ def platform_matching():
     for a in aliases:
         g = groups.setdefault(_norm_product(a.canonical_name), {"name": a.canonical_name, "items": []})
         g["items"].append({"id": a.id, "name": a.alias_name, "platforms": where.get(a.alias_key, [])})
+    # Grubun adıyla birebir aynı adı taşıyan platform ürünleri de bu grupta (eşleştirme gerekmeden).
+    for key, g in groups.items():
+        if where.get(key):
+            g["items"].insert(0, {"id": None, "name": g["name"], "platforms": where[key]})
     linked = {a.alias_key: a.canonical_name for a in aliases}
     return render_template("dashboard/platform_matching.html", columns=MATCH_COLUMNS, catalog=catalog,
                            notes=notes, groups=sorted(groups.values(), key=lambda g: g["name"].casefold()),

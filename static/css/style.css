@@ -2104,3 +2104,5 @@ body.pm-open .main{padding-bottom:170px}
 .av-bar .btn-ghost{color:#fff;background:transparent;border:1px solid rgba(255,255,255,.4)}
 .pm-target{font-size:.85rem;font-weight:600;margin-bottom:.5rem;color:#d8f3e6}
 .pm-rename{flex-wrap:wrap}.pm-rename input{min-width:120px}
+.pm-link-same{background:#e4f1ea;padding-right:.7rem}
+.pm-group{grid-template-columns:minmax(260px,360px) 1fr}
