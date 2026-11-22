@@ -2106,3 +2106,20 @@ body.pm-open .main{padding-bottom:170px}
 .pm-rename{flex-wrap:wrap}.pm-rename input{min-width:120px}
 .pm-link-same{background:#e4f1ea;padding-right:.7rem}
 .pm-group{grid-template-columns:minmax(260px,360px) 1fr}
+/* Platform renkleri */
+.pf-trendyolgo{--pf:#F27A1A;--pf-bg:#FFF1E6;--pf-ink:#8A3D00}
+.pf-yemeksepeti{--pf:#EA004B;--pf-bg:#FFE8EF;--pf-ink:#8C002D}
+.pf-migros{--pf:#E0A100;--pf-bg:#FFF7D9;--pf-ink:#6B4D00}
+.pf-qr{--pf:#1E5B47;--pf-bg:#E4F1EA;--pf-ink:#123A2D}
+.pf-none{--pf:#9aa29d;--pf-bg:#f1f3f1;--pf-ink:#5b625e}
+.pm-link{background:var(--pf-bg,#f1f3f1);color:var(--pf-ink,inherit);border:1px solid color-mix(in srgb,var(--pf,#ccc) 35%,transparent);padding:.15rem .3rem .15rem .2rem}
+span.pm-link{padding-right:.7rem}
+.pf-tag{font-style:normal;font-size:.7rem;font-weight:700;background:var(--pf);color:#fff;border-radius:999px;padding:.1rem .45rem;margin-right:.35rem;white-space:nowrap}
+.pf-migros .pf-tag{color:#3d2c00}
+.pm-missing{background:transparent;border:1px dashed var(--pf);opacity:.6;color:#6b746f}
+.pm-missing .pf-tag{background:transparent;color:var(--pf-ink);border:1px solid var(--pf)}
+.pm-count{align-self:center;font-size:.75rem;font-weight:700;color:#6b746f;min-width:4.6rem}
+.pm-col-h.pf-trendyolgo,.pm-col-h.pf-migros,.pm-col-h.pf-yemeksepeti,.pm-col-h.pf-qr{border-bottom:3px solid var(--pf);padding-bottom:.35rem}
+.pf-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--pf);margin-right:.4rem;vertical-align:middle}
+.pm-chip.pf-trendyolgo,.pm-chip.pf-migros,.pm-chip.pf-yemeksepeti,.pm-chip.pf-qr{background:var(--pf);color:#fff}
+.pm-chip.pf-migros{color:#3d2c00}

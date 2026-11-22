@@ -21,14 +21,14 @@
   <div class="pm-cols">
     {% for key, label in columns %}
     <section class="pm-col card" data-col="{{ key }}">
-      <header class="pm-col-h"><b>{{ label }}</b> <small class="muted">{{ catalog[key]|length }} ürün</small></header>
+      <header class="pm-col-h pf-{{ key }}"><b><i class="pf-dot"></i>{{ label }}</b> <small class="muted">{{ catalog[key]|length }} ürün</small></header>
       {% if notes.get(key) %}<p class="hint pm-note">{{ notes[key] }}</p>{% endif %}
       <ul class="pm-list">
         {% for it in catalog[key] %}
         {% set k = norm(it.name) %}{% set group = linked.get(k) or canon.get(k) %}
         <li class="pm-item {{ 'is-linked' if group }}" data-name="{{ it.name }}" data-linked="{{ '1' if group else '0' }}">
           <label>
-            <input type="checkbox" class="pm-sel" name="names" value="{{ it.name }}" data-plat="{{ label }}">
+            <input type="checkbox" class="pm-sel" name="names" value="{{ it.name }}" data-plat="{{ label }}" data-pf="{{ key }}">
             <span class="pm-n">{{ it.name }}</span>
             {% if it.on is not none %}<i class="pm-dot {{ 'on' if it.on else 'off' }}" title="{{ 'Satışta' if it.on else 'Kapalı' }}"></i>{% endif %}
           </label>
@@ -67,17 +67,19 @@
         <button class="btn btn-primary btn-sm pm-add" type="button" data-group="{{ g.name }}" title="Bu gruba başka platformdan ürün ekle">+ Ekle</button>
       </form>
       <div class="pm-links">
-        {% for it in g["items"] %}
-        {% if it.id is none %}
-        <span class="pm-link pm-link-same" title="Adı grubun adıyla aynı olduğu için kendiliğinden bu grupta. Ayırmak için grubun adını değiştir.">{{ it.name }} <small class="muted">· {% for p in it.platforms %}{{ plabel[p] }}{{ ', ' if not loop.last }}{% endfor %}</small></span>
+        <span class="pm-count" title="Bu ürün kaç platforma bağlı">{{ g.count }} platform</span>
+        {% for c in g.chips %}
+        {% if c.id is none %}
+        <span class="pm-link pf-{{ c.platform or 'none' }}" title="Adı grubun adıyla aynı olduğu için kendiliğinden bu grupta. Ayırmak için grubun adını değiştir."><i class="pf-tag">{{ plabel.get(c.platform, '?') }}</i>{{ c.name }}</span>
         {% else %}
-        <form method="post" class="pm-link">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="unlink"><input type="hidden" name="alias_id" value="{{ it.id }}">
-          <span>{{ it.name }}{% if it.platforms %} <small class="muted">· {% for p in it.platforms %}{{ plabel[p] }}{{ ', ' if not loop.last }}{% endfor %}</small>{% endif %}</span>
-          <button type="submit" class="pm-x" title="Bağlantıyı kaldır" aria-label="{{ it.name }} bağlantısını kaldır">{{ icon('x', 14) }}</button>
+        <form method="post" class="pm-link pf-{{ c.platform or 'none' }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="unlink"><input type="hidden" name="alias_id" value="{{ c.id }}">
+          <i class="pf-tag">{{ plabel.get(c.platform, 'Menüde yok') }}</i><span>{{ c.name }}</span>
+          <button type="submit" class="pm-x" title="Bağlantıyı kaldır" aria-label="{{ c.name }} bağlantısını kaldır">{{ icon('x', 14) }}</button>
         </form>
         {% endif %}
         {% endfor %}
+        {% for m in g.missing %}<span class="pm-link pm-missing pf-{{ m }}" title="Bu platformdan bağlı ürün yok"><i class="pf-tag">{{ plabel[m] }}</i>yok</span>{% endfor %}
       </div>
     </li>
     {% endfor %}
@@ -99,7 +101,7 @@
     chips.innerHTML = "";
     picked.forEach(function (c) {
       var s = document.createElement("span"); s.className = "pm-chip";
-      s.textContent = c.getAttribute("data-plat") + ": " + c.value; chips.appendChild(s);
+      s.className += " pf-" + c.getAttribute("data-pf"); s.textContent = c.getAttribute("data-plat") + ": " + c.value; chips.appendChild(s);
     });
     if (!touched && picked.length) {
       var shortest = picked.map(function (c) { return c.value; }).sort(function (a, b) { return a.length - b.length; })[0];
