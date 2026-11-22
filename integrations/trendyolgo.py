@@ -243,6 +243,33 @@ def set_store_working_status(supplier_id: str, store_id: str, api_key: str, api_
     return _request("PUT", endpoint, supplier_id, api_key, api_secret, {"status": status})
 
 
+def get_meal_products(supplier_id: str, store_id: str, api_key: str, api_secret: str) -> list:
+    """Restoran menüsündeki ürünler: [{id, name, status, price}] (Trendyol Go Yemek)."""
+    endpoint = f"/integrator/product/meal/suppliers/{supplier_id}/stores/{store_id}/products"
+    data = _request("GET", endpoint, supplier_id, api_key, api_secret) or {}
+    products = data.get("products") if isinstance(data, dict) else data
+    rows = []
+    for p in products or []:
+        if not isinstance(p, dict) or p.get("id") is None:
+            continue
+        rows.append({
+            "id": p.get("id"),
+            "name": _clean_text(p.get("name")),
+            "status": str(p.get("status") or "").upper(),
+            "price": _as_float(p.get("sellingPrice")),
+        })
+    return rows
+
+
+def set_meal_product_status(supplier_id: str, store_id: str, api_key: str, api_secret: str,
+                            product_id, active: bool):
+    """Ürünü Trendyol Go Yemek'te satışa açar (ACTIVE) ya da kapatır (PASSIVE)."""
+    endpoint = (f"/integrator/product/meal/suppliers/{supplier_id}/stores/{store_id}"
+                f"/products/{product_id}/status")
+    return _request("PUT", endpoint, supplier_id, api_key, api_secret,
+                    {"status": "ACTIVE" if active else "PASSIVE"})
+
+
 # ── Mesaj formatlama ────────────────────────────────────────────────────────
 
 def summarize_items(order: dict, max_items: int = 4) -> str:

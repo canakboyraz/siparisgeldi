@@ -4078,3 +4078,110 @@ def send_test_notification():
 
     flash("Test sonucu: " + (" · ".join(results) if results else "kanal ayarlı değil"), "info")
     return redirect(url_for("dashboard.profile"))
+
+
+# ── Ürünü tüm platformlarda tek tıkla aç/kapat ─────────────────────────────
+
+AVAILABILITY_PLATFORMS = [
+    ("trendyolgo", "Trendyol Go"),
+    ("qr", "QR menü"),
+    ("yemeksepeti", "Yemeksepeti"),
+    ("migros", "Migros Yemek"),
+]
+
+
+def _avail_anchor(key):
+    import hashlib
+    return "u-" + hashlib.md5(key.encode()).hexdigest()[:8]
+
+
+def _tgo_menu_integration(user_id):
+    intg = Integration.query.filter_by(user_id=user_id, platform=TGO_FOOD_PLATFORM, is_active=True).first()
+    if intg and intg.tgo_supplier_id and intg.tgo_store_id and intg.tgo_api_key and intg.tgo_api_secret:
+        return intg
+    return None
+
+
+def _availability_rows(user_id):
+    """Platform ürünlerini (eşleştirmeler dahil) tek ürün satırlarında toplar."""
+    from models import MenuItem
+    aliases = _product_aliases(user_id)
+    rows, errors = {}, []
+
+    def row_for(name):
+        canonical = aliases.get(_norm_product(name)) or name
+        key = _norm_product(canonical)
+        return rows.setdefault(key, {"key": key, "name": canonical, "trendyolgo": [], "qr": []})
+
+    intg = _tgo_menu_integration(user_id)
+    if intg:
+        try:
+            for p in tgo.get_meal_products(intg.tgo_supplier_id, intg.tgo_store_id,
+                                           intg.tgo_api_key, intg.tgo_api_secret):
+                if p["name"]:
+                    row_for(p["name"])["trendyolgo"].append({"id": p["id"], "on": p["status"] == "ACTIVE",
+                                                             "name": p["name"]})
+        except Exception as e:
+            errors.append(f"Trendyol Go menüsü alınamadı: {e}")
+    for item in MenuItem.query.filter_by(user_id=user_id, is_active=True).all():
+        row_for(item.name)["qr"].append({"id": item.id, "on": bool(item.is_available), "name": item.name})
+    out = sorted(rows.values(), key=lambda r: r["name"].casefold())
+    for r in out:
+        states = [x["on"] for plat in ("trendyolgo", "qr") for x in r[plat]]
+        r["any_on"] = any(states)
+        r["all_off"] = bool(states) and not any(states)
+        r["any_off"] = bool(states) and not all(states)
+    return out, intg, errors
+
+
+@dashboard_bp.route("/urun-durumu", methods=["GET", "POST"])
+@login_required
+def product_availability():
+    """Bir ürünü (ör. Sahlep bitti) bağlı tüm platformlarda tek tıkla satışa kapat/aç."""
+    from models import MenuItem
+    if request.method == "POST":
+        key = (request.form.get("key") or "").strip()
+        turn_on = request.form.get("action") == "open"
+        q = request.form.get("q", "")
+        rows, intg, errors = _availability_rows(current_user.id)
+        row = next((r for r in rows if r["key"] == key), None)
+        if not row:
+            flash("Ürün bulunamadı; sayfayı yenileyip tekrar dene.", "warning")
+            return redirect(url_for("dashboard.product_availability", q=q))
+        done, failed = [], []
+        for p in row["trendyolgo"]:
+            if p["on"] == turn_on:
+                continue
+            try:
+                tgo.set_meal_product_status(intg.tgo_supplier_id, intg.tgo_store_id,
+                                            intg.tgo_api_key, intg.tgo_api_secret, p["id"], turn_on)
+                done.append("Trendyol Go")
+            except Exception as e:
+                failed.append(f"Trendyol Go ({e})"[:160])
+        changed_qr = False
+        for item in row["qr"]:
+            obj = MenuItem.query.filter_by(id=item["id"], user_id=current_user.id).first()
+            if obj and bool(obj.is_available) != turn_on:
+                obj.is_available = turn_on
+                changed_qr = True
+        if changed_qr:
+            db.session.commit()
+            done.append("QR menü")
+        verb = "satışa açıldı" if turn_on else "satışa kapatıldı"
+        if done:
+            flash(f"{row['name']} {verb}: {', '.join(sorted(set(done)))}.", "success")
+        elif not failed:
+            flash(f"{row['name']} zaten {'açık' if turn_on else 'kapalı'}.", "info")
+        if failed:
+            flash("Gönderilemeyenler: " + "; ".join(failed), "danger")
+        return redirect(url_for("dashboard.product_availability", q=q) + "#" + _avail_anchor(key))
+
+    rows, intg, errors = _availability_rows(current_user.id)
+    for msg in errors:
+        flash(msg, "warning")
+    for r in rows:
+        r["anchor"] = _avail_anchor(r["key"])
+    has_ys = Integration.query.filter_by(user_id=current_user.id, platform="yemeksepeti", is_active=True).first() is not None
+    has_migros = Integration.query.filter_by(user_id=current_user.id, platform="migros", is_active=True).first() is not None
+    return render_template("dashboard/product_availability.html", rows=rows, tgo_ready=bool(intg),
+                           has_ys=has_ys, has_migros=has_migros, q=request.args.get("q", ""))

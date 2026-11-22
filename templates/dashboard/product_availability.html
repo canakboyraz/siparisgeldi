@@ -1,0 +1,81 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Ürün aç/kapat · SiparişGeldi{% endblock %}
+{% block panel %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Ürün aç/kapat</h1>
+    <p class="muted" style="margin:0">Bir ürün bittiğinde tek dokunuşla bağlı tüm platformlarda satışa kapat; gelince yine tek dokunuşla aç.</p>
+  </div>
+  <div class="inline"><a class="btn btn-ghost" href="{{ url_for('dashboard.product_aliases') }}">Ürün eşleştirme</a></div>
+</div>
+
+<div class="card av-platforms">
+  <span class="av-chip {{ 'on' if tgo_ready else 'off' }}">{{ icon('check' if tgo_ready else 'x', 14) }} Trendyol Go{% if not tgo_ready %} · <a href="{{ url_for('dashboard.trendyolgo_setup') }}">bağla</a>{% endif %}</span>
+  <span class="av-chip on">{{ icon('check', 14) }} QR menü</span>
+  <span class="av-chip soon" title="Yemeksepeti POS entegrasyon onayı gelince otomatik çalışacak">{{ icon('clock', 14) }} Yemeksepeti · yakında</span>
+  <span class="av-chip soon" title="Migros Yemek ürün servisi bağlanınca otomatik çalışacak">{{ icon('clock', 14) }} Migros Yemek · yakında</span>
+</div>
+
+<div class="card">
+  <div class="av-tools">
+    <input type="search" id="av-q" value="{{ q }}" placeholder="Ürün ara (ör. sahlep)" autocomplete="off">
+    <label class="av-only"><input type="checkbox" id="av-off"> Sadece kapalılar</label>
+  </div>
+  {% if rows %}
+  <ul class="av-list" id="av-list">
+    {% for r in rows %}
+    <li class="av-row {{ 'is-off' if r.all_off }}" id="{{ r.anchor }}" data-name="{{ r.name|lower }}" data-off="{{ '1' if r.all_off else '0' }}">
+      <div class="av-name">
+        <b>{{ r.name }}</b>
+        <div class="av-badges">
+          {% for p in r.trendyolgo %}<span class="av-b {{ 'on' if p.on else 'off' }}" title="{{ p.name }}">Trendyol Go · {{ 'Açık' if p.on else 'Kapalı' }}</span>{% endfor %}
+          {% for p in r.qr %}<span class="av-b {{ 'on' if p.on else 'off' }}" title="{{ p.name }}">QR menü · {{ 'Açık' if p.on else 'Tükendi' }}</span>{% endfor %}
+        </div>
+      </div>
+      <form method="post" class="av-act">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="key" value="{{ r.key }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        {% if r.any_on %}
+        <button class="btn btn-danger btn-sm" name="action" value="close" type="submit">Bitti · kapat</button>
+        {% endif %}
+        {% if r.any_off %}
+        <button class="btn btn-primary btn-sm" name="action" value="open" type="submit">Satışa aç</button>
+        {% endif %}
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted av-empty" id="av-empty" hidden>Aramana uyan ürün yok.</p>
+  {% else %}
+  <p class="muted">Henüz ürün yok. Trendyol Go'yu bağladığında ya da QR menüye ürün eklediğinde burada listelenir.</p>
+  {% endif %}
+  <p class="hint" style="margin-top:.8rem">Aynı ürün platformlarda farklı adla duruyorsa <a href="{{ url_for('dashboard.product_aliases') }}">Ürün eşleştirme</a>'den birleştir; burada tek satır olur ve hepsi birlikte kapanır.</p>
+</div>
+
+<script>
+(function () {
+  var q = document.getElementById("av-q"), off = document.getElementById("av-off");
+  var rows = document.querySelectorAll(".av-row"), empty = document.getElementById("av-empty");
+  if (!q) return;
+  function norm(s) { return (s || "").toLocaleLowerCase("tr").trim(); }
+  function apply() {
+    var term = norm(q.value), shown = 0;
+    rows.forEach(function (r) {
+      var ok = (!term || r.getAttribute("data-name").indexOf(term) !== -1) && (!off.checked || r.getAttribute("data-off") === "1");
+      r.hidden = !ok; if (ok) shown++;
+    });
+    if (empty) empty.hidden = shown !== 0;
+    document.querySelectorAll('.av-act input[name="q"]').forEach(function (i) { i.value = q.value; });
+  }
+  q.addEventListener("input", apply); off.addEventListener("change", apply); apply();
+  document.querySelectorAll(".av-act").forEach(function (f) {
+    f.addEventListener("submit", function () {
+      f.querySelectorAll("button").forEach(function (b) { b.disabled = true; });
+      f.insertAdjacentHTML("beforeend", '<span class="muted av-wait">Gönderiliyor…</span>');
+    });
+  });
+})();
+</script>
+{% endblock %}
