@@ -1,0 +1,115 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Platform eşleştirme · SiparişGeldi{% endblock %}
+{% block panel %}
+{% from "_icons.html" import icon %}
+{% set plabel = {'trendyolgo': 'Trendyol Go', 'yemeksepeti': 'Yemeksepeti', 'migros': 'Migros', 'qr': 'QR menü'} %}
+<div class="page-head">
+  <div>
+    <h1>Platform eşleştirme</h1>
+    <p class="muted" style="margin:0">Her sütundan aynı ürünü seç, nasıl görünmesini istediğini yaz, <b>Bağla</b>. Ürün aç/kapat, maliyet ve raporlar bu adı kullanır.</p>
+  </div>
+  <div class="inline"><a class="btn btn-ghost" href="{{ url_for('dashboard.product_availability') }}">Ürün aç/kapat</a></div>
+</div>
+
+<form method="post" id="pm-form">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="pm-tools card">
+    <input type="search" id="pm-q" placeholder="Tüm sütunlarda ara (ör. ice latte)" autocomplete="off">
+    <label class="av-only"><input type="checkbox" id="pm-free"> Sadece bağlanmamışlar</label>
+  </div>
+
+  <div class="pm-cols">
+    {% for key, label in columns %}
+    <section class="pm-col card" data-col="{{ key }}">
+      <header class="pm-col-h"><b>{{ label }}</b> <small class="muted">{{ catalog[key]|length }} ürün</small></header>
+      {% if notes.get(key) %}<p class="hint pm-note">{{ notes[key] }}</p>{% endif %}
+      <ul class="pm-list">
+        {% for it in catalog[key] %}
+        {% set k = norm(it.name) %}{% set group = linked.get(k) or canon.get(k) %}
+        <li class="pm-item {{ 'is-linked' if group }}" data-name="{{ it.name|lower }}" data-linked="{{ '1' if group else '0' }}">
+          <label>
+            <input type="checkbox" class="pm-sel" name="names" value="{{ it.name }}" data-plat="{{ label }}">
+            <span class="pm-n">{{ it.name }}</span>
+            {% if it.on is not none %}<i class="pm-dot {{ 'on' if it.on else 'off' }}" title="{{ 'Satışta' if it.on else 'Kapalı' }}"></i>{% endif %}
+          </label>
+          {% if group %}<small class="pm-g">→ {{ group }}</small>{% endif %}
+        </li>
+        {% else %}
+        <li class="muted pm-empty">Ürün yok.</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+  </div>
+
+  <div class="pm-bar" id="pm-bar" hidden>
+    <div class="pm-chips" id="pm-chips"></div>
+    <div class="pm-bar-row">
+      <label class="pm-name">Görünecek ad <input type="text" name="canonical" id="pm-canonical" maxlength="180" placeholder="ör. Ice Latte" required></label>
+      <button class="btn btn-primary" type="submit">{{ icon('check', 16) }} Bağla</button>
+      <button class="btn btn-ghost" type="button" id="pm-clear">Vazgeç</button>
+    </div>
+  </div>
+</form>
+
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">{{ icon('list', 18) }}Bağlı ürünler ({{ groups|length }})</div>
+  {% if groups %}
+  <ul class="pm-groups">
+    {% for g in groups %}
+    <li class="pm-group">
+      <form method="post" class="pm-rename">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename"><input type="hidden" name="old" value="{{ g.name }}">
+        <input type="text" name="new" value="{{ g.name }}" maxlength="180" aria-label="Görünecek ad"><button class="btn btn-ghost btn-sm" type="submit">Kaydet</button>
+      </form>
+      <div class="pm-links">
+        {% for it in g["items"] %}
+        <form method="post" class="pm-link">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="unlink"><input type="hidden" name="alias_id" value="{{ it.id }}">
+          <span>{{ it.name }}{% if it.platforms %} <small class="muted">· {% for p in it.platforms %}{{ plabel[p] }}{{ ', ' if not loop.last }}{% endfor %}</small>{% endif %}</span>
+          <button type="submit" class="pm-x" title="Bağlantıyı kaldır" aria-label="{{ it.name }} bağlantısını kaldır">{{ icon('x', 14) }}</button>
+        </form>
+        {% endfor %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Henüz bağlı ürün yok. Yukarıdan seçip bağla.</p>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  var sels = document.querySelectorAll(".pm-sel"), bar = document.getElementById("pm-bar");
+  var chips = document.getElementById("pm-chips"), name = document.getElementById("pm-canonical");
+  var q = document.getElementById("pm-q"), free = document.getElementById("pm-free"), touched = false;
+  name.addEventListener("input", function () { touched = true; });
+  function sync() {
+    var picked = [].filter.call(sels, function (c) { return c.checked; });
+    bar.hidden = picked.length === 0;
+    chips.innerHTML = "";
+    picked.forEach(function (c) {
+      var s = document.createElement("span"); s.className = "pm-chip";
+      s.textContent = c.getAttribute("data-plat") + ": " + c.value; chips.appendChild(s);
+    });
+    if (!touched && picked.length) {
+      var shortest = picked.map(function (c) { return c.value; }).sort(function (a, b) { return a.length - b.length; })[0];
+      name.value = shortest;
+    }
+    if (!picked.length) { touched = false; name.value = ""; }
+  }
+  sels.forEach(function (c) { c.addEventListener("change", sync); });
+  document.getElementById("pm-clear").addEventListener("click", function () { sels.forEach(function (c) { c.checked = false; }); sync(); });
+  function norm(s) { return (s || "").toLocaleLowerCase("tr").trim(); }
+  function filter() {
+    var t = norm(q.value);
+    document.querySelectorAll(".pm-item").forEach(function (li) {
+      var ok = (!t || li.getAttribute("data-name").indexOf(t) !== -1) && (!free.checked || li.getAttribute("data-linked") === "0");
+      li.hidden = !ok;
+    });
+  }
+  q.addEventListener("input", filter); free.addEventListener("change", filter);
+})();
+</script>
+{% endblock %}

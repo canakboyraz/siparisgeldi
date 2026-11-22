@@ -4240,3 +4240,103 @@ def product_availability():
     return render_template("dashboard/product_availability.html", rows=rows, tgo_ready=bool(intg),
                            migros_ready=bool(mig), has_ys=has_ys, q=request.args.get("q", ""),
                            suggestions=suggestions, row_platforms={r["name"]: r["platforms"] for r in rows})
+
+
+# ── Platform eşleştirme: Trendyol Go | Yemeksepeti | Migros yan yana ──────
+
+MATCH_COLUMNS = [("trendyolgo", "Trendyol Go"), ("yemeksepeti", "Yemeksepeti"), ("migros", "Migros Yemek"), ("qr", "QR menü")]
+
+
+def _platform_catalog(user_id):
+    """Her platformun ürün adları: {platform: [{name, on}]}, hata listesi ve kaynak notu."""
+    from models import MenuItem
+    catalog = {key: {} for key, _ in MATCH_COLUMNS}
+    errors, notes = [], {}
+    intg = _tgo_menu_integration(user_id)
+    if intg:
+        try:
+            for p in tgo.get_meal_products(intg.tgo_supplier_id, intg.tgo_store_id, intg.tgo_api_key, intg.tgo_api_secret):
+                if p["name"]:
+                    catalog["trendyolgo"].setdefault(p["name"], p["status"] == "ACTIVE")
+        except Exception as e:
+            errors.append(f"Trendyol Go menüsü alınamadı: {e}")
+    else:
+        notes["trendyolgo"] = "Trendyol Go bağlı değil."
+    mig, secret = _migros_menu_integration(user_id)
+    if mig:
+        try:
+            for p in migros.get_store_menu_products(mig.migros_store_id, mig.migros_group_id, mig.migros_api_key, secret):
+                if p["name"]:
+                    catalog["migros"].setdefault(p["name"], p["status"] == "ACTIVE")
+        except Exception as e:
+            errors.append(f"Migros Yemek menüsü alınamadı: {e}")
+    else:
+        notes["migros"] = "Migros Yemek bağlı değil."
+    # Yemeksepeti menü servisi Delivery Hero onayıyla açılacak; şimdilik son 6 ayın siparişlerindeki ürün adları.
+    since = datetime.utcnow() - timedelta(days=180)
+    for order in Order.query.filter(Order.user_id == user_id, Order.platform == ys.PLATFORM,
+                                    Order.created_at >= since).all():
+        for item in _raw_cost_product_lines(order.platform, _parse_raw_json(order.raw_json)):
+            if item.get("name"):
+                catalog["yemeksepeti"].setdefault(item["name"].strip(), None)
+    notes["yemeksepeti"] = "Son 6 ayın siparişlerinden (menü servisi Delivery Hero onayıyla gelecek)."
+    for item in MenuItem.query.filter_by(user_id=user_id, is_active=True).all():
+        catalog["qr"].setdefault(item.name, bool(item.is_available))
+    out = {k: sorted(({"name": n, "on": on} for n, on in v.items()), key=lambda x: x["name"].casefold())
+           for k, v in catalog.items()}
+    return out, errors, notes
+
+
+@dashboard_bp.route("/platform-eslestirme", methods=["GET", "POST"])
+@login_required
+def platform_matching():
+    """Platformlardaki aynı ürünü seçip tek bir ad altında bağlama."""
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "unlink":
+            row = ProductAlias.query.filter_by(user_id=current_user.id, id=request.form.get("alias_id", type=int)).first()
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+                flash(f"“{row.alias_name}” bağlantısı kaldırıldı.", "success")
+            return redirect(url_for("dashboard.platform_matching"))
+        if action == "rename":
+            old = (request.form.get("old") or "").strip()
+            new = (request.form.get("new") or "").strip()[:180]
+            rows = [a for a in ProductAlias.query.filter_by(user_id=current_user.id).all()
+                    if _norm_product(a.canonical_name) == _norm_product(old)]
+            if new and rows:
+                for a in rows:
+                    a.canonical_name = new
+                db.session.commit()
+                flash(f"“{old}” adı “{new}” olarak değişti.", "success")
+            return redirect(url_for("dashboard.platform_matching"))
+        selected = [n.strip()[:180] for n in request.form.getlist("names") if n.strip()]
+        canonical = (request.form.get("canonical") or "").strip()[:180]
+        if not canonical:
+            flash("Ürünlerin hangi adla görüneceğini yaz.", "warning")
+            return redirect(url_for("dashboard.platform_matching"))
+        # Ana ad seçilenlerden biri değilse tek ürün seçilse de bağlanabilir.
+        if _norm_product(canonical) not in {_norm_product(n) for n in selected} and selected:
+            selected = selected + [canonical]
+        msg = _merge_product_names(current_user.id, selected, canonical)
+        flash(msg.replace("birleştirildi", "bağlandı") if msg else "En az bir ürün seç.", "success" if msg else "warning")
+        return redirect(url_for("dashboard.platform_matching"))
+
+    catalog, errors, notes = _platform_catalog(current_user.id)
+    for msg in errors:
+        flash(msg, "warning")
+    aliases = ProductAlias.query.filter_by(user_id=current_user.id).order_by(ProductAlias.canonical_name).all()
+    where = {}
+    for plat, items in catalog.items():
+        for it in items:
+            where.setdefault(_norm_product(it["name"]), []).append(plat)
+    groups = {}
+    for a in aliases:
+        g = groups.setdefault(_norm_product(a.canonical_name), {"name": a.canonical_name, "items": []})
+        g["items"].append({"id": a.id, "name": a.alias_name, "platforms": where.get(a.alias_key, [])})
+    linked = {a.alias_key: a.canonical_name for a in aliases}
+    return render_template("dashboard/platform_matching.html", columns=MATCH_COLUMNS, catalog=catalog,
+                           notes=notes, groups=sorted(groups.values(), key=lambda g: g["name"].casefold()),
+                           linked=linked, canon={_norm_product(a.canonical_name): a.canonical_name for a in aliases},
+                           norm=_norm_product)

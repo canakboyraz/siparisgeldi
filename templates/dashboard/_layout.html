@@ -2,7 +2,7 @@
 {% block body %}
 {% from "_icons.html" import icon %}
 <div class="layout">
-  {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.trendyolgo_market_setup', 'dashboard.migros_setup', 'dashboard.yemeksepeti_setup', 'adisyo.setup', 'dashboard.product_availability'] %}
+  {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.trendyolgo_market_setup', 'dashboard.migros_setup', 'dashboard.yemeksepeti_setup', 'adisyo.setup', 'dashboard.product_availability', 'dashboard.platform_matching'] %}
   {% set ecommerce_endpoints = ['dashboard.trendyol_marketplace_setup', 'dashboard.hepsiburada_setup'] %}
   {% set contact_endpoints = ['dashboard.connect_telegram', 'dashboard.reset_telegram', 'dashboard.connect_whatsapp'] %}
   {% set cost_endpoints = ['dashboard.profit_card', 'dashboard.product_costs', 'dashboard.product_cost_entry', 'dashboard.monthly_expenses', 'dashboard.reports', 'dashboard.analytics', 'dashboard.menu_analysis', 'dashboard.product_aliases'] %}
@@ -37,6 +37,7 @@
           <a href="{{ url_for('dashboard.migros_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.migros_setup' }}">Migros Yemek</a>
           <a href="{{ url_for('dashboard.yemeksepeti_setup') }}" class="{{ 'active' if request.endpoint=='dashboard.yemeksepeti_setup' }}">Yemeksepeti</a>
           <a href="{{ url_for('dashboard.product_availability') }}" class="{{ 'active' if request.endpoint=='dashboard.product_availability' }}">Ürün aç/kapat</a>
+          <a href="{{ url_for('dashboard.platform_matching') }}" class="{{ 'active' if request.endpoint=='dashboard.platform_matching' }}">Platform eşleştirme</a>
           <a href="{{ url_for('adisyo.setup') }}" class="{{ 'active' if request.endpoint=='adisyo.setup' }}">Adisyo</a>
         </div>
       </details>

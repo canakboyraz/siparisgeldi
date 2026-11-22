@@ -79,6 +79,15 @@ class ProductAvailabilityTest(unittest.TestCase):
         self.client.post("/panel/urun-durumu", data={"_csrf_token": "test", "action": "split", "key": "sahlep"})
         self.assertEqual(ProductAlias.query.filter_by(user_id=self.uid).count(), 0)
 
+    @patch("integrations.trendyolgo.get_meal_products", return_value=TGO_MENU)
+    def test_platform_matching_links_under_typed_name(self, _menu):
+        html = self.client.get("/panel/platform-eslestirme").get_data(as_text=True)
+        self.assertIn("Platform eşleştirme", html)
+        self.client.post("/panel/platform-eslestirme", data={"_csrf_token": "test", "names": ["Latte", "Sahlep"],
+                                                             "canonical": "Kış İçeceği"})
+        rows = ProductAlias.query.filter_by(user_id=self.uid, canonical_name="Kış İçeceği").all()
+        self.assertEqual({r.alias_key for r in rows} >= {"latte", "sahlep"}, True)
+
 
 if __name__ == "__main__":
     unittest.main()
