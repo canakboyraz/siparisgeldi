@@ -87,7 +87,7 @@
   name.addEventListener("input", function () { touched = true; });
   function sync() {
     var picked = [].filter.call(sels, function (c) { return c.checked; });
-    bar.hidden = picked.length === 0;
+    bar.hidden = picked.length === 0; document.body.classList.toggle("pm-open", picked.length > 0);
     chips.innerHTML = "";
     picked.forEach(function (c) {
       var s = document.createElement("span"); s.className = "pm-chip";
