@@ -2021,7 +2021,10 @@ def alias_suggestions(names: list, loose_volume: bool = False) -> list:
     for i, a in enumerate(info):
         for j in range(i + 1, len(info)):
             b = info[j]
-            weight_clash = (a["weight"] != b["weight"]) and not (loose_volume and (not a["weight"] or not b["weight"]))
+            # Gevşek modda yalnız hacim (ml/cl) tek tarafta yazılıysa engel değil; gramaj (paket ürün) her zaman ayırır.
+            one_sided = loose_volume and (not a["weight"] or not b["weight"])
+            mass = any(isinstance(w, str) and re.search(r"(g|gr|kg)$", w) for w in (a["weight"], b["weight"]))
+            weight_clash = (a["weight"] != b["weight"]) and not (one_sided and not mass)
             if (a["ice"] != b["ice"] or a["size"] != b["size"] or weight_clash
                     or not a["set"] or not b["set"]):
                 continue
@@ -4411,7 +4414,8 @@ def platform_matching():
     suggestions = []
     for names in alias_suggestions(list(free), loose_volume=True):
         plats = set().union(*(free[n] for n in names))
-        if len(plats) < 2:
+        # Adları yalnız büyük/küçük harfle ayrışanlar zaten aynı ürün sayılıyor; öneriye gerek yok.
+        if len(plats) < 2 or len({_norm_product(n) for n in names}) < 2:
             continue
         chips = sorted(({"name": n, "platform": p} for n in names for p in free[n]),
                        key=lambda c: (order.index(c["platform"]), c["name"].casefold()))
