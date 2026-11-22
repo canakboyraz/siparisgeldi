@@ -43,9 +43,11 @@
   </div>
 
   <div class="pm-bar" id="pm-bar" hidden>
+    <div class="pm-target" id="pm-target" hidden></div>
     <div class="pm-chips" id="pm-chips"></div>
     <div class="pm-bar-row">
-      <label class="pm-name">Görünecek ad <input type="text" name="canonical" id="pm-canonical" maxlength="180" placeholder="ör. Ice Latte" required></label>
+      <label class="pm-name">Görünecek ad <input type="text" name="canonical" id="pm-canonical" maxlength="180" placeholder="ör. Ice Latte — var olan grubun adını yazarsan ona eklenir" list="pm-group-names" autocomplete="off" required></label>
+      <datalist id="pm-group-names">{% for g in groups %}<option value="{{ g.name }}">{% endfor %}</datalist>
       <button class="btn btn-primary" type="submit">{{ icon('check', 16) }} Bağla</button>
       <button class="btn btn-ghost" type="button" id="pm-clear">Vazgeç</button>
     </div>
@@ -55,12 +57,14 @@
 <div class="card" style="margin-top:1rem">
   <div class="card-title">{{ icon('list', 18) }}Bağlı ürünler ({{ groups|length }})</div>
   {% if groups %}
+  <p class="hint" style="margin:.2rem 0 .6rem">Yanlış eklenen ürünü <b>×</b> ile gruptan çıkar. Eksik platformu eklemek için grubun yanındaki <b>+ Ekle</b>'ye bas, yukarıdan ürünü işaretle, <b>Bağla</b>.</p>
   <ul class="pm-groups">
     {% for g in groups %}
     <li class="pm-group">
       <form method="post" class="pm-rename">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename"><input type="hidden" name="old" value="{{ g.name }}">
         <input type="text" name="new" value="{{ g.name }}" maxlength="180" aria-label="Görünecek ad"><button class="btn btn-ghost btn-sm" type="submit">Kaydet</button>
+        <button class="btn btn-primary btn-sm pm-add" type="button" data-group="{{ g.name }}" title="Bu gruba başka platformdan ürün ekle">+ Ekle</button>
       </form>
       <div class="pm-links">
         {% for it in g["items"] %}
@@ -97,10 +101,26 @@
       var shortest = picked.map(function (c) { return c.value; }).sort(function (a, b) { return a.length - b.length; })[0];
       name.value = shortest;
     }
-    if (!picked.length) { touched = false; name.value = ""; }
+    if (!picked.length && !group) { touched = false; name.value = ""; }
+    if (group) { name.value = group; bar.hidden = false; }
   }
   sels.forEach(function (c) { c.addEventListener("change", sync); });
-  document.getElementById("pm-clear").addEventListener("click", function () { sels.forEach(function (c) { c.checked = false; }); sync(); });
+  // "+ Ekle": seçilecek ürünler bu grubun adına bağlanır
+  var target = document.getElementById("pm-target"), group = "";
+  function setGroup(g) {
+    group = g; touched = !!g; name.value = g || "";
+    target.hidden = !g;
+    target.textContent = g ? "“" + g + "” grubuna ekleniyor — yukarıdan eklemek istediğin ürünleri işaretle." : "";
+    bar.hidden = !g && ![].some.call(sels, function (c) { return c.checked; });
+  }
+  document.querySelectorAll(".pm-add").forEach(function (b) {
+    b.addEventListener("click", function () {
+      setGroup(b.getAttribute("data-group"));
+      free.checked = true; q.value = ""; filter();
+      document.querySelector(".pm-tools").scrollIntoView({behavior: "smooth", block: "start"}); q.focus();
+    });
+  });
+  document.getElementById("pm-clear").addEventListener("click", function () { sels.forEach(function (c) { c.checked = false; }); group = ""; target.hidden = true; sync(); });
   var norm = window.trFold;
   function filter() {
     var t = norm(q.value);

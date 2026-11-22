@@ -4320,6 +4320,10 @@ def platform_matching():
         if not canonical:
             flash("Ürünlerin hangi adla görüneceğini yaz.", "warning")
             return redirect(url_for("dashboard.platform_matching"))
+        # Var olan bir grubun adı yazıldıysa (büyük/küçük harf farkıyla) o grubun yazımını kullan.
+        same = next((a.canonical_name for a in ProductAlias.query.filter_by(user_id=current_user.id).all()
+                     if _norm_product(a.canonical_name) == _norm_product(canonical)), None)
+        canonical = same or canonical
         # Ana ad seçilenlerden biri değilse tek ürün seçilse de bağlanabilir.
         if _norm_product(canonical) not in {_norm_product(n) for n in selected} and selected:
             selected = selected + [canonical]
