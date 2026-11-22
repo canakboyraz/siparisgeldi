@@ -2123,3 +2123,13 @@ span.pm-link{padding-right:.7rem}
 .pf-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--pf);margin-right:.4rem;vertical-align:middle}
 .pm-chip.pf-trendyolgo,.pm-chip.pf-migros,.pm-chip.pf-yemeksepeti,.pm-chip.pf-qr{background:var(--pf);color:#fff}
 .pm-chip.pf-migros{color:#3d2c00}
+.pm-sugg{margin-top:.8rem;border:1px solid #f0d9a8;background:#fffdf6}
+.pm-sugg-h{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.6rem;align-items:flex-start;margin-bottom:.5rem}
+.pm-sugg-list{list-style:none;margin:0;padding:0;max-height:420px;overflow:auto}
+.pm-sugg-row{display:grid;grid-template-columns:auto auto 1fr minmax(180px,260px);gap:.6rem;align-items:center;padding:.5rem 0;border-top:1px solid #f1ead8}
+.pm-sugg-row:first-child{border-top:0}
+.pm-sugg-row.is-off{opacity:.45}
+.pm-sugg-pick{width:18px;height:18px}
+.pm-sugg-name{display:flex;gap:.35rem;align-items:center;font-weight:700;color:#6b746f}
+.pm-sugg-name input{flex:1;min-width:0;font-weight:600}
+@media (max-width:760px){.pm-sugg-row{grid-template-columns:auto 1fr}.pm-sugg-row .pm-links,.pm-sugg-name{grid-column:1/-1}}

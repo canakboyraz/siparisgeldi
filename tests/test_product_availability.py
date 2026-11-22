@@ -97,6 +97,14 @@ class ProductAvailabilityTest(unittest.TestCase):
         rows = ProductAlias.query.filter_by(user_id=self.uid).all()
         self.assertEqual([(r.alias_name, r.canonical_name) for r in rows], [("Cappuccino Büyük", "Capp B")])
 
+    def test_platform_matching_bulk_links_picked_suggestions(self):
+        self.client.post("/panel/platform-eslestirme", data={
+            "_csrf_token": "test", "action": "bulk", "pick": ["0"],
+            "names_0": ["Vanilya Latte", "Vanilya Latte (360 Ml)"], "canonical_0": "Vanilya Latte",
+            "names_1": ["Cool Lime", "Cool Lime (420 Ml)"], "canonical_1": "Cool Lime"})
+        rows = ProductAlias.query.filter_by(user_id=self.uid).all()
+        self.assertEqual([(r.alias_name, r.canonical_name) for r in rows], [("Vanilya Latte (360 Ml)", "Vanilya Latte")])
+
 
 if __name__ == "__main__":
     unittest.main()

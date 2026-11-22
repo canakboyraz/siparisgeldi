@@ -11,6 +11,30 @@
   <div class="inline"><a class="btn btn-ghost" href="{{ url_for('dashboard.product_availability') }}">Ürün aç/kapat</a></div>
 </div>
 
+{% if suggestions %}
+<form method="post" class="card pm-sugg" id="pm-sugg">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="bulk">
+  <div class="pm-sugg-h">
+    <div><div class="card-title" style="margin:0">💡 Öneriler ({{ suggestions|length }})</div>
+      <p class="hint" style="margin:.2rem 0 0">Farklı platformlarda adı aynı ya da çok benzer, henüz bağlanmamış ürünler. Kontrol et, adı istersen değiştir, <b>Bağla</b>. Yanlış olanın işaretini kaldır.</p></div>
+    <div class="inline"><label class="av-only"><input type="checkbox" id="pm-sugg-all" checked> Hepsi</label><button class="btn btn-primary" type="submit">Seçilenleri bağla</button></div>
+  </div>
+  <ul class="pm-sugg-list">
+    {% for sg in suggestions %}{% set i = loop.index0 %}
+    <li class="pm-sugg-row">
+      <input type="checkbox" class="pm-sugg-pick" name="pick" value="{{ i }}" checked aria-label="Bu öneriyi bağla">
+      <span class="pm-count">{{ sg.count }} platform</span>
+      <div class="pm-links">
+        {% for c in sg.chips %}<span class="pm-link pf-{{ c.platform }}"><i class="pf-tag">{{ plabel[c.platform] }}</i><span>{{ c.name }}</span></span>{% endfor %}
+        {% for n in sg.names %}<input type="hidden" name="names_{{ i }}" value="{{ n }}">{% endfor %}
+      </div>
+      <label class="pm-sugg-name">→ <input type="text" name="canonical_{{ i }}" value="{{ sg.canonical }}" maxlength="180" aria-label="Görünecek ad"></label>
+    </li>
+    {% endfor %}
+  </ul>
+</form>
+{% endif %}
+
 <form method="post" id="pm-form">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <div class="pm-tools card">
@@ -94,6 +118,13 @@
 </div>
 
 <script>
+(function () {
+  var all = document.getElementById("pm-sugg-all");
+  if (!all) return;
+  var picks = document.querySelectorAll(".pm-sugg-pick");
+  all.addEventListener("change", function () { picks.forEach(function (c) { c.checked = all.checked; c.closest("li").classList.toggle("is-off", !c.checked); }); });
+  picks.forEach(function (c) { c.addEventListener("change", function () { c.closest("li").classList.toggle("is-off", !c.checked); }); });
+})();
 (function () {
   var sels = document.querySelectorAll(".pm-sel"), bar = document.getElementById("pm-bar");
   var chips = document.getElementById("pm-chips"), name = document.getElementById("pm-canonical");

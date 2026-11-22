@@ -1995,8 +1995,9 @@ def saved_costs_update():
     return redirect(url_for("dashboard.product_cost_entry") + "#kayitli-maliyetler")
 
 
-def alias_suggestions(names: list) -> list:
-    """Aynı ürün olabilecek ad gruplarını önerir (boy ve sıcak/buzlu farkı olanları ayırır)."""
+def alias_suggestions(names: list, loose_volume: bool = False) -> list:
+    """Aynı ürün olabilecek ad gruplarını önerir (boy ve sıcak/buzlu farkı olanları ayırır).
+    loose_volume: '(420 Ml)' gibi hacim yalnız bir tarafta yazılıysa engel sayılmaz (platformlar arası)."""
     from difflib import SequenceMatcher
     info = []
     for name in names:
@@ -2004,7 +2005,8 @@ def alias_suggestions(names: list) -> list:
         if not tokens:
             continue
         size = frozenset(t for t in tokens if t in _COST_SIZE)
-        weight = bool(re.search(r"\d+\s*(ml|cl|lt|l|gr|g|kg|oz)\b", (name or "").casefold()))
+        m = re.search(r"(\d+)\s*(ml|cl|lt|l|gr|g|kg|oz)\b", (name or "").casefold())
+        weight = (m.group(1) + m.group(2)) if (m and loose_volume) else bool(m)
         core = [t for t in tokens if t not in _COST_SIZE]
         info.append({"name": name, "ice": "ice" in tokens, "size": size, "weight": weight,
                      "set": frozenset(core), "joined": "".join(sorted(core)), "flat": "".join(core)})
@@ -2019,7 +2021,8 @@ def alias_suggestions(names: list) -> list:
     for i, a in enumerate(info):
         for j in range(i + 1, len(info)):
             b = info[j]
-            if (a["ice"] != b["ice"] or a["size"] != b["size"] or a["weight"] != b["weight"]
+            weight_clash = (a["weight"] != b["weight"]) and not (loose_volume and (not a["weight"] or not b["weight"]))
+            if (a["ice"] != b["ice"] or a["size"] != b["size"] or weight_clash
                     or not a["set"] or not b["set"]):
                 continue
             same = a["set"] == b["set"] or a["flat"] == b["flat"] or a["joined"] == b["joined"]
@@ -2128,7 +2131,7 @@ def _cost_tokens(name: str) -> list:
     text = re.sub(r"\d+\s*(ml|cl|lt|l|gr|g|oz)\b", " ", text)
     words = []
     for w in re.sub(r"[^a-z0-9 ]+", " ", text).split():
-        if w == "iced":
+        if w in ("iced", "buzlu"):
             w = "ice"
         if w not in _COST_FILLER:
             words.append(w)
@@ -4304,6 +4307,20 @@ def platform_matching():
                 db.session.commit()
                 flash(f"“{row.alias_name}” bağlantısı kaldırıldı.", "success")
             return redirect(url_for("dashboard.platform_matching"))
+        if action == "bulk":
+            # Öneriler: işaretli her öneri kendi adıyla bağlanır.
+            done = 0
+            for idx in request.form.getlist("pick"):
+                names = [n.strip()[:180] for n in request.form.getlist(f"names_{idx}") if n.strip()]
+                canonical = (request.form.get(f"canonical_{idx}") or "").strip()[:180]
+                if not canonical or not names:
+                    continue
+                if _norm_product(canonical) not in {_norm_product(n) for n in names}:
+                    names.append(canonical)
+                if _merge_product_names(current_user.id, names, canonical):
+                    done += 1
+            flash(f"{done} öneri bağlandı." if done else "Bağlanacak öneri seçilmedi.", "success" if done else "warning")
+            return redirect(url_for("dashboard.platform_matching"))
         if action == "detach":
             # Grubun adıyla aynı adı taşıyan ürünü gruptan çıkar: kalan ürünler, içlerinden birinin adıyla grup olarak kalır.
             group = (request.form.get("group") or "").strip()
@@ -4381,8 +4398,29 @@ def platform_matching():
         g["count"] = len(have)
         # Yemeksepeti listesi sipariş geçmişinden geldiği için eksik sayılmaz.
         g["missing"] = [k for k in order if k != "yemeksepeti" and k not in have and catalog.get(k)]
+    # Öneriler: henüz bağlanmamış ürünlerden farklı platformlarda olup adı aynı/çok benzer olanlar.
+    canon_keys = {_norm_product(a.canonical_name) for a in aliases}
+    alias_keys = {a.alias_key for a in aliases}
+    free = {}
+    for plat, items in catalog.items():
+        for it in items:
+            k = _norm_product(it["name"])
+            if k in alias_keys or k in canon_keys:
+                continue
+            free.setdefault(it["name"], set()).add(plat)
+    suggestions = []
+    for names in alias_suggestions(list(free), loose_volume=True):
+        plats = set().union(*(free[n] for n in names))
+        if len(plats) < 2:
+            continue
+        chips = sorted(({"name": n, "platform": p} for n in names for p in free[n]),
+                       key=lambda c: (order.index(c["platform"]), c["name"].casefold()))
+        # Önerilen ad: en çok platformda geçen, eşitse en kısa ad (hacim yazısı olmadan)
+        best = sorted(names, key=lambda n: (-len(free[n]), bool(re.search(r"\d+\s*ml", n, re.I)), len(n)))[0]
+        suggestions.append({"names": names, "chips": chips, "canonical": best, "count": len(plats)})
+    suggestions.sort(key=lambda g: (-g["count"], g["canonical"].casefold()))
     linked = {a.alias_key: a.canonical_name for a in aliases}
-    return render_template("dashboard/platform_matching.html", columns=MATCH_COLUMNS, catalog=catalog,
+    return render_template("dashboard/platform_matching.html", suggestions=suggestions[:40], columns=MATCH_COLUMNS, catalog=catalog,
                            notes=notes, groups=sorted(groups.values(), key=lambda g: g["name"].casefold()),
                            linked=linked, canon={_norm_product(a.canonical_name): a.canonical_name for a in aliases},
                            norm=_norm_product)
