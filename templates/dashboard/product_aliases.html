@@ -51,7 +51,7 @@
     <input type="search" id="al-search" placeholder="Ürün ara… (ör. magnolia)" autocomplete="off">
   </div>
   <div class="table-wrap al-wrap"><table class="al-table"><thead><tr><th></th><th>Ürün adı (platformdan gelen)</th><th>Adet</th><th>Platform</th></tr></thead><tbody>
-    {% for p in products %}<tr data-name="{{ p.name|lower }}" class="{{ 'is-linked' if p.linked }}">
+    {% for p in products %}<tr data-name="{{ p.name }}" class="{{ 'is-linked' if p.linked }}">
       <td><input type="checkbox" name="names" value="{{ p.name }}" {{ 'disabled' if p.linked }} aria-label="{{ p.name }} seç"></td>
       <td>{{ p.name }}{% if p.linked %} <span class="badge gray">eşleşmiş</span>{% endif %}</td>
       <td>{{ '%.0f'|format(p.quantity) }}</td>
@@ -75,8 +75,8 @@
   }
   form.addEventListener("change", function (e) { if (e.target.name === "names") refresh(); });
   var q = document.getElementById("al-search");
-  q.addEventListener("input", function () { var v = q.value.trim().toLocaleLowerCase("tr");
-    form.querySelectorAll("tbody tr").forEach(function (r) { r.hidden = v && r.getAttribute("data-name").toLocaleLowerCase("tr").indexOf(v) < 0 && !r.querySelector("input:checked"); }); });
+  q.addEventListener("input", function () { var v = window.trFold(q.value);
+    form.querySelectorAll("tbody tr").forEach(function (r) { r.hidden = v && window.trFold(r.getAttribute("data-name")).indexOf(v) < 0 && !r.querySelector("input:checked"); }); });
   q.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
 })();
 </script>

@@ -26,7 +26,7 @@
       <ul class="pm-list">
         {% for it in catalog[key] %}
         {% set k = norm(it.name) %}{% set group = linked.get(k) or canon.get(k) %}
-        <li class="pm-item {{ 'is-linked' if group }}" data-name="{{ it.name|lower }}" data-linked="{{ '1' if group else '0' }}">
+        <li class="pm-item {{ 'is-linked' if group }}" data-name="{{ it.name }}" data-linked="{{ '1' if group else '0' }}">
           <label>
             <input type="checkbox" class="pm-sel" name="names" value="{{ it.name }}" data-plat="{{ label }}">
             <span class="pm-n">{{ it.name }}</span>
@@ -101,11 +101,11 @@
   }
   sels.forEach(function (c) { c.addEventListener("change", sync); });
   document.getElementById("pm-clear").addEventListener("click", function () { sels.forEach(function (c) { c.checked = false; }); sync(); });
-  function norm(s) { return (s || "").toLocaleLowerCase("tr").trim(); }
+  var norm = window.trFold;
   function filter() {
     var t = norm(q.value);
     document.querySelectorAll(".pm-item").forEach(function (li) {
-      var ok = (!t || li.getAttribute("data-name").indexOf(t) !== -1) && (!free.checked || li.getAttribute("data-linked") === "0");
+      var ok = (!t || norm(li.getAttribute("data-name")).indexOf(t) !== -1) && (!free.checked || li.getAttribute("data-linked") === "0");
       li.hidden = !ok;
     });
   }

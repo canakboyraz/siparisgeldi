@@ -44,7 +44,7 @@
   {% if rows %}
   <ul class="av-list" id="av-list">
     {% for r in rows %}
-    <li class="av-row {{ 'is-off' if r.all_off }}" id="{{ r.anchor }}" data-name="{{ r.name|lower }}" data-off="{{ '1' if r.all_off else '0' }}">
+    <li class="av-row {{ 'is-off' if r.all_off }}" id="{{ r.anchor }}" data-name="{{ r.name }}" data-off="{{ '1' if r.all_off else '0' }}">
       <label class="av-pick" title="Eşleştirmek için seç"><input type="checkbox" class="av-sel" value="{{ r.name }}"></label>
       <div class="av-name">
         <b>{{ r.name }}</b>{% if r.merged %} <small class="av-merged" title="Eşleştirilmiş ürün">eşleşmiş</small>{% endif %}
@@ -107,11 +107,11 @@
   var q = document.getElementById("av-q"), off = document.getElementById("av-off");
   var rows = document.querySelectorAll(".av-row"), empty = document.getElementById("av-empty");
   if (!q) return;
-  function norm(s) { return (s || "").toLocaleLowerCase("tr").trim(); }
+  var norm = window.trFold;
   function apply() {
     var term = norm(q.value), shown = 0;
     rows.forEach(function (r) {
-      var ok = (!term || r.getAttribute("data-name").indexOf(term) !== -1) && (!off.checked || r.getAttribute("data-off") === "1");
+      var ok = (!term || norm(r.getAttribute("data-name")).indexOf(term) !== -1) && (!off.checked || r.getAttribute("data-off") === "1");
       r.hidden = !ok; if (ok) shown++;
     });
     if (empty) empty.hidden = shown !== 0;
