@@ -2100,3 +2100,5 @@ body.pm-open .main{padding-bottom:170px}
 .pm-x:hover{background:#fbe9e6;color:#b33a24}
 
 .av-row[hidden],.pm-item[hidden]{display:none!important}
+.av-bar[hidden]{display:none!important}
+.av-bar .btn-ghost{color:#fff;background:transparent;border:1px solid rgba(255,255,255,.4)}
