@@ -4304,6 +4304,26 @@ def platform_matching():
                 db.session.commit()
                 flash(f"“{row.alias_name}” bağlantısı kaldırıldı.", "success")
             return redirect(url_for("dashboard.platform_matching"))
+        if action == "detach":
+            # Grubun adıyla aynı adı taşıyan ürünü gruptan çıkar: kalan ürünler, içlerinden birinin adıyla grup olarak kalır.
+            group = (request.form.get("group") or "").strip()
+            rows = sorted((a for a in ProductAlias.query.filter_by(user_id=current_user.id).all()
+                           if _norm_product(a.canonical_name) == _norm_product(group)),
+                          key=lambda a: a.alias_name.casefold())
+            if len(rows) <= 1:
+                for a in rows:
+                    db.session.delete(a)
+                db.session.commit()
+                flash(f"“{group}” gruptan çıkarıldı; grupta başka ürün kalmadığı için grup kaldırıldı.", "success")
+            else:
+                head = rows[0]
+                new_name = head.alias_name
+                db.session.delete(head)
+                for a in rows[1:]:
+                    a.canonical_name = new_name
+                db.session.commit()
+                flash(f"“{group}” gruptan çıkarıldı. Kalan ürünler “{new_name}” adıyla bağlı; adı istersen değiştirebilirsin.", "success")
+            return redirect(url_for("dashboard.platform_matching"))
         if action == "rename":
             old = (request.form.get("old") or "").strip()
             new = (request.form.get("new") or "").strip()[:180]
@@ -4356,6 +4376,7 @@ def platform_matching():
                 chips.append({"platform": plat, "name": it["name"], "id": it["id"]})
         chips.sort(key=lambda c: (order.index(c["platform"]) if c["platform"] in order else 99, c["name"].casefold()))
         g["chips"] = chips
+        g["same_multi"] = sum(1 for c in chips if c["id"] is None) > 1
         have = {c["platform"] for c in chips if c["platform"]}
         g["count"] = len(have)
         # Yemeksepeti listesi sipariş geçmişinden geldiği için eksik sayılmaz.

@@ -70,7 +70,11 @@
         <span class="pm-count" title="Bu ürün kaç platforma bağlı">{{ g.count }} platform</span>
         {% for c in g.chips %}
         {% if c.id is none %}
-        <span class="pm-link pf-{{ c.platform or 'none' }}" title="Adı grubun adıyla aynı olduğu için kendiliğinden bu grupta. Ayırmak için grubun adını değiştir."><i class="pf-tag">{{ plabel.get(c.platform, '?') }}</i>{{ c.name }}</span>
+        <form method="post" class="pm-link pf-{{ c.platform or 'none' }}" title="Adı grubun adıyla aynı olduğu için bu grupta.">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="detach"><input type="hidden" name="group" value="{{ g.name }}">
+          <i class="pf-tag">{{ plabel.get(c.platform, '?') }}</i><span>{{ c.name }}</span>
+          <button type="submit" class="pm-x" title="Gruptan çıkar{{ ' (aynı adlı tüm platformlar)' if g.same_multi }}" aria-label="{{ c.name }} gruptan çıkar">{{ icon('x', 14) }}</button>
+        </form>
         {% else %}
         <form method="post" class="pm-link pf-{{ c.platform or 'none' }}">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="unlink"><input type="hidden" name="alias_id" value="{{ c.id }}">

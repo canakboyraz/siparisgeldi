@@ -88,6 +88,15 @@ class ProductAvailabilityTest(unittest.TestCase):
         rows = ProductAlias.query.filter_by(user_id=self.uid, canonical_name="Kış İçeceği").all()
         self.assertEqual({r.alias_key for r in rows} >= {"latte", "sahlep"}, True)
 
+    def test_platform_matching_detach_same_named_member(self):
+        for key, name in (("cappuccino büyük", "Cappuccino Büyük"), ("capp b", "Capp B")):
+            db.session.add(ProductAlias(user_id=self.uid, alias_key=key, alias_name=name, canonical_name="Cappuccino (Büyük)"))
+        db.session.commit()
+        self.client.post("/panel/platform-eslestirme", data={"_csrf_token": "test", "action": "detach",
+                                                             "group": "Cappuccino (Büyük)"})
+        rows = ProductAlias.query.filter_by(user_id=self.uid).all()
+        self.assertEqual([(r.alias_name, r.canonical_name) for r in rows], [("Cappuccino Büyük", "Capp B")])
+
 
 if __name__ == "__main__":
     unittest.main()
