@@ -4102,6 +4102,14 @@ def _tgo_menu_integration(user_id):
     return None
 
 
+def _migros_menu_integration(user_id):
+    intg = Integration.query.filter_by(user_id=user_id, platform="migros", is_active=True).first()
+    secret = current_app.config.get("MIGROS_SECRET_KEY", "")
+    if intg and intg.migros_api_key and intg.migros_store_id and intg.migros_group_id and secret:
+        return intg, secret
+    return None, secret
+
+
 def _availability_rows(user_id):
     """Platform ürünlerini (eşleştirmeler dahil) tek ürün satırlarında toplar."""
     from models import MenuItem
@@ -4111,7 +4119,7 @@ def _availability_rows(user_id):
     def row_for(name):
         canonical = aliases.get(_norm_product(name)) or name
         key = _norm_product(canonical)
-        return rows.setdefault(key, {"key": key, "name": canonical, "trendyolgo": [], "qr": []})
+        return rows.setdefault(key, {"key": key, "name": canonical, "trendyolgo": [], "migros": [], "qr": []})
 
     intg = _tgo_menu_integration(user_id)
     if intg:
@@ -4123,15 +4131,25 @@ def _availability_rows(user_id):
                                                              "name": p["name"]})
         except Exception as e:
             errors.append(f"Trendyol Go menüsü alınamadı: {e}")
+    mig, secret = _migros_menu_integration(user_id)
+    if mig:
+        try:
+            for p in migros.get_store_menu_products(mig.migros_store_id, mig.migros_group_id,
+                                                    mig.migros_api_key, secret):
+                if p["name"]:
+                    row_for(p["name"])["migros"].append({"id": p["id"], "on": p["status"] == "ACTIVE",
+                                                         "name": p["name"]})
+        except Exception as e:
+            errors.append(f"Migros Yemek menüsü alınamadı: {e}")
     for item in MenuItem.query.filter_by(user_id=user_id, is_active=True).all():
         row_for(item.name)["qr"].append({"id": item.id, "on": bool(item.is_available), "name": item.name})
     out = sorted(rows.values(), key=lambda r: r["name"].casefold())
     for r in out:
-        states = [x["on"] for plat in ("trendyolgo", "qr") for x in r[plat]]
+        states = [x["on"] for plat in ("trendyolgo", "migros", "qr") for x in r[plat]]
         r["any_on"] = any(states)
         r["all_off"] = bool(states) and not any(states)
         r["any_off"] = bool(states) and not all(states)
-    return out, intg, errors
+    return out, intg, mig, secret, errors
 
 
 @dashboard_bp.route("/urun-durumu", methods=["GET", "POST"])
@@ -4143,7 +4161,7 @@ def product_availability():
         key = (request.form.get("key") or "").strip()
         turn_on = request.form.get("action") == "open"
         q = request.form.get("q", "")
-        rows, intg, errors = _availability_rows(current_user.id)
+        rows, intg, mig, secret, errors = _availability_rows(current_user.id)
         row = next((r for r in rows if r["key"] == key), None)
         if not row:
             flash("Ürün bulunamadı; sayfayı yenileyip tekrar dene.", "warning")
@@ -4158,6 +4176,14 @@ def product_availability():
                 done.append("Trendyol Go")
             except Exception as e:
                 failed.append(f"Trendyol Go ({e})"[:160])
+        for p in row["migros"]:
+            if p["on"] == turn_on:
+                continue
+            try:
+                migros.set_product_status(mig.migros_store_id, p["id"], turn_on, mig.migros_api_key, secret)
+                done.append("Migros Yemek")
+            except Exception as e:
+                failed.append(f"Migros Yemek ({e})"[:160])
         changed_qr = False
         for item in row["qr"]:
             obj = MenuItem.query.filter_by(id=item["id"], user_id=current_user.id).first()
@@ -4176,12 +4202,11 @@ def product_availability():
             flash("Gönderilemeyenler: " + "; ".join(failed), "danger")
         return redirect(url_for("dashboard.product_availability", q=q) + "#" + _avail_anchor(key))
 
-    rows, intg, errors = _availability_rows(current_user.id)
+    rows, intg, mig, _secret, errors = _availability_rows(current_user.id)
     for msg in errors:
         flash(msg, "warning")
     for r in rows:
         r["anchor"] = _avail_anchor(r["key"])
     has_ys = Integration.query.filter_by(user_id=current_user.id, platform="yemeksepeti", is_active=True).first() is not None
-    has_migros = Integration.query.filter_by(user_id=current_user.id, platform="migros", is_active=True).first() is not None
     return render_template("dashboard/product_availability.html", rows=rows, tgo_ready=bool(intg),
-                           has_ys=has_ys, has_migros=has_migros, q=request.args.get("q", ""))
+                           migros_ready=bool(mig), has_ys=has_ys, q=request.args.get("q", ""))

@@ -13,8 +13,8 @@
 <div class="card av-platforms">
   <span class="av-chip {{ 'on' if tgo_ready else 'off' }}">{{ icon('check' if tgo_ready else 'x', 14) }} Trendyol Go{% if not tgo_ready %} · <a href="{{ url_for('dashboard.trendyolgo_setup') }}">bağla</a>{% endif %}</span>
   <span class="av-chip on">{{ icon('check', 14) }} QR menü</span>
-  <span class="av-chip soon" title="Yemeksepeti POS entegrasyon onayı gelince otomatik çalışacak">{{ icon('clock', 14) }} Yemeksepeti · yakında</span>
-  <span class="av-chip soon" title="Migros Yemek ürün servisi bağlanınca otomatik çalışacak">{{ icon('clock', 14) }} Migros Yemek · yakında</span>
+  <span class="av-chip soon" title="Delivery Hero POS onayı gelince eklenecek">{{ icon('clock', 14) }} Yemeksepeti · onay bekleniyor</span>
+  <span class="av-chip {{ 'on' if migros_ready else 'off' }}">{{ icon('check' if migros_ready else 'x', 14) }} Migros Yemek{% if not migros_ready %} · <a href="{{ url_for('dashboard.migros_setup') }}">bağla</a>{% endif %}</span>
 </div>
 
 <div class="card">
@@ -30,6 +30,7 @@
         <b>{{ r.name }}</b>
         <div class="av-badges">
           {% for p in r.trendyolgo %}<span class="av-b {{ 'on' if p.on else 'off' }}" title="{{ p.name }}">Trendyol Go · {{ 'Açık' if p.on else 'Kapalı' }}</span>{% endfor %}
+          {% for p in r.migros %}<span class="av-b {{ 'on' if p.on else 'off' }}" title="{{ p.name }}">Migros · {{ 'Açık' if p.on else 'Kapalı' }}</span>{% endfor %}
           {% for p in r.qr %}<span class="av-b {{ 'on' if p.on else 'off' }}" title="{{ p.name }}">QR menü · {{ 'Açık' if p.on else 'Tükendi' }}</span>{% endfor %}
         </div>
       </div>
@@ -49,7 +50,7 @@
   </ul>
   <p class="muted av-empty" id="av-empty" hidden>Aramana uyan ürün yok.</p>
   {% else %}
-  <p class="muted">Henüz ürün yok. Trendyol Go'yu bağladığında ya da QR menüye ürün eklediğinde burada listelenir.</p>
+  <p class="muted">Henüz ürün yok. Trendyol Go'yu ya da Migros Yemek'i bağladığında veya QR menüye ürün eklediğinde burada listelenir.</p>
   {% endif %}
   <p class="hint" style="margin-top:.8rem">Aynı ürün platformlarda farklı adla duruyorsa <a href="{{ url_for('dashboard.product_aliases') }}">Ürün eşleştirme</a>'den birleştir; burada tek satır olur ve hepsi birlikte kapanır.</p>
 </div>

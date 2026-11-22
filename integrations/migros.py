@@ -141,6 +141,45 @@ def set_store_status(store_id, api_key: str, secret_key: str, base_url: str = DE
     return api_post(endpoint, body, api_key, secret_key, base_url)
 
 
+def _check(data) -> dict:
+    """Gourmet cevabındaki success=false durumunu hataya çevirir."""
+    if isinstance(data, dict) and data.get("success") is False:
+        err = data.get("errorMessage") or {}
+        detail = err.get("errorDetail") or err.get("errorTitle") or "bilinmeyen hata"
+        raise RuntimeError(f"Migros: {detail}")
+    return data
+
+
+def get_store_menu_products(store_id, store_group_id, api_key: str, secret_key: str,
+                            base_url: str = DEFAULT_BASE) -> list:
+    """Restorandaki menü ürünleri ve restorana göre durumları: [{id, name, status}].
+    Servis: Menu/GetMenuDetailsByStoreAndStoreGroupId"""
+    body = {"storeId": int(store_id), "storeGroupId": int(store_group_id)}
+    data = _check(api_post("/Menu/GetMenuDetailsByStoreAndStoreGroupId", body, api_key, secret_key, base_url))
+    menu = (data or {}).get("data") or {}
+    rows, seen = [], set()
+    for header in menu.get("menuHeaderInfos") or []:
+        for item in header.get("foodMenuItemDetailsDTOs") or []:
+            pid = item.get("productId")
+            if pid is None or pid in seen:
+                continue
+            seen.add(pid)
+            rows.append({
+                "id": pid,
+                "name": str(item.get("productName") or "").strip(),
+                "status": str(item.get("status") or "").upper(),
+            })
+    return rows
+
+
+def set_product_status(store_id, product_id, active: bool, api_key: str, secret_key: str,
+                       base_url: str = DEFAULT_BASE) -> dict:
+    """Ürünü restoranda satışa açar/kapatır. Servis: Menu/UpdateProductStatusByStoreId"""
+    body = {"storeId": int(store_id), "productId": int(product_id),
+            "status": "ACTIVE" if active else "PASSIVE"}
+    return _check(api_post("/Menu/UpdateProductStatusByStoreId", body, api_key, secret_key, base_url))
+
+
 # ── TERS AKIŞ: Webhook ayrıştırma ve mesaj formatlama ────────────────────────
 
 WEBHOOK_ORDER_CREATED   = "order_created"
