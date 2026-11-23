@@ -4349,7 +4349,13 @@ def platform_matching():
             new = (request.form.get("new") or "").strip()[:180]
             rows = [a for a in ProductAlias.query.filter_by(user_id=current_user.id).all()
                     if _norm_product(a.canonical_name) == _norm_product(old)]
-            if new and rows:
+            if new and not rows and old and _norm_product(new) != _norm_product(old):
+                # Adı her platformda aynı olan (kendiliğinden bağlı) ürünün görünen adını değiştir.
+                db.session.add(ProductAlias(user_id=current_user.id, alias_key=_norm_product(old),
+                                            alias_name=old, canonical_name=new))
+                db.session.commit()
+                flash(f"“{old}” adı “{new}” olarak değişti.", "success")
+            elif new and rows:
                 for a in rows:
                     a.canonical_name = new
                 db.session.commit()
@@ -4367,6 +4373,9 @@ def platform_matching():
         # Ana ad seçilenlerden biri değilse tek ürün seçilse de bağlanabilir.
         if _norm_product(canonical) not in {_norm_product(n) for n in selected} and selected:
             selected = selected + [canonical]
+        if selected and len({_norm_product(n) for n in selected}) == 1:
+            flash(f"“{canonical}” adı her platformda aynı olduğu için bu ürünler zaten bağlı; Bağlı ürünler listesinde görünür.", "info")
+            return redirect(url_for("dashboard.platform_matching"))
         msg = _merge_product_names(current_user.id, selected, canonical)
         flash(msg.replace("birleştirildi", "bağlandı") if msg else "En az bir ürün seç.", "success" if msg else "warning")
         return redirect(url_for("dashboard.platform_matching"))
@@ -4387,6 +4396,17 @@ def platform_matching():
     for key, g in groups.items():
         if where.get(key):
             g["items"].insert(0, {"id": None, "name": g["name"], "platforms": where[key]})
+    # Hiç eşleştirme yapılmadan, adı birden çok platformda birebir aynı olan ürünler de bağlı sayılır.
+    shown = {}
+    for plat, items in catalog.items():
+        for it in items:
+            shown.setdefault(_norm_product(it["name"]), it["name"])
+    alias_keys_all = {a.alias_key for a in aliases}
+    for key, plats in where.items():
+        if key in groups or key in alias_keys_all or len(set(plats)) < 2:
+            continue
+        groups[key] = {"name": shown[key], "items": [{"id": None, "name": shown[key], "platforms": sorted(set(plats))}],
+                       "auto": True}
     # Her platform ürünü ayrı rozet; platform sırasına göre, eksik platformlar ayrıca.
     order = [k for k, _ in MATCH_COLUMNS]
     for g in groups.values():
@@ -4426,5 +4446,5 @@ def platform_matching():
     linked = {a.alias_key: a.canonical_name for a in aliases}
     return render_template("dashboard/platform_matching.html", suggestions=suggestions[:40], columns=MATCH_COLUMNS, catalog=catalog,
                            notes=notes, groups=sorted(groups.values(), key=lambda g: g["name"].casefold()),
-                           linked=linked, canon={_norm_product(a.canonical_name): a.canonical_name for a in aliases},
+                           linked=linked, canon={k: g["name"] for k, g in groups.items()},
                            norm=_norm_product)

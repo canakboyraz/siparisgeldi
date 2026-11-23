@@ -105,6 +105,13 @@ class ProductAvailabilityTest(unittest.TestCase):
         rows = ProductAlias.query.filter_by(user_id=self.uid).all()
         self.assertEqual([(r.alias_name, r.canonical_name) for r in rows], [("Vanilya Latte (360 Ml)", "Vanilya Latte")])
 
+    def test_platform_matching_same_name_everywhere_is_already_linked(self):
+        resp = self.client.post("/panel/platform-eslestirme", data={"_csrf_token": "test",
+                                "names": ["Berry Hibiscus", "Berry Hibiscus"], "canonical": "Berry Hibiscus"},
+                                follow_redirects=True)
+        self.assertIn("zaten bağlı", resp.get_data(as_text=True))
+        self.assertEqual(ProductAlias.query.filter_by(user_id=self.uid).count(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -93,7 +93,9 @@
       <div class="pm-links">
         <span class="pm-count" title="Bu ürün kaç platforma bağlı">{{ g.count }} platform</span>
         {% for c in g.chips %}
-        {% if c.id is none %}
+        {% if c.id is none and g.auto %}
+        <span class="pm-link pf-{{ c.platform or 'none' }}" title="Adı her platformda aynı olduğu için kendiliğinden bağlı. Ayırmak için ürünün adını platformda değiştirmek gerekir."><i class="pf-tag">{{ plabel.get(c.platform, '?') }}</i><span>{{ c.name }}</span></span>
+        {% elif c.id is none %}
         <form method="post" class="pm-link pf-{{ c.platform or 'none' }}" title="Adı grubun adıyla aynı olduğu için bu grupta.">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="detach"><input type="hidden" name="group" value="{{ g.name }}">
           <i class="pf-tag">{{ plabel.get(c.platform, '?') }}</i><span>{{ c.name }}</span>
