@@ -4439,6 +4439,14 @@ def platform_matching():
         for it in g["items"]:
             for plat in (it["platforms"] or [None]):
                 chips.append({"platform": plat, "name": it["name"], "id": it["id"]})
+        seen_chip, uniq = set(), []
+        for c in chips:  # aynı platformda aynı ad bir kez görünsün
+            k = (c["platform"], _norm_product(c["name"]))
+            if c["platform"] and k in seen_chip:
+                continue
+            seen_chip.add(k)
+            uniq.append(c)
+        chips = uniq
         chips.sort(key=lambda c: (order.index(c["platform"]) if c["platform"] in order else 99, c["name"].casefold()))
         g["chips"] = chips
         g["same_multi"] = sum(1 for c in chips if c["id"] is None) > 1
