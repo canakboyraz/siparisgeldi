@@ -159,6 +159,7 @@ def get_store_menu_products(store_id, store_group_id, api_key: str, secret_key: 
     menu = (data or {}).get("data") or {}
     rows, seen = [], set()
     for header in menu.get("menuHeaderInfos") or []:
+        section = str(next((header.get(k) for k in ("headerName", "name", "menuHeaderName", "title") if header.get(k)), "")).strip()
         for item in header.get("foodMenuItemDetailsDTOs") or []:
             pid = item.get("productId")
             if pid is None or pid in seen:
@@ -168,6 +169,9 @@ def get_store_menu_products(store_id, store_group_id, api_key: str, secret_key: 
                 "id": pid,
                 "name": str(item.get("productName") or "").strip(),
                 "status": str(item.get("status") or "").upper(),
+                "price": next((float(item[k]) for k in ("price", "salePrice", "salesPrice", "listPrice", "productPrice")
+                               if isinstance(item.get(k), (int, float))), None),
+                "section": section,
             })
     return rows
 

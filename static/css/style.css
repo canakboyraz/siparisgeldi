@@ -2148,3 +2148,4 @@ span.pm-link{padding-right:.7rem}
 .br-status{font-size:.75rem;font-weight:700;border-radius:999px;padding:.15rem .55rem;background:#fff4d6;color:#7a5600}
 .br-status.active{background:#e4f1ea;color:#1e5b47}
 .br-links form:last-child{margin-left:auto}
+.pm-price{color:#6b746f;font-weight:600;white-space:nowrap}

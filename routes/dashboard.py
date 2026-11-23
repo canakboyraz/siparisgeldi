@@ -4267,13 +4267,14 @@ def _platform_catalog(user_id):
     """Her platformun ürün adları: {platform: [{name, on}]}, hata listesi ve kaynak notu."""
     from models import MenuItem
     catalog = {key: {} for key, _ in MATCH_COLUMNS}
-    errors, notes = [], {}
+    errors, notes, prices = [], {}, {}
     intg = _tgo_menu_integration(user_id)
     if intg:
         try:
             for p in tgo.get_meal_products(intg.tgo_supplier_id, intg.tgo_store_id, intg.tgo_api_key, intg.tgo_api_secret):
                 if p["name"]:
                     catalog["trendyolgo"].setdefault(p["name"], p["status"] == "ACTIVE")
+                    prices.setdefault(("trendyolgo", p["name"]), p.get("price"))
         except Exception as e:
             errors.append(f"Trendyol Go menüsü alınamadı: {e}")
     else:
@@ -4284,6 +4285,7 @@ def _platform_catalog(user_id):
             for p in migros.get_store_menu_products(mig.migros_store_id, mig.migros_group_id, mig.migros_api_key, secret):
                 if p["name"]:
                     catalog["migros"].setdefault(p["name"], p["status"] == "ACTIVE")
+                    prices.setdefault(("migros", p["name"]), p.get("price"))
         except Exception as e:
             errors.append(f"Migros Yemek menüsü alınamadı: {e}")
     else:
@@ -4298,7 +4300,9 @@ def _platform_catalog(user_id):
     notes["yemeksepeti"] = "Son 6 ayın siparişlerinden (menü servisi Delivery Hero onayıyla gelecek)."
     for item in MenuItem.query.filter_by(user_id=user_id, is_active=True).all():
         catalog["qr"].setdefault(item.name, bool(item.is_available))
-    out = {k: sorted(({"name": n, "on": on} for n, on in v.items()), key=lambda x: x["name"].casefold())
+        prices.setdefault(("qr", item.name), item.price)
+    out = {k: sorted(({"name": n, "on": on, "price": prices.get((k, n))} for n, on in v.items()),
+                     key=lambda x: x["name"].casefold())
            for k, v in catalog.items()}
     return out, errors, notes
 

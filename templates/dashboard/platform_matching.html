@@ -53,7 +53,7 @@
         <li class="pm-item {{ 'is-linked' if group }}" data-name="{{ it.name }}" data-linked="{{ '1' if group else '0' }}">
           <label>
             <input type="checkbox" class="pm-sel" name="names" value="{{ it.name }}" data-plat="{{ label }}" data-pf="{{ key }}">
-            <span class="pm-n">{{ it.name }}</span>
+            <span class="pm-n">{{ it.name }}{% if it.price %} <small class="pm-price">{{ '%.0f'|format(it.price) }} TL</small>{% endif %}</span>
             {% if it.on is not none %}<i class="pm-dot {{ 'on' if it.on else 'off' }}" title="{{ 'Satışta' if it.on else 'Kapalı' }}"></i>{% endif %}
           </label>
           {% if group %}<small class="pm-g">→ {{ group }}</small>{% endif %}
