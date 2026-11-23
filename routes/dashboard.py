@@ -4374,6 +4374,15 @@ def platform_matching():
             elif new and rows:
                 for a in rows:
                     a.canonical_name = new
+                # Grubun eski adını taşıyan platform ürünleri de grupta kalsın (ör. platform adı onay beklerken).
+                old_key = _norm_product(old)
+                if old_key != _norm_product(new) and not any(a.alias_key == old_key for a in rows):
+                    clash = ProductAlias.query.filter_by(user_id=current_user.id, alias_key=old_key).first()
+                    if clash:
+                        clash.canonical_name = new
+                    else:
+                        db.session.add(ProductAlias(user_id=current_user.id, alias_key=old_key,
+                                                    alias_name=old, canonical_name=new))
                 db.session.commit()
                 flash(f"“{old}” adı “{new}” olarak değişti.", "success")
             return redirect(url_for("dashboard.platform_matching"))

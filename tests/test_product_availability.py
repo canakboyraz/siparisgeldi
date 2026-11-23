@@ -119,6 +119,15 @@ class ProductAvailabilityTest(unittest.TestCase):
         set_status.assert_not_called()
         self.assertTrue(MenuItem.query.filter_by(name="Salep").one().is_available)
 
+    def test_group_rename_keeps_items_with_old_name(self):
+        db.session.add(ProductAlias(user_id=self.uid, alias_key="latte büyük", alias_name="Latte Büyük", canonical_name="Latte (Büyük)"))
+        db.session.commit()
+        self.client.post("/panel/platform-eslestirme", data={"_csrf_token": "test", "action": "rename",
+                                                             "old": "Latte (Büyük)", "new": "Latte"})
+        got = {a.alias_key: a.canonical_name for a in ProductAlias.query.filter_by(user_id=self.uid)}
+        self.assertEqual(got["latte büyük"], "Latte")
+        self.assertEqual(got["latte (büyük)"], "Latte")
+
 
 if __name__ == "__main__":
     unittest.main()
