@@ -242,6 +242,7 @@
       try {
         var query = "?since_id=" + encodeURIComponent(latestId);
         if (alertOrderId) query += "&watch_id=" + encodeURIComponent(alertOrderId);
+        if (queue.length) query += "&watch_ids=" + encodeURIComponent(queue.map(function (order) { return order.id; }).join(","));
         var response = await fetch(pollUrl + query, {
           credentials: "same-origin",
           cache: "no-store",
@@ -250,7 +251,14 @@
         if (!response.ok) return;
         var data = await response.json();
         latestId = Math.max(latestId, Number(data.latest_id) || 0);
-        if (alertOrderId && data.watch_pending === false) stopAlarm();
+        if (data.pending_by_id) {
+          queue = queue.filter(function (order) { return data.pending_by_id[String(order.id)] !== false; });
+        }
+        if (alertOrderId && data.watch_pending === false) {
+            // Gösterilen sipariş bu arada (ör. platform arayüzünden) kabul edildi: uyarıyı kapat.
+            stopAlarm();
+            if (backdrop && !backdrop.hidden) closeAlert();
+          }
         if (Array.isArray(data.orders) && data.orders.length) {
           queue = queue.concat(data.orders);
           if (backdrop.hidden) showNextAlert();

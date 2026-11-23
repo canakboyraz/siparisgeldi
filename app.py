@@ -367,7 +367,7 @@ def create_app(config_class=Config, start_scheduler=None):
 
     @app.context_processor
     def inject_helpers():
-        dashboard_latest_order_id = 0
+        dashboard_latest_order_id = None  # bilinmiyorsa sipariş uyarısı geçmişi göstermez
         loyalty_active = False
         menu_active = False
         if current_user.is_authenticated and request.blueprint in ("dashboard", "adisyo", "loyalty", "stock", "menu"):
@@ -375,7 +375,7 @@ def create_app(config_class=Config, start_scheduler=None):
             loyalty_active = db.session.query(LoyaltyProgram.id).filter_by(
                 user_id=current_user.id, is_active=True).first() is not None
             menu_active = db.session.query(MenuTable.id).filter_by(user_id=current_user.id).first() is not None
-        if current_user.is_authenticated and request.blueprint == "dashboard":
+        if current_user.is_authenticated and request.blueprint in ("dashboard", "adisyo", "loyalty", "stock", "menu", "branches", "admin"):
             from sqlalchemy import func
             from models import Order
             dashboard_latest_order_id = (

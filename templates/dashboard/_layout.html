@@ -118,7 +118,7 @@
   <script>
     (function () {
       var pollUrl = "{{ url_for('dashboard.active_orders_check') }}";
-      var latestId = Number("{{ dashboard_latest_order_id or 0 }}") || 0;
+      var latestId = {{ dashboard_latest_order_id if dashboard_latest_order_id is not none else -1 }};
       var queue = [];
       var polling = false;
       var backdrop = document.getElementById("global-order-alert-backdrop");
@@ -225,7 +225,11 @@
             queue = queue.filter(function (order) { return data.pending_by_id[String(order.id)] !== false; });
           }
           if (statusText) { statusText.classList.remove("is-error"); statusText.title = "Son kontrol: " + new Date().toLocaleTimeString("tr-TR"); }
-          if (alertOrderId && data.watch_pending === false) stopAlarm();
+          if (alertOrderId && data.watch_pending === false) {
+            // Gösterilen sipariş bu arada (ör. platform arayüzünden) kabul edildi: uyarıyı kapat.
+            stopAlarm();
+            if (backdrop && !backdrop.hidden) closeAlert();
+          }
           if (Array.isArray(data.orders) && data.orders.length) {
             queue = queue.concat(data.orders);
             if (backdrop.hidden) showNextAlert();

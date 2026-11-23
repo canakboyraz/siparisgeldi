@@ -30,6 +30,7 @@ REFUNDED_STATUSES = {"Refunded", "Refund", "Returned", "Return", "PartiallyRefun
 PROBLEM_STATUSES = CANCELLED_STATUSES | REFUNDED_STATUSES
 DONE_STATUSES = {"Delivered", "DELIVERED", "Completed"}
 ACTIVE_EXCLUDED_STATUSES = PROBLEM_STATUSES | DONE_STATUSES
+POPUP_STATUSES = PENDING_STATUSES | {"Open"}  # anlık uyarı yalnız kabul bekleyen siparişler için
 UNACCEPTED_WARNING_SECONDS = 120
 ORDER_POPUP_SOUND_OPTIONS = [
     ("classic", "Klasik üçlü"),
@@ -2543,7 +2544,9 @@ def clear_active_orders():
 @login_required
 def active_orders_check():
     """Aktif ekran açik kalirken kullanicinin yeni siparislerini döndürür."""
-    since_id = request.args.get("since_id", 0, type=int) or 0
+    since_id = request.args.get("since_id", -1, type=int)
+    if since_id is None:
+        since_id = -1
     watch_id = request.args.get("watch_id", 0, type=int) or 0
     watch_ids = {int(value) for value in request.args.get("watch_ids", "").split(",") if value.isdigit()}
     if watch_id:
@@ -2555,17 +2558,20 @@ def active_orders_check():
         watched_orders = Order.query.filter(Order.user_id == current_user.id, Order.id.in_(watch_ids)).all()
         for watched_order in watched_orders:
             pending_by_id[str(watched_order.id)] = bool(
-                watched_order.status in PENDING_STATUSES or not (watched_order.status or "").strip()
+                watched_order.status in POPUP_STATUSES or not (watched_order.status or "").strip()
             )
         watch_pending = pending_by_id.get(str(watch_id), False) if watch_id else None
-    if latest_order_id <= since_id:
+    # since_id bilinmiyorsa (-1: sayfa son siparişi bilmeden açıldı) geçmiş siparişleri yeniden gösterme.
+    if since_id < 0 or latest_order_id <= since_id:
         return jsonify({"latest_id": latest_order_id, "orders": [], "watch_pending": watch_pending, "pending_by_id": pending_by_id})
 
+    # Yalnızca henüz kabul edilmemiş siparişler için uyarı çıkar; platform arayüzünden kabul edilmiş,
+    # hazırlanan ya da yola çıkmış siparişler sessizce geçer.
     new_orders = (
         Order.query
         .filter(Order.user_id == current_user.id, Order.id > since_id)
         .filter(Order.active_hidden_at.is_(None))
-        .filter(or_(Order.status.is_(None), ~Order.status.in_(sorted(ACTIVE_EXCLUDED_STATUSES))))
+        .filter(or_(Order.status.is_(None), Order.status == "", Order.status.in_(sorted(POPUP_STATUSES))))
         .order_by(Order.id.asc())
         .limit(20)
         .all()
