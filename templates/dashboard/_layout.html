@@ -5,7 +5,7 @@
   {% set platform_endpoints = ['dashboard.trendyolgo_setup', 'dashboard.trendyolgo_market_setup', 'dashboard.migros_setup', 'dashboard.yemeksepeti_setup', 'adisyo.setup', 'dashboard.product_availability', 'dashboard.platform_matching'] %}
   {% set ecommerce_endpoints = ['dashboard.trendyol_marketplace_setup', 'dashboard.hepsiburada_setup'] %}
   {% set contact_endpoints = ['dashboard.connect_telegram', 'dashboard.reset_telegram', 'dashboard.connect_whatsapp'] %}
-  {% set cost_endpoints = ['dashboard.profit_card', 'dashboard.product_costs', 'dashboard.product_cost_entry', 'dashboard.monthly_expenses', 'dashboard.reports', 'dashboard.analytics', 'dashboard.menu_analysis', 'dashboard.product_aliases'] %}
+  {% set cost_endpoints = ['dashboard.profit_card', 'dashboard.product_costs', 'dashboard.product_cost_entry', 'dashboard.monthly_expenses', 'dashboard.reports', 'dashboard.analytics', 'dashboard.menu_analysis', 'dashboard.product_aliases', 'branches.index'] %}
   <aside class="sidebar" id="app-nav" aria-label="Menü">
     <div class="sheet-grabber" aria-hidden="true"><span></span></div>
     <div class="sidebar-head">
@@ -20,6 +20,7 @@
         <summary class="{{ 'active' if request.endpoint in cost_endpoints }}">{{ icon('trend') }}<span>Kâr ve maliyet</span></summary>
         <div class="nav-sub">
           <a href="{{ url_for('dashboard.profit_card') }}" class="{{ 'active' if request.endpoint=='dashboard.profit_card' }}">Kâr karnesi</a>
+          <a href="{{ url_for('branches.index') }}" class="{{ 'active' if request.endpoint=='branches.index' }}">Şubeler</a>
           <a href="{{ url_for('dashboard.product_costs') }}" class="{{ 'active' if request.endpoint=='dashboard.product_costs' }}">Kârlılık</a>
           <a href="{{ url_for('dashboard.menu_analysis') }}" class="{{ 'active' if request.endpoint=='dashboard.menu_analysis' }}">Menü analizi</a>
           <a href="{{ url_for('dashboard.product_aliases') }}" class="{{ 'active' if request.endpoint=='dashboard.product_aliases' }}">Ürün eşleştirme</a>

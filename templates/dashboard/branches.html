@@ -1,0 +1,162 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Şubeler · SiparişGeldi{% endblock %}
+{% block panel %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Şubeler</h1>
+    <p class="muted" style="margin:0">Tüm şubelerinin satışı ve kârı tek ekranda; gün sonunda tek mesaj.</p>
+  </div>
+  {% if data %}
+  <form method="get" class="inline">
+    <select name="donem" onchange="this.form.submit()" aria-label="Dönem">
+      {% for k, l in periods %}<option value="{{ k }}" {{ 'selected' if k == period }}>{{ l }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+{% for inv in invites %}
+<div class="account-banner">
+  <span>{{ icon('store', 17) }}<b>{{ inv.group.owner_label or 'Bir işletme' }}</b> seni{% if inv.label %} “{{ inv.label }}”{% endif %} şubesi olarak eklemek istiyor. Kabul edersen günlük satış ve kâr özetin merkezde toplu görünür; siparişlerin ve ayarların sende kalır.</span>
+  <span class="inline">
+    <form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="link_id" value="{{ inv.id }}"><input type="hidden" name="token" value="{{ inv.token if request.args.get('davet') == inv.token else '' }}">
+      <button class="btn btn-primary btn-sm" name="action" value="accept">Kabul et</button>
+      <button class="btn btn-ghost btn-sm" name="action" value="decline">Reddet</button></form>
+  </span>
+</div>
+{% endfor %}
+
+{% if mine %}
+{# ── Şube hesabı görünümü ── #}
+<div class="card">
+  <div class="card-title">{{ icon('store', 18) }}Merkeze bağlısın</div>
+  <p>Bu hesap <b>{{ mine.group.owner_label or 'merkez' }}</b> hesabına “{{ mine.label or current_user.name }}” şubesi olarak bağlı. Merkez bu şubenin satış ve kâr özetini görüyor; siparişlerin, ayarların ve bildirimlerin sende.</p>
+  <div class="inline" style="flex-wrap:wrap;gap:.5rem">
+    <form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="own_reports"><input type="hidden" name="on" value="{{ '0' if own_reports_on else '1' }}">
+      <button class="btn btn-ghost">{{ 'Bu şubenin gün sonu raporlarını kapat' if own_reports_on else 'Bu şubenin gün sonu raporlarını aç' }}</button></form>
+    <form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="leave">
+      <button class="btn btn-ghost" style="color:#b33a24">Merkezden ayrıl</button></form>
+  </div>
+  <p class="hint">Gün sonu raporu açıkken bu şube her platform için kendi raporunu almaya devam eder; merkez ayrıca tüm şubelerin toplamını alır.</p>
+</div>
+{% else %}
+
+{% if data %}
+{% set t = data.total %}
+<div class="stats">
+  <div class="stat"><div class="v">{{ t.orders }}</div><div class="l">Sipariş · {{ data.branch_count }} şube</div></div>
+  <div class="stat"><div class="v">{{ tl(t.revenue) }}</div><div class="l">Toplam ciro</div></div>
+  <div class="stat"><div class="v pc-neg">{{ tl(t.commission) }}</div><div class="l">Komisyona giden</div></div>
+  <div class="stat"><div class="v {{ 'pc-pos' if t.profit >= 0 else 'pc-neg' }}">{{ tl(t.profit) }}</div><div class="l">Tahmini kâr · %{{ '%.0f'|format(t.margin) }}</div></div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ icon('store', 18) }}Şube şube · {{ data.start.strftime('%d.%m') }}{% if data.end != data.start %}–{{ data.end.strftime('%d.%m.%Y') }}{% else %}.{{ data.start.strftime('%Y') }}{% endif %}</div>
+  <div class="table-wrap">
+  <table class="br-table">
+    <thead><tr><th>Şube</th><th class="num">Sipariş</th><th class="num">Ciro</th><th class="num">Pay</th><th class="num">Komisyon</th><th class="num">Ürün maliyeti</th><th class="num">Paket/reklam</th><th class="num">Kâr</th><th class="num">Marj</th></tr></thead>
+    <tbody>
+    {% for r in data.rows %}
+      {% if r.error is defined %}
+      <tr class="br-off"><td data-label="Şube"><b>{{ r.label }}</b></td><td colspan="8" class="muted">{{ 'Abonelik gerekli — bu şube toplama dahil değil' if r.unpaid else 'Hesaplanamadı' }}</td></tr>
+      {% else %}
+      <tr>
+        <td data-label="Şube"><b>{{ r.label }}</b>{% if r.uncosted %} <small class="muted" title="Maliyeti girilmemiş ürün sayısı">· {{ r.uncosted }} ürün maliyetsiz</small>{% endif %}</td>
+        <td class="num" data-label="Sipariş">{{ r.orders }}</td>
+        <td class="num" data-label="Ciro">{{ tl(r.revenue) }}</td>
+        <td class="num" data-label="Pay"><span class="br-bar"><i style="width:{{ '%.0f'|format(r.share) }}%"></i></span>%{{ '%.0f'|format(r.share) }}</td>
+        <td class="num" data-label="Komisyon">{{ tl(r.commission) }}</td>
+        <td class="num" data-label="Ürün maliyeti">{{ tl(r.cost) }}</td>
+        <td class="num" data-label="Paket/reklam">{{ tl(r.other) }}</td>
+        <td class="num {{ 'pc-pos' if r.profit >= 0 else 'pc-neg' }}" data-label="Kâr"><b>{{ tl(r.profit) }}</b></td>
+        <td class="num" data-label="Marj">%{{ '%.0f'|format(r.margin) }}</td>
+      </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td><b>Toplam</b></td><td class="num"><b>{{ t.orders }}</b></td><td class="num"><b>{{ tl(t.revenue) }}</b></td><td class="num">%100</td><td class="num">{{ tl(t.commission) }}</td><td class="num">{{ tl(t.cost) }}</td><td class="num">{{ tl(t.other) }}</td><td class="num {{ 'pc-pos' if t.profit >= 0 else 'pc-neg' }}"><b>{{ tl(t.profit) }}</b></td><td class="num">%{{ '%.0f'|format(t.margin) }}</td></tr></tfoot>
+  </table>
+  </div>
+  <p class="hint">Kâr = ciro − platform komisyonu − ürün maliyeti − paket ve reklam giderleri. Kira, personel gibi aylık sabit giderler dahil değildir. Her şubenin maliyetleri kendi hesabından alınır.</p>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">{{ icon('chart', 18) }}Platformlar (tüm şubeler)</div>
+    {% if data.platforms %}
+    <table class="br-mini"><tbody>
+      {% for p in data.platforms %}<tr><td>{{ platform_label(p.platform) }}</td><td class="num">{{ p.orders }} sipariş</td><td class="num">{{ tl(p.revenue) }}</td><td class="num {{ 'pc-pos' if p.profit >= 0 else 'pc-neg' }}">{{ tl(p.profit) }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% else %}<p class="muted">Bu dönemde sipariş yok.</p>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-title">{{ icon('coffee', 18) }}En çok satanlar (tüm şubeler)</div>
+    {% if data.top_products %}
+    <table class="br-mini"><tbody>
+      {% for p in data.top_products %}<tr><td>{{ p.name }}</td><td class="num">{{ '%.0f'|format(p.quantity) }} adet</td><td class="num">{{ tl(p.revenue) }}</td><td class="num muted">{{ p.branches }} şube</td></tr>{% endfor %}
+    </tbody></table>
+    {% else %}<p class="muted">Bu dönemde sipariş yok.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">{{ icon('plus', 18) }}Şube ekle</div>
+  <p class="muted" style="margin-top:0">Her şube kendi SiparişGeldi hesabıyla çalışır (platform bağlantıları, siparişler, maliyetler). Şubenin hesabındaki e-postayı yaz; şube daveti kabul edince burada görünür. Şubenin şifresi gerekmez.</p>
+  <form method="post" class="br-invite">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="invite">
+    <input type="text" name="label" maxlength="80" placeholder="Şube adı (ör. Kadıköy)">
+    <input type="email" name="email" maxlength="120" placeholder="Şube hesabının e-postası" required>
+    <button class="btn btn-primary" type="submit">{{ icon('send', 16) }}Davet gönder</button>
+  </form>
+  <p class="hint">Ücretlendirme şube başınadır: her şube hesabı kendi Pro aboneliğiyle (aylık {{ '%.0f'|format(price) }} TL) toplama girer. Aboneliği biten şube listede “abonelik gerekli” olarak görünür.</p>
+
+  {% if group and group.links %}
+  <ul class="br-links">
+    {% for l in group.links|sort(attribute='created_at') %}
+    <li>
+      <form method="post" class="br-rename"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rename"><input type="hidden" name="link_id" value="{{ l.id }}">
+        <input type="text" name="label" value="{{ l.label or '' }}" placeholder="Şube adı" maxlength="80" aria-label="Şube adı"><button class="btn btn-ghost btn-sm">Kaydet</button></form>
+      <span class="muted">{{ l.email }}</span>
+      <span class="br-status {{ l.status }}">{{ 'Bağlı' if l.status == 'active' else 'Davet bekliyor' }}</span>
+      {% if l.status != 'active' %}<button type="button" class="btn btn-ghost btn-sm br-copy" data-url="https://{{ request.host }}{{ url_for('branches.index', davet=l.token) }}" title="Davet bağlantısını kopyala; şubeye WhatsApp'tan gönderebilirsin">Bağlantıyı kopyala</button>{% endif %}
+      <form method="post" data-msg="{{ l.label or l.email }} şubelerden çıkarılsın mı? Şubenin hesabı ve verileri silinmez." onsubmit="return confirm(this.dataset.msg)"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="link_id" value="{{ l.id }}">
+        <button class="pm-x" title="Şubelerden çıkar" aria-label="Şubelerden çıkar">{{ icon('x', 14) }}</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+{% if group %}
+<div class="grid-2">
+  <form method="post" class="card">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="settings">
+    <div class="card-title">{{ icon('settings', 18) }}Ayarlar</div>
+    <label class="check-row"><input type="checkbox" name="daily_summary" value="1" {{ 'checked' if group.daily_summary }}> Her gece 23:50'de tüm şubelerin toplamını tek mesajla gönder</label>
+    <label class="check-row"><input type="checkbox" name="include_owner" value="1" {{ 'checked' if group.include_owner }}> Bu hesabın (merkezin) kendi satışları da toplama girsin</label>
+    <label style="display:block;margin:.6rem 0">Bu hesabın şube adı <input type="text" name="owner_label" value="{{ group.owner_label or current_user.name }}" maxlength="80"></label>
+    <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
+    <p class="hint">Şubeler kendi gün sonu raporlarını almaya devam eder; istemeyen şube kendi hesabındaki Şubeler sayfasından kapatabilir.</p>
+  </form>
+  <form method="post" class="card" onsubmit="return confirm('Bu hesaptaki ürün maliyetleri bağlı tüm şubelere kopyalansın mı?')">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="copy_costs">
+    <div class="card-title">{{ icon('coins', 18) }}Maliyetleri şubelere kopyala</div>
+    <p class="muted" style="margin-top:0">Ürün maliyetlerini bu hesapta bir kez gir, tek tıkla tüm şubelere aktar. Varsayılan olarak şubenin kendi girdiği maliyetlere dokunulmaz.</p>
+    <label class="check-row"><input type="checkbox" name="overwrite" value="1"> Şubelerde girilmiş maliyetlerin üzerine de yaz</label>
+    <button class="btn btn-ghost btn-sm" type="submit">Kopyala</button>
+  </form>
+</div>
+{% endif %}
+{% endif %}
+
+<script>
+document.querySelectorAll(".br-copy").forEach(function (b) {
+  b.addEventListener("click", function () {
+    var u = b.getAttribute("data-url");
+    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { b.textContent = "Kopyalandı ✓"; }, function () { window.prompt("Davet bağlantısı", u); });
+  });
+});
+</script>
+{% endblock %}

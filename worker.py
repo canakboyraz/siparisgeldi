@@ -1053,6 +1053,10 @@ def start_scheduler(app):
     scheduler.add_job(send_daily_reports, "cron", hour=23, minute=45,
                       args=[app], id="daily_report", replace_existing=True)
 
+    import branches
+    scheduler.add_job(branches.send_daily_summaries, "cron", hour=23, minute=50,
+                      args=[app], id="branch_daily_summary", replace_existing=True)
+
     # Haftalık — her Pazartesi 08:00 (önceki 7 gün)
     scheduler.add_job(send_weekly_reports, "cron", day_of_week="mon", hour=8, minute=0,
                       args=[app], id="weekly_report", replace_existing=True)

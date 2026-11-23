@@ -283,6 +283,8 @@ def create_app(config_class=Config, start_scheduler=None):
     app.register_blueprint(loyalty_bp, url_prefix="/panel/sadakat")
     from routes.wallet import wallet_bp
     app.register_blueprint(wallet_bp)
+    from routes.branches import branches_bp
+    app.register_blueprint(branches_bp, url_prefix="/panel/subeler")
     from routes.stock import stock_bp, stock_public_bp
     app.register_blueprint(stock_public_bp)
     app.register_blueprint(stock_bp, url_prefix="/panel/sayim")

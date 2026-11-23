@@ -2133,3 +2133,18 @@ span.pm-link{padding-right:.7rem}
 .pm-sugg-name{display:flex;gap:.35rem;align-items:center;font-weight:700;color:#6b746f}
 .pm-sugg-name input{flex:1;min-width:0;font-weight:600}
 @media (max-width:760px){.pm-sugg-row{grid-template-columns:auto 1fr}.pm-sugg-row .pm-links,.pm-sugg-name{grid-column:1/-1}}
+/* Şubeler */
+.br-table td.num,.br-table th.num,.br-mini td.num{text-align:right;white-space:nowrap}
+.br-table tfoot td{border-top:2px solid var(--line,#e6e9e7);padding-top:.5rem}
+.br-table .br-off td{color:#8a928d}
+.br-bar{display:inline-block;width:46px;height:6px;background:#edf0ee;border-radius:4px;margin-right:.35rem;vertical-align:middle;overflow:hidden}
+.br-bar i{display:block;height:100%;background:var(--brand,#1e5b47)}
+.br-mini{width:100%;border-collapse:collapse}.br-mini td{padding:.35rem .2rem;border-top:1px solid var(--line,#e6e9e7)}
+.br-mini tr:first-child td{border-top:0}
+.br-invite{display:flex;flex-wrap:wrap;gap:.5rem}.br-invite input{flex:1 1 200px;min-width:0}
+.br-links{list-style:none;margin:1rem 0 0;padding:0}
+.br-links li{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;padding:.5rem 0;border-top:1px solid var(--line,#e6e9e7)}
+.br-rename{display:flex;gap:.35rem}.br-rename input{width:170px}
+.br-status{font-size:.75rem;font-weight:700;border-radius:999px;padding:.15rem .55rem;background:#fff4d6;color:#7a5600}
+.br-status.active{background:#e4f1ea;color:#1e5b47}
+.br-links form:last-child{margin-left:auto}

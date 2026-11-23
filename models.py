@@ -762,3 +762,30 @@ class TableCall(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     done_at = db.Column(db.DateTime)
 
+
+
+class BranchGroup(db.Model):
+    """Çok şubeli işletme: merkez hesap (sahip) ve ayarları."""
+    __tablename__ = "branch_groups"
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    daily_summary = db.Column(db.Boolean, default=True, nullable=False)   # 23:50'de tek toplam mesaj
+    include_owner = db.Column(db.Boolean, default=True, nullable=False)   # merkezin kendi satışları da toplama girsin
+    owner_label = db.Column(db.String(80))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    links = db.relationship("BranchLink", backref="group", lazy=True, cascade="all, delete-orphan")
+
+
+class BranchLink(db.Model):
+    """Merkeze bağlı (ya da davet edilmiş) şube hesabı."""
+    __tablename__ = "branch_links"
+    id = db.Column(db.Integer, primary_key=True)
+    group_id = db.Column(db.Integer, db.ForeignKey("branch_groups.id"), nullable=False, index=True)
+    email = db.Column(db.String(120), nullable=False, index=True)        # davet edilen hesabın e-postası
+    branch_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, index=True)  # kabul edince dolar
+    label = db.Column(db.String(80))                                       # şube adı (ör. Kadıköy)
+    status = db.Column(db.String(10), nullable=False, default="pending")  # pending | active
+    token = db.Column(db.String(32), unique=True, nullable=False, default=lambda: secrets.token_urlsafe(16))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    accepted_at = db.Column(db.DateTime)
+    __table_args__ = (db.UniqueConstraint("group_id", "email", name="uq_branch_group_email"),)
