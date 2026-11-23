@@ -112,6 +112,13 @@ class ProductAvailabilityTest(unittest.TestCase):
         self.assertIn("zaten bağlı", resp.get_data(as_text=True))
         self.assertEqual(ProductAlias.query.filter_by(user_id=self.uid).count(), 0)
 
+    @patch("integrations.trendyolgo.set_meal_product_status")
+    @patch("integrations.trendyolgo.get_meal_products", return_value=TGO_MENU)
+    def test_close_only_one_platform_keeps_others(self, _menu, set_status):
+        self.client.post("/panel/urun-durumu", data={"_csrf_token": "test", "key": "sahlep", "action": "close", "only": "migros"})
+        set_status.assert_not_called()
+        self.assertTrue(MenuItem.query.filter_by(name="Salep").one().is_available)
+
 
 if __name__ == "__main__":
     unittest.main()

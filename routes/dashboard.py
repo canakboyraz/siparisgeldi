@@ -4209,6 +4209,12 @@ def product_availability():
             flash("Ürün bulunamadı; sayfayı yenileyip tekrar dene.", "warning")
             return redirect(url_for("dashboard.product_availability", q=q))
         done, failed = [], []
+        # only=migros gibi: yalnız o platformda aç/kapat (diğer bağlı platformlara dokunma)
+        only = request.form.get("only") or ""
+        if only:
+            for plat in ("trendyolgo", "migros", "qr"):
+                if plat != only:
+                    row = dict(row, **{plat: []})
         for p in row["trendyolgo"]:
             if p["on"] == turn_on:
                 continue
